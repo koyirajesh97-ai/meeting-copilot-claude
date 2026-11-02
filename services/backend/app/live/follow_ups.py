@@ -34,7 +34,10 @@ def follow_up_drafter(store: MeetingStore, router: Router, search: SearchService
         for item in items:
             question = item.question or item.text
             try:
-                hits = await search.search(meeting.owner_id, question, 3)
+                local = meeting.mode == "local"
+                hits = await search.search(
+                    meeting.owner_id, question, 3, local_only=local, for_cloud_model=not local
+                )
             except Exception:
                 hits = []
             facts = " | ".join(" ".join(h.text.split())[:400] for h in hits) or "none"
@@ -49,6 +52,8 @@ def follow_up_drafter(store: MeetingStore, router: Router, search: SearchService
                     ),
                     "meeting",
                     DraftOut,
+                    owner_id=meeting.owner_id,
+                    local_only=meeting.mode == "local",
                 )
             except NoProviderAvailable:
                 log.warning("couldn't draft a follow-up for %s", item.id)

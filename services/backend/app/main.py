@@ -1,9 +1,23 @@
+import asyncio
+import contextlib
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, meetings, profiles, projects, search, speakers, standup, summaries, usage
+from app.api import (
+    auth,
+    meetings,
+    privacy,
+    profiles,
+    projects,
+    search,
+    speakers,
+    standup,
+    summaries,
+    usage,
+)
 from app.api.auth import dev_login_enabled
 from app.services import services
 from app.ws import meetings as ws_meetings
@@ -13,7 +27,18 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    from app.privacy.service import retention_loop
+
+    retention = (
+        asyncio.create_task(retention_loop(services))
+        if os.environ.get("COPILOT_RETENTION_JOB", "1") == "1"
+        else None
+    )
     yield
+    if retention:
+        retention.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await retention
     # Flush live meetings' transcripts on shutdown.
     s = services()
     await s.sessions.shutdown()
@@ -32,6 +57,7 @@ app.include_router(speakers.router)
 app.include_router(profiles.router)
 app.include_router(standup.router)
 app.include_router(projects.router)
+app.include_router(privacy.router)
 app.include_router(ws_meetings.router)
 
 

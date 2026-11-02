@@ -67,20 +67,43 @@ class SearchService:
         chunks = transcript_chunks(await self.store.segments(meeting.id), names)
         if summary is not None:
             chunks += summary_chunks(Summary.model_validate(summary.sections))
-        vectors, provider = await self.embedder.embed([c.text for c in chunks], "meeting")
+        vectors, provider = await self.embedder.embed(
+            [c.text for c in chunks], "meeting", local_only=meeting.mode == "local"
+        )
         await self.index.replace_meeting(meeting, chunks, vectors)
         log.info("indexed meeting=%s chunks=%d embedder=%s", meeting.id, len(chunks), provider)
         return len(chunks)
 
-    async def search(self, user_id: str, query: str, limit: int = 10) -> list[Hit]:
+    async def search(
+        self,
+        user_id: str,
+        query: str,
+        limit: int = 10,
+        *,
+        local_only: bool = False,
+        for_cloud_model: bool = False,
+    ) -> list[Hit]:
+        """`local_only`: embed the query on this machine. `for_cloud_model`: the hits will be
+        sent to a cloud model, so Local-only meetings are left out."""
         query = query.strip()
         if not query:
             return []
-        [vector], _ = await self.embedder.embed([query], "meeting")
-        return await self.index.search(user_id, query, vector, limit)
+        [vector], _ = await self.embedder.embed([query], "meeting", local_only=local_only)
+        hits = await self.index.search(
+            user_id, query, vector, limit * 2 if for_cloud_model else limit
+        )
+        if for_cloud_model:
+            hits = [h for h in hits if h.mode != "local"]
+        return hits[:limit]
 
-    async def ask(self, user_id: str, question: str) -> Answer:
-        hits = await self.search(user_id, question, ASK_CONTEXT_CHUNKS)
+    async def ask(self, user_id: str, question: str, *, local_only: bool = False) -> Answer:
+        hits = await self.search(
+            user_id,
+            question,
+            ASK_CONTEXT_CHUNKS,
+            local_only=local_only,
+            for_cloud_model=not local_only,
+        )
         if not hits:
             return Answer(NOT_FOUND, False, [], None)
         ids = {f"c{i + 1}": h for i, h in enumerate(hits)}
@@ -97,7 +120,12 @@ class SearchService:
             for cid, h in ids.items()
         )
         out = await self.router.complete(
-            "ask", load("ask").render(question=question, context=context), "meeting", AskOut
+            "ask",
+            load("ask").render(question=question, context=context),
+            "meeting",
+            AskOut,
+            owner_id=user_id,
+            local_only=local_only,
         )
         parsed: AskOut = out.json
         # Only keep citations to excerpts we actually sent.

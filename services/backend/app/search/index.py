@@ -28,6 +28,10 @@ class Hit:
     start_ms: int | None
     score: float
     document_id: str | None = None
+    #: The meeting's mode; "local" hits never go to a cloud model.
+    mode: str = "cloud"
+    #: The meeting's mode; "local" hits never go to a cloud model.
+    mode: str = "cloud"
 
 
 @dataclass
@@ -110,7 +114,17 @@ class InMemoryIndex:
                     m.visibility == "project" and await self.member(m.project_id, user_id)
                 ):
                     keyed[f"m|{m.id}|{c.source_type}|{c.source_id}"] = (
-                        Hit(m.id, m.title, m.started_at, c.source_type, c.text, c.start_ms, 0),
+                        Hit(
+                            m.id,
+                            m.title,
+                            m.started_at,
+                            c.source_type,
+                            c.text,
+                            c.start_ms,
+                            0,
+                            None,
+                            m.mode,
+                        ),
                         v,
                     )
         for lst in self._docs.values():
@@ -218,7 +232,7 @@ class PostgresIndex:
           select id, sum(1.0 / ({RRF_K} + r)) as score from (select * from fts union all select * from vec) x group by id
         )
         select c.meeting_id, coalesce(m.title, d.title), coalesce(m.started_at, d.created_at), c.source_type, c.text,
-               c.start_ms, f.score, d.id
+               c.start_ms, f.score, d.id, coalesce(m.mode, 'cloud')
         from fused f join public.chunks c on c.id = f.id
         left join public.meetings m on m.id = c.meeting_id
         left join public.documents d on c.source_type = 'document' and d.id::text = c.source_id
@@ -238,6 +252,7 @@ class PostgresIndex:
                     r[5],
                     round(float(r[6]), 5),
                     str(r[7]) if r[7] else None,
+                    r[8],
                 )
                 for r in await cur.fetchall()
             ]

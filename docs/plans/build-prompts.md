@@ -233,7 +233,7 @@ Acceptance: two test accounts on two machines see the same shared meeting live; 
 non-members see nothing and private meetings never leak.
 ```
 
-## Prompt 14: Privacy modes and consent tools
+## Prompt 14: Privacy modes and consent tools — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("Privacy, consent and compliance").

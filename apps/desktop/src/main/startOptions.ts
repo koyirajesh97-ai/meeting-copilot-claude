@@ -26,3 +26,24 @@ export function sanitizeStartOptions(raw: unknown, now = new Date()): StartOptio
     project_id,
   };
 }
+
+/** True for http(s)://localhost, 127.x.x.x or [::1]. */
+export function isLoopbackUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.replace(/^\[|\]$/g, "").toLowerCase();
+    return host === "localhost" || host === "::1" || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(host);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Whether this meeting may talk to the backend. Local-only meetings only connect to a backend
+ * on this computer; otherwise they record to this computer only.
+ */
+export function liveConnectionAllowed(mode: StartOptions["mode"], backendUrl: string): { ok: true } | { ok: false; message: string } {
+  if (mode === "local" && !isLoopbackUrl(backendUrl)) {
+    return { ok: false, message: "Local-only: the backend isn't on this computer, so this records to your computer only." };
+  }
+  return { ok: true };
+}

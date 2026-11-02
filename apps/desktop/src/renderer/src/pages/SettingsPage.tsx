@@ -1,3 +1,4 @@
+import { PrivacySection } from "../components/PrivacySection";
 import { useEffect, useState } from "react";
 import { CAPTION_FONT_RANGE, type Theme } from "../../../shared/ipc";
 import { AccountSettings } from "../components/AccountSettings";
@@ -70,10 +71,7 @@ export function SettingsPage() {
           </tbody>
         </table>
       </div>
-      <div className="space-y-1">
-        <h2 className="font-medium">AI providers, retention</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">These settings arrive with the provider router and privacy modes.</p>
-      </div>
+      <PrivacySection />
     </section>
   );
 }

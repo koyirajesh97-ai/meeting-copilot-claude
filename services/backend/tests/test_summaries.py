@@ -223,11 +223,13 @@ def test_regenerate_edit_rename_and_export(env) -> None:
 def test_live_only_meetings_are_not_summarized(env) -> None:
     s, store, client, h = env
     m = asyncio.run(_seed(store, mode="live-only"))
-    client.post(f"/meetings/{m.id}/end", headers=h)
-    assert client.get(f"/meetings/{m.id}/summary", headers=h).json()["status"] == "none"
     assert (
         client.post(f"/meetings/{m.id}/summary/regenerate", json={}, headers=h).status_code == 409
     )
+    client.post(f"/meetings/{m.id}/end", headers=h)
+    # Nothing is summarized, and the meeting itself is gone once it ends.
+    assert client.get(f"/meetings/{m.id}/summary", headers=h).status_code == 404
+    assert asyncio.run(store.get(m.id)) is None
 
 
 def test_failed_summary_is_reported(env) -> None:

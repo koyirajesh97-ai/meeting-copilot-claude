@@ -93,6 +93,30 @@ describe("projects", () => {
     await expect(projectCall(backend, { op: "get", id: "../admin" }, async () => null)).rejects.toThrow("Bad id");
   });
 
+  it("deleting a meeting returns its recording folder; clearAll empties the cache", () => {
+    const c = new Cache(join(dir, "d.sqlite"));
+    c.upsertMeeting({ id: "m1", title: "a", type: "custom", mode: "cloud", started_at: 1, ended_at: 2 });
+    c.setRecordingDir("m1", "/rec/2026-11-02");
+    c.upsertSegment("m1", seg("seg_1", 0));
+    c.upsertMeeting({ id: "m2", title: "b", type: "custom", mode: "cloud", started_at: 3, ended_at: 4 });
+    expect(c.deleteMeeting("m1")).toBe("/rec/2026-11-02");
+    expect(c.getMeeting("m1")).toBeNull();
+    expect(c.deleteMeeting("m2")).toBeNull();
+    c.upsertMeeting({ id: "m3", title: "c", type: "custom", mode: "cloud", started_at: 5, ended_at: 6 });
+    c.clearAll();
+    expect(c.listMeetings()).toEqual([]);
+    c.close();
+  });
+
+  it("Local-only only connects to a backend on this computer", async () => {
+    const { isLoopbackUrl, liveConnectionAllowed } = await import("../startOptions");
+    expect(["http://127.0.0.1:8000", "http://localhost:8000", "http://[::1]:8000"].every(isLoopbackUrl)).toBe(true);
+    expect(["https://api.example.com", "http://127.example.com", "http://localhost.evil.com", "nonsense"].some(isLoopbackUrl)).toBe(false);
+    expect(liveConnectionAllowed("local", "https://copilot.example.com")).toMatchObject({ ok: false });
+    expect(liveConnectionAllowed("local", "http://127.0.0.1:8000")).toEqual({ ok: true });
+    expect(liveConnectionAllowed("cloud", "https://copilot.example.com")).toEqual({ ok: true });
+  });
+
   it("only shares a meeting that has a project", () => {
     const now = new Date();
     expect(sanitizeStartOptions({ title: "x", visibility: "project", project_id: "p1" }, now)).toMatchObject({ visibility: "project", project_id: "p1" });
@@ -120,6 +144,20 @@ describe("sync worker", () => {
       ["m2", "New", 1],
       ["m1", "Renamed", 1],
     ]);
+    c.close();
+  });
+
+  it("drops meetings the server deleted, but keeps ones never uploaded", async () => {
+    const c = new Cache(join(dir, "c.sqlite"));
+    c.upsertMeeting({ id: "gone", title: "deleted elsewhere", type: "custom", mode: "cloud", started_at: 1, ended_at: 2 });
+    c.setRecordingDir("gone", "/rec/gone");
+    c.markSynced("gone", 3);
+    c.upsertMeeting({ id: "offline", title: "not uploaded yet", type: "custom", mode: "cloud", started_at: 4, ended_at: null });
+    const server = { listMeetings: async () => [] } as unknown as BackendClient;
+    const removed: string[] = [];
+    await syncAll(server, c, (d) => removed.push(d));
+    expect(c.listMeetings().map((m) => m.id)).toEqual(["offline"]);
+    expect(removed).toEqual(["/rec/gone"]);
     c.close();
   });
 });

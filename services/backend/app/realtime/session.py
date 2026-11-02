@@ -25,7 +25,7 @@ from app.events import (
     TranscriptPartial,
     dump_event,
 )
-from app.meetings.store import Meeting, MeetingStore, Segment
+from app.meetings.store import ConsentEvent, Meeting, MeetingStore, Segment
 from app.metrics import metrics
 from app.providers.stt.base import SttError, SttOptions, SttResult
 from app.router.policy import DataPolicyError
@@ -83,7 +83,8 @@ class ChannelWorker:
         ex = set(self.failed)
         if self.session.meeting.mode == "local":
             # Local-only: nothing may leave this machine.
-            ex |= {d.id for d in self.session.registry.chain if d.provider != "local"}
+            cfg = self.session.registry.config
+            ex |= {d.id for d in self.session.registry.chain if not cfg.provider(d.provider).local}
         return ex
 
     async def start(self, wait_s: float = 15.0) -> None:
@@ -386,10 +387,13 @@ class MeetingSession:
             await self.workers[ch].feed(bytes(pcm))
 
     async def on_control(self, msg: Control, peer: Peer) -> None:
-        if msg.action == "pause":
-            self.paused = True
-        elif msg.action == "resume":
-            self.paused = False
+        if msg.action in ("pause", "resume"):
+            self.paused = msg.action == "pause"
+            if self.meeting.mode != "live-only":  # Live-only keeps nothing, not even this
+                note = getattr(msg, "note", None)
+                await self.store.add_consent_event(
+                    ConsentEvent(self.meeting.id, "paused" if self.paused else "resumed", note)
+                )
         else:
             for plugin in self.plugins:
                 if await plugin.on_control(msg, peer):

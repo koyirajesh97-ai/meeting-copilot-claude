@@ -57,7 +57,15 @@ class SummaryJobs:
             segments = await self.store.segments(meeting_id)
             names = await self.store.speaker_names(meeting_id)
             template = template_for(meeting.type, template_id)
-            result = await summarize(self.router, meeting.type, segments, template, names)
+            result = await summarize(
+                self.router,
+                meeting.type,
+                segments,
+                template,
+                names,
+                owner_id=meeting.owner_id,
+                local_only=meeting.mode == "local",
+            )
             stored = await self.store.save_summary(
                 StoredSummary(
                     new_id(), meeting_id, template.id, result.summary.model_dump(), result.provider

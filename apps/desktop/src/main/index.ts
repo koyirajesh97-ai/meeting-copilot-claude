@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   globalShortcut,
   ipcMain,
@@ -28,7 +29,11 @@ import { writeFile } from "node:fs/promises";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
 import { trayIcons } from "./icons";
-import { sanitizeStartOptions } from "./startOptions";
+import { rm } from "node:fs/promises";
+import { DEFAULT_CONSENT_MESSAGE } from "../shared/meetings";
+import { DELETE_ACCOUNT_PHRASE, type PrivacySettings, type ProviderInfo } from "../shared/ipc";
+import { BackendError } from "./backend/client";
+import { liveConnectionAllowed, sanitizeStartOptions } from "./startOptions";
 import { deleteSecret, getSettings, hasSecret, secretBox, setSecret, updateSettings } from "./store";
 import { createMainWindow, createOverlayWindow, navigateMain, resizeOverlay } from "./windows";
 
@@ -48,6 +53,8 @@ const state: AppState = {
   enrolling: false,
   auth: SIGNED_OUT,
   live: { status: "off", meetingId: null },
+  paused: false,
+  meetingMode: null,
 };
 
 // Hidden capture windows have no user gesture; let their AudioContext start anyway.
@@ -126,7 +133,14 @@ function setupBackend(): void {
   });
   l.on("meeting", (id, opts) => {
     liveMode = opts.mode;
-    cache?.upsertMeeting({ id, title: opts.title, type: opts.type, mode: opts.mode, started_at: Date.now() / 1000, ended_at: null });
+    // Live-only: nothing is kept on this computer either.
+    if (opts.mode !== "live-only") {
+      cache?.upsertMeeting({ id, title: opts.title, type: opts.type, mode: opts.mode, started_at: Date.now() / 1000, ended_at: null });
+      cache?.setRecordingDir(id, capture?.currentDir ?? null);
+    }
+    // "Announce" pressed before the meeting reached the backend: log it now.
+    if (pendingAnnounce && Date.now() - pendingAnnounce < 15 * 60_000) void logAnnounce(id);
+    pendingAnnounce = null;
   });
   l.on("event", (event) => {
     sendToWindows(IPC.liveEvent, event);
@@ -140,10 +154,24 @@ function setupBackend(): void {
   setInterval(() => auth?.state.signedIn && void runSync(), SYNC_EVERY_MS).unref();
 }
 
+let pendingAnnounce: number | null = null;
+
+async function logAnnounce(meetingId: string): Promise<boolean> {
+  try {
+    const r = await backend!.call<{ logged: boolean }>("POST", `/meetings/${encodeURIComponent(meetingId)}/consent`, { kind: "announced" });
+    return r.logged;
+  } catch (err) {
+    console.warn("[consent] couldn't log the announcement:", (err as Error).message);
+    return false;
+  }
+}
+
 async function runSync(): Promise<{ meetings: number; error?: string }> {
   if (!backend || !cache) return { meetings: 0, error: "not ready" };
   try {
-    const n = await syncAll(backend, cache);
+    const n = await syncAll(backend, cache, (dir) => {
+      if (dir.startsWith(recordingsDir())) void rm(dir, { recursive: true, force: true });
+    });
     sendToWindows(IPC.state, state);
     return { meetings: n };
   } catch (err) {
@@ -171,15 +199,23 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
     if (state.capturing === on) return state;
     // The indicator turns on before any audio is read and off only after capture stops.
     if (on) {
+      const opts = options ?? sanitizeStartOptions(undefined);
       state.capturing = true;
+      state.paused = false;
+      state.meetingMode = opts.mode;
       state.captureStartedAt = Date.now();
       showOverlay();
       broadcast();
       const settings = getSettings();
-      await capture?.start({ micDeviceId: settings.micDeviceId, systemApp: settings.systemAudioApp });
-      if (auth?.state.signedIn) {
+      // Live-only keeps no WAV files: audio only streams for live help.
+      await capture?.start({ micDeviceId: settings.micDeviceId, systemApp: settings.systemAudioApp, keepAudio: opts.mode !== "live-only" });
+      const allowed = liveConnectionAllowed(opts.mode, settings.backendUrl);
+      if (!allowed.ok) {
+        state.live = { status: "local-only", meetingId: null, message: allowed.message };
+        broadcast();
+      } else if (auth?.state.signedIn) {
         // Creating the meeting retries in the background; audio buffers locally meanwhile.
-        void live?.start(options ?? sanitizeStartOptions(undefined));
+        void live?.start(opts);
       } else {
         state.live = { status: "local-only", meetingId: null, message: "Sign in (Settings) to get live captions. Recording locally." };
         broadcast();
@@ -189,11 +225,14 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
       const summary = await capture?.stop();
       if (summary) console.log(`[audio] saved recording to ${summary.dir}`);
       const id = await live?.stop();
+      const endedMode = state.meetingMode;
       state.capturing = false;
+      state.paused = false;
+      state.meetingMode = null;
       state.captureStartedAt = null;
       state.live = { status: "off", meetingId: null };
       broadcast();
-      if (id && cache && backend) {
+      if (id && cache && backend && endedMode !== "live-only") {
         cache.markEnded(id, Date.now() / 1000);
         // Fill in anything the live socket missed, then pick up the summary when it's ready.
         const b = backend;
@@ -209,6 +248,16 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
   });
   captureOp = op.catch(() => undefined);
   return op;
+}
+
+/** Pause drops audio until Resume; the backend logs both as consent events. */
+function setPaused(paused: boolean): AppState {
+  if (!state.capturing || state.paused === paused) return state;
+  capture?.setPaused(paused);
+  live?.send({ type: "control", action: paused ? "pause" : "resume" });
+  state.paused = paused;
+  broadcast();
+  return state;
 }
 
 function setExpanded(expanded: boolean): AppState {
@@ -369,6 +418,63 @@ function registerIpc(): void {
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.pause, () => setPaused(true));
+  handle(IPC.resume, () => setPaused(false));
+  handle(IPC.privacyGet, async () => {
+    const defaults: PrivacySettings = { allow_test_providers: false, retention_days: null, consent_message: DEFAULT_CONSENT_MESSAGE };
+    if (!auth?.state.signedIn) return { settings: defaults, providers: [], signedIn: false };
+    const [settings, providers] = await Promise.all([
+      backend!.call<PrivacySettings>("GET", "/me/privacy"),
+      backend!.call<ProviderInfo[]>("GET", "/providers"),
+    ]);
+    return { settings, providers, signedIn: true };
+  });
+  handle(IPC.privacySave, (s) => {
+    const p = (s ?? {}) as Partial<PrivacySettings>;
+    return backend!.call("PUT", "/me/privacy", {
+      allow_test_providers: p.allow_test_providers === true,
+      retention_days: typeof p.retention_days === "number" ? Math.round(p.retention_days) : null,
+      consent_message: String(p.consent_message ?? DEFAULT_CONSENT_MESSAGE).slice(0, 1000),
+    });
+  });
+  handle(IPC.announce, async (message) => {
+    clipboard.writeText(String(message || DEFAULT_CONSENT_MESSAGE).slice(0, 1000));
+    const id = live?.currentMeetingId;
+    if (id) return { logged: await logAnnounce(id) };
+    // Not in a meeting yet: log it when the next one starts.
+    pendingAnnounce = Date.now();
+    return { logged: false };
+  });
+  handle(IPC.meetingDelete, async (id) => {
+    if (typeof id !== "string" || !/^[\w-]{1,64}$/.test(id)) throw new Error("Bad meeting id");
+    if (auth?.state.signedIn) {
+      try {
+        await backend!.call("DELETE", `/meetings/${encodeURIComponent(id)}`);
+      } catch (err) {
+        // Gone already is fine; offline isn't (the backend copy would stay).
+        if (!(err instanceof BackendError) || err.status !== 404) throw err;
+      }
+    }
+    const dir = cache?.deleteMeeting(id);
+    if (dir && dir.startsWith(recordingsDir())) await rm(dir, { recursive: true, force: true });
+    sendToWindows(IPC.state, state);
+  });
+  handle(IPC.accountExport, async () => {
+    const data = await backend!.download("/me/export");
+    const r = await dialog.showSaveDialog({ title: "Export your meetings", defaultPath: "meeting-copilot-export.zip", filters: [{ name: "Zip", extensions: ["zip"] }] });
+    if (r.canceled || !r.filePath) return null;
+    await writeFile(r.filePath, data);
+    return r.filePath;
+  });
+  handle(IPC.accountDelete, async (phrase) => {
+    if (phrase !== DELETE_ACCOUNT_PHRASE) throw new Error(`Type "${DELETE_ACCOUNT_PHRASE}" to confirm`);
+    if (state.capturing) throw new Error("Stop recording first");
+    await backend!.call("POST", "/me/delete", { confirm: DELETE_ACCOUNT_PHRASE });
+    cache?.clearAll();
+    await rm(recordingsDir(), { recursive: true, force: true });
+    await auth?.signOut();
+    broadcast();
+  });
   handle(IPC.projects, (call) =>
     projectCall(backend!, call as never, async () => {
       const r = await dialog.showOpenDialog({

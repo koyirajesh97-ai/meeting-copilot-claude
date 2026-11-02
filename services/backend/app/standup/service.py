@@ -60,6 +60,7 @@ class StandupService:
             ),
             "meeting",
             StandupOut,
+            owner_id=user_id,
         )
         s: StandupOut = out.json
         return await self.store.upsert(

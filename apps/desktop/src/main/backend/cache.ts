@@ -69,6 +69,7 @@ export class Cache {
       ["is_live", "integer not null default 0"],
       ["visibility", "text not null default 'private'"],
       ["project_id", "text"],
+      ["recording_dir", "text"],
     ];
     for (const [name, def] of add) if (!cols.has(name)) this.db.exec(`alter table meetings add column ${name} ${def}`);
   }
@@ -88,6 +89,30 @@ export class Cache {
       )
       .run(m.id, m.title, m.type, m.mode, m.started_at, m.ended_at, m.is_mine === false ? 0 : 1, m.is_live ? 1 : 0,
         m.visibility ?? "private", m.project_id ?? null);
+  }
+
+  /** Remember where this meeting's WAV files are, so deleting the meeting deletes them. */
+  setRecordingDir(id: string, dir: string | null): void {
+    this.db.prepare("update meetings set recording_dir = ? where id = ?").run(dir, id);
+  }
+
+  /** Delete a meeting and its transcript and details. Returns its recording folder, if any. */
+  deleteMeeting(id: string): string | null {
+    const row = this.db.prepare("select recording_dir from meetings where id = ?").get(id) as { recording_dir: string | null } | undefined;
+    this.db.prepare("delete from segments where meeting_id = ?").run(id);
+    this.db.prepare("delete from details where meeting_id = ?").run(id);
+    this.db.prepare("delete from meetings where id = ?").run(id);
+    return row?.recording_dir ?? null;
+  }
+
+  /** Meetings this computer synced before (so the server had them). */
+  syncedMeetingIds(): string[] {
+    return (this.db.prepare("select id from meetings where synced_at is not null").all() as { id: string }[]).map((r) => r.id);
+  }
+
+  /** Delete everything (after deleting the account). */
+  clearAll(): void {
+    this.db.exec("delete from segments; delete from details; delete from meetings;");
   }
 
   markEnded(id: string, at: number): void {

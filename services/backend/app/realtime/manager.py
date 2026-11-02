@@ -81,6 +81,10 @@ class SessionManager:
         if mark_ended:
             await self.store.end(meeting_id)
 
+    def forget(self, meeting_id: str) -> None:
+        """The meeting was deleted: drop its ended session (and replay log) too."""
+        self._finished.pop(meeting_id, None)
+
     def get_any(self, meeting_id: str) -> MeetingSession | None:
         """A live session, or one that just ended and is waiting for its summary."""
         return self._sessions.get(meeting_id) or self._finished.get(meeting_id)

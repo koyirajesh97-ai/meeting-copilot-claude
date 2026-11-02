@@ -201,7 +201,16 @@ class LiveHelp(Plugin):
             )
 
     async def complete(self, task: str, messages, schema):
-        return await self.router.complete(task, messages, "meeting", schema, on_notice=self._notice)
+        m = self.session.meeting
+        return await self.router.complete(
+            task,
+            messages,
+            "meeting",
+            schema,
+            on_notice=self._notice,
+            owner_id=m.owner_id,
+            local_only=m.mode == "local",
+        )
 
     def recent_lines(self, minutes: float | None = None) -> list[str]:
         segs = self.session.recent
@@ -289,8 +298,13 @@ class LiveHelp(Plugin):
 
     async def _retrieve(self, text: str) -> list[Hit]:
         try:
+            local = self.session.meeting.mode == "local"
             hits = await self.search.search(
-                self.session.meeting.owner_id, text, self.cfg.context_chunks + 2
+                self.session.meeting.owner_id,
+                text,
+                self.cfg.context_chunks + 2,
+                local_only=local,
+                for_cloud_model=not local,
             )
         except Exception:
             log.exception("retrieval failed")

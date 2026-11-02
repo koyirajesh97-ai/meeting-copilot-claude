@@ -65,9 +65,11 @@ class Completion:
 
 
 class NoProviderAvailable(RuntimeError):
-    def __init__(self, task: str, attempts: list[dict[str, str]]):
+    def __init__(self, task: str, attempts: list[dict[str, str]], hint: str = ""):
         detail = "; ".join(f"{a['deployment']}: {a['outcome']}" for a in attempts) or "empty chain"
-        super().__init__(f"No provider could serve task {task!r} ({detail})")
+        super().__init__(
+            f"No provider could serve task {task!r} ({detail}){' ' + hint if hint else ''}"
+        )
         self.task = task
         self.attempts = attempts
 
@@ -115,6 +117,8 @@ class Router:
         self.cooldowns = cooldowns or Cooldowns(config)
         self.limiter = limiter or MinuteLimiter()
         self._listeners: list[Listener] = []
+        #: owner_id -> True when that user opted in to test-only providers (Settings).
+        self.opt_in: Callable[[str], Awaitable[bool]] | None = None
 
     def subscribe(self, listener: Listener) -> Callable[[], None]:
         self._listeners.append(listener)
@@ -137,9 +141,17 @@ class Router:
         json_schema: type[BaseModel] | None = None,
         *,
         json_mode: bool | None = None,
-        allow_test_only: bool = False,
+        allow_test_only: bool | None = None,
+        owner_id: str | None = None,
+        local_only: bool = False,
         on_notice: Listener | None = None,
     ) -> Completion:
+        """Try the task's chain in order.
+
+        `owner_id` looks up that user's Settings opt-in for test-only providers (unless
+        `allow_test_only` is given); `local_only` (Local-only meetings) skips every provider that
+        isn't marked `local: true`.
+        """
         chain = self.config.tasks.get(task)
         if chain is None:
             raise KeyError(f"Unknown task {task!r}; add it to config/providers.yaml")
@@ -151,9 +163,16 @@ class Router:
         last_tried: Deployment | None = None
         last_reason = ""
         started = time.perf_counter()
+        if allow_test_only is None:
+            allow_test_only = bool(owner_id and self.opt_in and await self.opt_in(owner_id))
+        local_skipped = 0
 
         for d in chain:
             provider = self.config.provider(d.provider)
+            if local_only and not provider.local:
+                local_skipped += 1
+                attempts.append({"deployment": d.id, "outcome": "skipped: Local-only"})
+                continue
             if not allowed(provider, data_class, allow_test_only):
                 policy_blocked += 1
                 attempts.append(
@@ -207,6 +226,10 @@ class Router:
                 )
             last_tried, last_reason = d, outcome
 
+        if local_only and local_skipped == len(chain):
+            raise NoProviderAvailable(
+                task, attempts, hint="No local model for this task; install Ollama."
+            )
         if policy_blocked == len(chain):
             raise DataPolicyError(
                 f"Every provider for {task!r} may train on its inputs, so meeting data can't be sent. "

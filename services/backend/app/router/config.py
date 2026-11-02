@@ -16,6 +16,19 @@ DEFAULT_CONFIG_PATH = REPO_ROOT / "config" / "providers.yaml"
 TrainsOnData = bool | Literal["unknown"]
 
 
+def is_loopback_url(url: str) -> bool:
+    """True for http(s)://localhost, 127.x.x.x or [::1] URLs."""
+    from urllib.parse import urlparse
+
+    host = (urlparse(url).hostname or "").lower()
+    import re
+
+    return (
+        host in ("localhost", "::1")
+        or re.fullmatch(r"127\.\d{1,3}\.\d{1,3}\.\d{1,3}", host) is not None
+    )
+
+
 class Limits(BaseModel):
     """Free-tier limits for one model. Any limit may be absent (unknown or unlimited)."""
 
@@ -34,12 +47,18 @@ class ProviderConfig(BaseModel):
     # Unknown is treated as "trains on data": meeting content never goes there.
     trains_on_data: TrainsOnData = "unknown"
     kind: Literal["llm", "stt_stream", "stt_local", "embed"] = "llm"
+    #: Runs on this machine (no network beyond localhost). Local-only meetings use only these.
+    local: bool = False
     #: Some providers need an account id in the URL (Cloudflare).
     account_env: str | None = None
     model: str | None = None  # default model for STT providers
     models: dict[str, Limits] = Field(default_factory=dict)
     # Hour (UTC) when the provider's daily quota resets.
     reset_utc_hour: int = Field(default=0, ge=0, le=23)
+
+    def model_post_init(self, _ctx: object) -> None:
+        if self.local and self.base_url and not is_loopback_url(self.base_url):
+            raise ValueError(f"A local provider must use a localhost base_url, got {self.base_url}")
 
     @property
     def api_key(self) -> str | None:

@@ -14,7 +14,9 @@ from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
 from .store import (
+    LIVE_ONLY_MAX_S,
     ActionItemRecord,
+    ConsentEvent,
     DecisionRecord,
     Meeting,
     Segment,
@@ -478,3 +480,40 @@ class PostgresStore:
                 "update public.meetings set project_id = null, visibility = 'private' where project_id = %s",
                 (project_id,),
             )
+
+    # ---------- privacy ----------
+
+    async def add_consent_event(self, e: ConsentEvent) -> None:
+        async with await self.connection() as conn:
+            await conn.execute(
+                "insert into public.consent_events (meeting_id, kind, note, at) values (%s, %s, %s, %s)",
+                (e.meeting_id, e.kind, e.note, datetime.fromtimestamp(e.at, UTC)),
+            )
+
+    async def consent_events(self, meeting_id: str) -> list[ConsentEvent]:
+        async with await self.connection() as conn:
+            cur = await conn.execute(
+                "select kind, note, at from public.consent_events where meeting_id = %s order by at",
+                (meeting_id,),
+            )
+            return [
+                ConsentEvent(meeting_id, r[0], r[1], r[2].timestamp()) for r in await cur.fetchall()
+            ]
+
+    async def delete_meeting(self, meeting_id: str) -> None:
+        """Segments, chunks, summaries, cards, action items, decisions, names and consent events
+        all cascade from the meeting row."""
+        async with await self.connection() as conn:
+            await conn.execute("delete from public.meetings where id = %s", (meeting_id,))
+
+    async def expired_meetings(self, now: float) -> list[Meeting]:
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(
+                """select m.* from public.meetings m join public.users u on u.id = m.owner_id
+                   where (u.retention_days is not null
+                          and m.started_at < %(now)s - make_interval(days => u.retention_days))
+                      or (m.mode = 'live-only' and m.started_at < %(now)s - make_interval(secs => %(live)s))""",
+                {"now": datetime.fromtimestamp(now, UTC), "live": LIVE_ONLY_MAX_S},
+            )
+            return [_meeting(r) for r in await cur.fetchall()]

@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
 from .config import Deployment, ProviderConfig
+
+# LiteLLM downloads a model price list on import unless told not to; keep startup offline.
+os.environ.setdefault("LITELLM_LOCAL_MODEL_COST_MAP", "True")
 
 
 class ProviderError(Exception):
@@ -67,7 +71,7 @@ class LiteLLMClient:
 
         if not provider.base_url:
             raise ProviderError(f"{deployment.provider} has no base_url")
-        key = provider.api_key
+        key = provider.api_key or ("local" if provider.local and not provider.key_env else None)
         if not key:
             raise ProviderError(f"{provider.key_env} is not set", status=401)
         kwargs: dict[str, Any] = {

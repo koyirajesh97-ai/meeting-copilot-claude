@@ -17,7 +17,6 @@ Follow-ups that were out of scope for the prompt that found them.
   GET /metrics), and stopping Deepgram mid-meeting falls back to Groq Whisper.
 - After a network outage longer than 60 s, upload the missed audio from the local WAV so the
   transcript has no gap (today only the last 60 s are replayed).
-- Live-only mode still writes the local WAV files; Prompt 14 should skip them.
 - Sign-in by magic link (deep link into the app) in addition to the emailed code.
 - With real keys: run `evals/summaries/run.py --real --long` and confirm a 60-minute meeting
   summarizes in under 60 s; tune the prompts if recall is below 90%.
@@ -47,3 +46,11 @@ Follow-ups that were out of scope for the prompt that found them.
 - Watch socket fan-out is per backend process; run one backend (or add a shared pub/sub) before
   scaling out.
 - Link documents are fetched once; add "refresh" for wiki pages that change.
+- Local-only with real models: install faster-whisper (`local` STT) and Ollama, pull
+  `llama3.2:3b` (or set another model in config/providers.yaml), and check card latency on a
+  laptop; small local models may miss the 2.5 s card budget.
+- Local-only meetings started while signed out record to the laptop only; add a way to upload
+  or transcribe those WAVs later.
+- Consent events for "objection" have an API but no button yet (Pause covers the common case).
+- The retention job runs in the backend process every hour; with several backends, run it once
+  (a scheduled job) instead.

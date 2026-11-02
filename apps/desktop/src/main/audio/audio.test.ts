@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import { AudioChannel, decodeFrame, FRAME_SAMPLES, WIRE_FRAME_BYTES } from "@meeting-copilot/shared";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -263,6 +264,22 @@ describe("channel pipeline", () => {
     expect(sent.length).toBe(p.framesCaptured);
     expect(sent.every((f) => f.length === WIRE_FRAME_BYTES && decodeFrame(f).channel === AudioChannel.System)).toBe(true);
     expect(readWav(join(dir, "system.wav")).dataBytes).toBe(p.framesCaptured * 640);
+  });
+
+  it("Live-only writes no WAV; while paused nothing is written or sent", async () => {
+    const out = new OutboundAudio();
+    const sent: Uint8Array[] = [];
+    out.attach((f) => (sent.push(f), true));
+    const p = new ChannelPipeline({ channel: AudioChannel.System, wavPath: null, outbound: out });
+    p.push(sine(440, 16_000, 0.2), 16_000);
+    p.paused = true;
+    p.push(sine(440, 16_000, 1), 16_000);
+    p.paused = false;
+    p.push(sine(440, 16_000, 0.2), 16_000);
+    await p.stop();
+    expect(p.framesCaptured).toBe(20);
+    expect(sent.length).toBe(20);
+    expect(readdirSync(dir)).toEqual([]);
   });
 
   it("mic: records all audio locally but sends only speech", async () => {

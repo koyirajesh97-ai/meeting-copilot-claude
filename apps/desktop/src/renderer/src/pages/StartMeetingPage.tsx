@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { AppState, Brief } from "../../../shared/ipc";
+import type { AppState, Brief, PrivacySettings } from "../../../shared/ipc";
 import {
   DEFAULT_CONSENT_MESSAGE,
   MEETING_MODES,
@@ -16,7 +16,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [type, setType] = useState<MeetingType>("standup");
   const [mode, setMode] = useState<MeetingMode>("cloud");
   const [visibility, setVisibility] = useState<Visibility>("private");
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
   const [agenda, setAgenda] = useState("");
   const [brief, setBrief] = useState<Brief | null>(null);
   const { projects } = useProjects();
@@ -31,10 +31,23 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
     return () => clearTimeout(t);
   }, [title, type, agenda, state?.auth.signedIn]);
 
+  const [consent, setConsent] = useState(DEFAULT_CONSENT_MESSAGE);
+  const [savedConsent, setSavedConsent] = useState<PrivacySettings | null>(null);
+  useEffect(() => {
+    void window.copilot.privacy.get().then((p) => {
+      setConsent(p.settings.consent_message);
+      if (p.signedIn) setSavedConsent(p.settings);
+    }, () => undefined);
+  }, [state?.auth.signedIn]);
+
   const announce = async () => {
-    await navigator.clipboard.writeText(DEFAULT_CONSENT_MESSAGE);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+    const r = await window.copilot.privacy.announce(consent);
+    // An edited message becomes your default.
+    if (savedConsent && consent.trim() && consent !== savedConsent.consent_message) {
+      void window.copilot.privacy.save({ ...savedConsent, consent_message: consent.trim() }).then(setSavedConsent);
+    }
+    setCopied(r.logged ? "Copied and logged" : "Copied consent message");
+    setTimeout(() => setCopied(null), 2500);
   };
 
   return (
@@ -98,7 +111,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             {state?.capturing ? "Stop recording" : "Start recording"}
           </button>
           <button type="button" className={secondaryButtonClass} onClick={() => void announce()}>
-            {copied ? "Copied consent message" : "Announce"}
+            {copied ?? "Announce"}
           </button>
         </div>
         {state && !state.auth.signedIn && (
@@ -106,8 +119,12 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             You're not signed in, so this records to your computer only (no live captions). Sign in under Settings.
           </p>
         )}
+        <label className="block text-sm">
+          Consent message
+          <textarea aria-label="Consent message" className={`${inputClass} mt-1`} rows={2} value={consent} onChange={(e) => setConsent(e.target.value)} />
+        </label>
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Announce copies a short message to paste in the meeting chat so everyone knows you're recording.
+          Announce copies this message to paste in the meeting chat so everyone knows you're recording, and notes that you announced it.
         </p>
       </div>
       {brief && <BriefPanel brief={brief} />}

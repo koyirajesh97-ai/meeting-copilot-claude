@@ -12,7 +12,8 @@ import { WavWriter } from "./wav";
 
 export interface PipelineOptions {
   channel: AudioChannel;
-  wavPath: string;
+  /** Null in Live-only mode: nothing is written to disk. */
+  wavPath: string | null;
   outbound: OutboundAudio;
   /** Mic only: send frames only during speech. */
   vad?: VadGate;
@@ -25,14 +26,16 @@ export class ChannelPipeline {
   private resampler: Resampler | null = null;
   private readonly framer = new Framer();
   private readonly meter = new LevelMeter();
-  private readonly wav: WavWriter;
+  private readonly wav: WavWriter | null;
+  /** Paused: incoming audio is dropped (not written, metered or sent). */
+  paused = false;
   private readonly silence: SilenceWatch | null;
   private pendingVad: Promise<unknown> = Promise.resolve();
   framesCaptured = 0;
   framesSent = 0;
 
   constructor(private readonly opts: PipelineOptions) {
-    this.wav = new WavWriter(opts.wavPath);
+    this.wav = opts.wavPath ? new WavWriter(opts.wavPath) : null;
     this.silence = opts.onSilent ? new SilenceWatch(opts.silenceAfterMs) : null;
   }
 
@@ -42,6 +45,7 @@ export class ChannelPipeline {
 
   /** Mono float samples in [-1, 1] at `sampleRate`. */
   push(samples: Float32Array, sampleRate: number): void {
+    if (this.paused) return;
     if (!this.resampler || this.resampler.inputRate !== sampleRate) {
       this.resampler = new Resampler(sampleRate);
     }
@@ -51,7 +55,7 @@ export class ChannelPipeline {
 
   private handle(frame: Int16Array): void {
     this.framesCaptured++;
-    this.wav.write(frame);
+    this.wav?.write(frame);
     this.meter.push(frame);
     if (this.silence?.push(frame)) this.opts.onSilent?.();
     if (this.opts.vad) {
@@ -73,6 +77,6 @@ export class ChannelPipeline {
   async stop(): Promise<void> {
     for (const frame of this.framer.flush()) this.handle(frame);
     await this.pendingVad;
-    this.wav.close();
+    this.wav?.close();
   }
 }

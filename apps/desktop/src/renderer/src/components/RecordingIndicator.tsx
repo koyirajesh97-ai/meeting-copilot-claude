@@ -20,6 +20,14 @@ export function RecordingIndicator({ state, compact = false }: { state: AppState
       </span>
     );
   }
+  if (state.capturing && state.paused) {
+    return (
+      <span data-testid="recording-indicator" data-recording="paused" role="status" aria-label="Recording paused" className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
+        <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" aria-hidden />
+        PAUSED
+      </span>
+    );
+  }
   return (
     <span
       data-testid="recording-indicator"

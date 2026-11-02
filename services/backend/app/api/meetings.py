@@ -168,6 +168,11 @@ async def check_project(project_id: str | None, visibility: str, user_id: str) -
 
 @router.post("/meetings", response_model=MeetingSocket, status_code=status.HTTP_201_CREATED)
 async def create_meeting(body: CreateMeeting, request: Request, user: CurrentUser) -> MeetingSocket:
+    if body.mode == "local":
+        from app.api.privacy import local_mode_problem
+
+        if problem := local_mode_problem():
+            raise HTTPException(status.HTTP_409_CONFLICT, problem)
     project_vocab = await check_project(body.project_id, body.visibility, user.user_id)
     # Project vocabulary feeds transcription key terms and Clarify.
     vocab = sorted({t.strip() for t in [*body.vocabulary, *project_vocab] if t.strip()})
@@ -300,8 +305,12 @@ async def end_meeting(meeting_id: str, user: CurrentUser) -> None:
     m = await _owned(meeting_id, user.user_id)
     already_ended = m.ended_at is not None
     await services().sessions.end(meeting_id)
-    # Live-only meetings keep nothing, so there's nothing to summarize.
-    if not already_ended and m.mode != "live-only":
+    if m.mode == "live-only":
+        # Live-only keeps nothing: the meeting row and its replay log go when it ends.
+        from app.privacy.service import delete_meeting
+
+        await delete_meeting(services(), meeting_id)
+    elif not already_ended:
         await services().summaries.enqueue(meeting_id)
 
 

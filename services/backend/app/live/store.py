@@ -42,6 +42,10 @@ class InMemoryCards:
         c.used = used
         return True
 
+    async def delete_for_meeting(self, meeting_id: str) -> None:
+        for k in [k for k, c in self.rows.items() if c.meeting_id == meeting_id]:
+            del self.rows[k]
+
     async def for_meeting(self, meeting_id: str) -> list[CardRecord]:
         return sorted(
             (c for c in self.rows.values() if c.meeting_id == meeting_id),

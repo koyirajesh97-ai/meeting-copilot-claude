@@ -30,16 +30,19 @@ export interface CaptureStartOptions {
   systemApp: string | null;
   /** Folder name under recordingsDir; defaults to a timestamp. */
   sessionId?: string;
+  /** False in Live-only mode: no WAV files (audio is only streamed for live help). */
+  keepAudio?: boolean;
 }
 
 export interface CaptureSummary {
-  dir: string;
+  dir: string | null;
   mic: { framesCaptured: number; framesSent: number };
   system: { framesCaptured: number; framesSent: number };
 }
 
 interface Running {
-  dir: string;
+  /** Null when nothing is kept on disk (Live-only). */
+  dir: string | null;
   pipelines: Partial<Record<"mic" | "system", ChannelPipeline>>;
   sources: Partial<Record<"mic" | "system", AudioSource>>;
   timer: NodeJS.Timeout;
@@ -73,8 +76,8 @@ export class AudioCapture extends EventEmitter<{ status: [ChannelStatus]; levels
   async start(opts: CaptureStartOptions): Promise<ChannelStatus> {
     if (this.running) return this.status;
     const id = opts.sessionId ?? new Date().toISOString().replace(/[:.]/g, "-");
-    const dir = join(this.deps.recordingsDir, id);
-    mkdirSync(dir, { recursive: true });
+    const dir = opts.keepAudio === false ? null : join(this.deps.recordingsDir, id);
+    if (dir) mkdirSync(dir, { recursive: true });
 
     const running: Running = { dir, pipelines: {}, sources: {}, timer: setInterval(() => this.emitLevels(), this.deps.levelIntervalMs ?? 100) };
     this.running = running;
@@ -97,7 +100,7 @@ export class AudioCapture extends EventEmitter<{ status: [ChannelStatus]; levels
     }
     const pipeline = new ChannelPipeline({
       channel: AudioChannel.Mic,
-      wavPath: join(running.dir, "mic.wav"),
+      wavPath: running.dir && join(running.dir, "mic.wav"),
       outbound: this.outbound,
       vad: new VadGate(detector),
     });
@@ -127,7 +130,7 @@ export class AudioCapture extends EventEmitter<{ status: [ChannelStatus]; levels
     }
     const pipeline = new ChannelPipeline({
       channel: AudioChannel.System,
-      wavPath: join(running.dir, "system.wav"),
+      wavPath: running.dir && join(running.dir, "system.wav"),
       outbound: this.outbound,
       silenceAfterMs: this.deps.silenceAfterMs,
       onSilent: () =>
@@ -157,6 +160,17 @@ export class AudioCapture extends EventEmitter<{ status: [ChannelStatus]; levels
     const r = this.running;
     if (!r) return;
     this.emit("levels", { mic: r.pipelines.mic?.level ?? 0, system: r.pipelines.system?.level ?? 0 });
+  }
+
+  /** The folder this recording's WAV files go to (null when not recording or Live-only). */
+  get currentDir(): string | null {
+    return this.running?.dir ?? null;
+  }
+
+  /** Pause drops audio (nothing written or sent) until resumed; the session stays open. */
+  setPaused(paused: boolean): void {
+    for (const p of Object.values(this.running?.pipelines ?? {})) p.paused = paused;
+    if (paused) this.emit("levels", { mic: 0, system: 0 });
   }
 
   async stop(): Promise<CaptureSummary | null> {

@@ -52,7 +52,35 @@ export const IPC = {
   watchEvent: "watch:event",
   search: "search:query",
   ask: "search:ask",
+  privacyGet: "privacy:get",
+  privacySave: "privacy:save",
+  announce: "privacy:announce",
+  pause: "capture:pause",
+  resume: "capture:resume",
+  meetingDelete: "meetings:delete",
+  accountExport: "account:export",
+  accountDelete: "account:delete",
 } as const;
+
+export interface PrivacySettings {
+  /** Off by default: lets meeting data reach providers marked trains_on_data true or unknown. */
+  allow_test_providers: boolean;
+  /** Delete meetings older than this many days; null keeps them. */
+  retention_days: number | null;
+  consent_message: string;
+}
+
+export interface ProviderInfo {
+  name: string;
+  kind: string;
+  trains_on_data: boolean | "unknown";
+  local: boolean;
+  tasks: string[];
+  meeting_data_allowed: boolean;
+}
+
+/** Typed by the user to delete their account. */
+export const DELETE_ACCOUNT_PHRASE = "delete my account";
 
 export interface SearchHit {
   meeting_id: string;
@@ -360,6 +388,10 @@ export interface AppState {
   enrolling: boolean;
   auth: AuthState;
   live: LiveState;
+  /** Recording is paused: no audio is captured, written or sent until Resume. */
+  paused: boolean;
+  /** Mode of the meeting being recorded (null when not recording). */
+  meetingMode: "cloud" | "local" | "live-only" | null;
 }
 
 /** Secret names the renderer may store. Values never come back to the renderer. */
@@ -403,6 +435,21 @@ export interface CopilotApi {
   };
   /** Pre-meeting brief for a meeting about to start. */
   brief(title: string, type: string, agenda: string): Promise<Brief>;
+  privacy: {
+    /** Your privacy settings and each provider's data policy (defaults when signed out). */
+    get(): Promise<{ settings: PrivacySettings; providers: ProviderInfo[]; signedIn: boolean }>;
+    save(settings: PrivacySettings): Promise<PrivacySettings>;
+    /** Copy the consent message and log "announced" for the current (or next) meeting. */
+    announce(message: string): Promise<{ logged: boolean }>;
+    pause(): Promise<AppState>;
+    /** Call only after the user confirmed. */
+    resume(): Promise<AppState>;
+    /** Delete a meeting you recorded: backend data, the local cache and its WAV files. */
+    deleteMeeting(id: string): Promise<void>;
+    /** Save a zip of all your meetings (Markdown + JSON). Returns the path, or null if cancelled. */
+    exportAccount(): Promise<string | null>;
+    deleteAccount(phrase: string): Promise<void>;
+  };
   /** Projects, members, vocabulary, documents and the action-item board. */
   projects<T = unknown>(call: ProjectCall): Promise<T>;
   /** Rename a meeting, move it to a project, or share it with the project (owner only). */

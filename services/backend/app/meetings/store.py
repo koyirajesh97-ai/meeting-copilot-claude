@@ -74,6 +74,17 @@ class ActionItemRecord:
     draft: str | None = None
 
 
+ConsentKind = Literal["announced", "objection", "paused", "resumed"]
+
+
+@dataclass
+class ConsentEvent:
+    meeting_id: str
+    kind: ConsentKind
+    note: str | None = None
+    at: float = field(default_factory=time.time)
+
+
 @dataclass
 class DecisionRecord:
     id: str
@@ -129,9 +140,18 @@ class MeetingStore(Protocol):
         self, item_id: str, *, status: str | None, owner: str | None, due_text: str | None
     ) -> None: ...
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]: ...
+    # privacy
+    async def add_consent_event(self, e: ConsentEvent) -> None: ...
+    async def consent_events(self, meeting_id: str) -> list[ConsentEvent]: ...
+    async def delete_meeting(self, meeting_id: str) -> None: ...
+    async def expired_meetings(self, now: float) -> list[Meeting]: ...
     # speaker names given in a meeting (text only; never a voiceprint)
     async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None: ...
     async def speaker_names(self, meeting_id: str) -> dict[str, str]: ...
+
+
+#: A Live-only meeting whose app never came back to end it is deleted after this long.
+LIVE_ONLY_MAX_S = 12 * 3600
 
 
 def series_key(title: str) -> str:
@@ -160,6 +180,9 @@ class InMemoryMeetingStore:
         self._items: dict[str, list[ActionItemRecord]] = {}
         self._decisions: dict[str, list[DecisionRecord]] = {}
         self._names: dict[str, dict[str, str]] = {}
+        self._consent: dict[str, list[ConsentEvent]] = {}
+        #: owner_id -> retention days (in Postgres: users.retention_days).
+        self.retention: dict[str, int] = {}
 
     async def upsert_user(
         self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
@@ -316,3 +339,34 @@ class InMemoryMeetingStore:
         for m in self._meetings.values():
             if m.project_id == project_id:
                 m.project_id, m.visibility = None, "private"
+
+    async def add_consent_event(self, e: ConsentEvent) -> None:
+        self._consent.setdefault(e.meeting_id, []).append(e)
+
+    async def consent_events(self, meeting_id: str) -> list[ConsentEvent]:
+        return list(self._consent.get(meeting_id, []))
+
+    async def delete_meeting(self, meeting_id: str) -> None:
+        """Everything for a meeting: transcript, summaries, action items, decisions, names, consent."""
+        for d in (
+            self._meetings,
+            self._segments,
+            self._summary_status,
+            self._summaries,
+            self._items,
+            self._decisions,
+            self._names,
+            self._consent,
+        ):
+            d.pop(meeting_id, None)
+
+    async def expired_meetings(self, now: float) -> list[Meeting]:
+        """Meetings past their owner's retention period, and Live-only meetings left open > 12 h."""
+        out = []
+        for m in self._meetings.values():
+            days = self.retention.get(m.owner_id)
+            if (days and m.started_at < now - days * 86400) or (
+                m.mode == "live-only" and m.started_at < now - LIVE_ONLY_MAX_S
+            ):
+                out.append(m)
+        return out

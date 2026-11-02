@@ -18,8 +18,19 @@ export async function syncMeeting(backend: BackendClient, cache: Cache, id: stri
   return m.transcript.length;
 }
 
-export async function syncAll(backend: BackendClient, cache: Cache): Promise<number> {
+/**
+ * Pull everything new, and drop meetings the server no longer has (deleted elsewhere, by the
+ * retention setting, or unshared). Returns the deleted meetings' recording folders.
+ */
+export async function syncAll(backend: BackendClient, cache: Cache, removed: (dir: string) => void = () => undefined): Promise<number> {
   const server = await backend.listMeetings();
+  const onServer = new Set(server.map((m) => m.id));
+  // Only meetings synced before: one recorded offline and not uploaded yet stays.
+  for (const id of cache.syncedMeetingIds()) {
+    if (onServer.has(id)) continue;
+    const dir = cache.deleteMeeting(id);
+    if (dir) removed(dir);
+  }
   const local = new Map(cache.listMeetings(1000).map((m) => [m.id, m]));
   const stale = new Set(cache.unsyncedMeetingIds());
   for (const m of server) {

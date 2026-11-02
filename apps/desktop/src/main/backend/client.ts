@@ -198,6 +198,18 @@ export class BackendClient {
     return (await res.json()) as T;
   }
 
+  /** A binary download (the account export zip). */
+  async download(path: string): Promise<Buffer> {
+    const t = await this.token();
+    if (!t) throw new BackendError("Not signed in", 401);
+    const res = await this.fetchImpl(`${this.baseUrl()}${path}`, {
+      headers: { Authorization: `Bearer ${t}` },
+      signal: AbortSignal.timeout(120_000),
+    });
+    if (!res.ok) throw new BackendError(`Download failed: ${res.status}`, res.status);
+    return Buffer.from(await res.arrayBuffer());
+  }
+
   editMeeting(id: string, patch: object): Promise<MeetingOut> {
     return this.request("PATCH", `/meetings/${encodeURIComponent(id)}`, patch);
   }

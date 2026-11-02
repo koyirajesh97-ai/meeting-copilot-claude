@@ -157,13 +157,18 @@ class EmbeddingRouter:
             self._cache[d.id] = self.factory(d, self.cfg)
         return self._cache[d.id]
 
-    async def embed(self, texts: list[str], data_class: DataClass) -> tuple[list[list[float]], str]:
+    async def embed(
+        self, texts: list[str], data_class: DataClass, *, local_only: bool = False
+    ) -> tuple[list[list[float]], str]:
         if not texts:
             return [], "none"
         chain = self.cfg.tasks.get(TASK, [])
         tried = []
         blocked = 0
         for d in chain:
+            if local_only and not self.cfg.provider(d.provider).local:
+                tried.append(f"{d.id}: skipped (Local-only)")
+                continue
             if not allowed(self.cfg.provider(d.provider), data_class):
                 blocked += 1
                 continue

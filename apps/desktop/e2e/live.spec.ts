@@ -148,11 +148,26 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByLabel("Title").fill("E2E standup");
   await main.getByRole("combobox", { name: "Project", exact: true }).selectOption({ label: "Payments" });
   await main.getByLabel("Share with the project").check();
+  // Announce before starting: the message is copied and logged once the meeting exists.
+  await main.getByLabel("Consent message").fill("We're recording this standup for notes. Say so if that's not OK.");
+  await main.getByRole("button", { name: "Announce" }).click();
+  await expect(main.getByRole("button", { name: /Copied/ })).toBeVisible();
+  expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toContain("We're recording this standup");
   await main.getByRole("button", { name: "Start recording" }).click();
 
   // Live: the backend's (fake) transcriber turns the mic audio into captions in the overlay.
   await expect(overlay.getByTestId("live-status")).toHaveAttribute("data-status", "live", { timeout: 20_000 });
   await expect(overlay.getByTestId("caption-line")).toContainText("You: Morning everyone", { timeout: 30_000 });
+
+  // Pause stops capture at once; Resume asks first.
+  await overlay.getByRole("button", { name: "Pause" }).click();
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "paused");
+  await overlay.getByRole("button", { name: "Resume" }).click();
+  await overlay.getByRole("button", { name: "Cancel" }).click();
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "paused");
+  await overlay.getByRole("button", { name: "Resume" }).click();
+  await overlay.getByRole("button", { name: "Yes, resume" }).click();
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "true");
   await overlay.getByRole("button", { name: "Expand overlay" }).click();
   await expect(overlay.getByTestId("caption-final").first()).toContainText("Morning everyone, let's start the standup.");
   await expect(overlay.getByTestId("captions")).toHaveAttribute("data-pinned", "true");
@@ -182,6 +197,11 @@ test("record a meeting with live captions, then find its transcript after a rest
   await row.click();
   await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
   await expect(main.getByLabel("Sharing")).toHaveValue(/\|project$/);
+  // The announcement, the pause and the resume are in the meeting's consent log.
+  const meetingId = (await main.evaluate(() => location.hash)).split("/").pop()!;
+  const { token } = (await (await fetch(`${backendUrl}/auth/dev-session`, { method: "POST" })).json()) as { token: string };
+  const consent = (await (await fetch(`${backendUrl}/meetings/${meetingId}/consent`, { headers: { Authorization: `Bearer ${token}` } })).json()) as { kind: string }[];
+  expect(consent.map((e) => e.kind)).toEqual(["announced", "paused", "resumed"]);
   const lines = main.getByTestId("transcript-line");
   await expect(lines.first()).toContainText("You:Morning everyone, let's start the standup.");
   const count = await lines.count();
@@ -206,6 +226,13 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
   const highlighted = main.locator('[data-testid="transcript-line"][data-highlight="true"]');
   await expect(highlighted).toHaveCount(1);
+
+  // Settings → Privacy shows each provider's data policy; test-only ones are off for meeting data.
+  await main.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
+  const gemini = main.getByTestId("providers").locator('[data-provider="gemini"]');
+  await expect(gemini).toContainText("May train on data");
+  await expect(gemini).toContainText("Test data only");
+  await expect(main.getByLabel("Allow test-only providers for meeting data")).not.toBeChecked();
 
   // The next meeting of the series gets a brief about the last one.
   await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { LiveState, OverlayAction } from "../../../shared/ipc";
 import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
@@ -50,8 +50,21 @@ export function Overlay() {
   return (
     <div data-testid="overlay" data-expanded={expanded} className="flex h-full flex-col text-sm">
       <header className="drag flex items-center justify-between gap-2 border-b border-white/10 px-3 py-1.5">
-        <RecordingIndicator state={state} compact />
+        <span className="flex items-center gap-1.5">
+          <RecordingIndicator state={state} compact />
+          {state.capturing && state.meetingMode === "local" && (
+            <span data-testid="mode-badge" className="rounded bg-emerald-900/70 px-1.5 py-0.5 text-[10px] font-medium text-emerald-200" title="Local-only: nothing leaves this computer">
+              Local
+            </span>
+          )}
+          {state.capturing && state.meetingMode === "live-only" && (
+            <span data-testid="mode-badge" className="rounded bg-violet-900/70 px-1.5 py-0.5 text-[10px] font-medium text-violet-200" title="Live-only: nothing is saved">
+              Live-only
+            </span>
+          )}
+        </span>
         <div className="flex items-center gap-2">
+          {state.capturing && <PauseControl paused={state.paused} />}
           {state.capturing && <LevelMeters mic={state.audio.mic} system={state.audio.system} />}
           {state.capturing && <LiveChip live={state.live} provider={captions.provider} />}
           <button
@@ -141,5 +154,36 @@ function ActionButton({ action, label, hotkey }: { action: OverlayAction; label:
     >
       {label}
     </button>
+  );
+}
+
+/** Pause stops capture at once; Resume asks first, so recording never restarts by accident. */
+function PauseControl({ paused }: { paused: boolean }) {
+  const [confirming, setConfirming] = useState(false);
+  const cls = "no-drag rounded bg-white/10 px-1.5 py-0.5 text-[10px] hover:bg-white/20";
+  if (!paused) {
+    return (
+      <button type="button" className={cls} onClick={() => void window.copilot.privacy.pause()}>
+        Pause
+      </button>
+    );
+  }
+  if (!confirming) {
+    return (
+      <button type="button" className={cls} onClick={() => setConfirming(true)}>
+        Resume
+      </button>
+    );
+  }
+  return (
+    <span className="no-drag flex items-center gap-1 text-[10px]" role="group" aria-label="Resume recording?">
+      <span className="text-amber-200">Resume recording?</span>
+      <button type="button" className={cls} onClick={() => void window.copilot.privacy.resume().then(() => setConfirming(false))}>
+        Yes, resume
+      </button>
+      <button type="button" className={cls} onClick={() => setConfirming(false)}>
+        Cancel
+      </button>
+    </span>
   );
 }

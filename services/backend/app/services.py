@@ -14,6 +14,7 @@ from app.live.help import live_help_factory
 from app.live.store import InMemoryCards, PostgresCards
 from app.meetings.speakers import InMemorySpeakers, PostgresSpeakers
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
+from app.privacy.store import InMemoryPrivacy, PostgresPrivacy
 from app.profiles.store import InMemoryProfiles, PostgresProfiles
 from app.projects.documents import InMemoryDocuments, PostgresDocuments, default_blobs
 from app.projects.store import InMemoryProjects, PostgresProjects
@@ -68,6 +69,7 @@ class Services:
     projects: InMemoryProjects | PostgresProjects
     documents: InMemoryDocuments | PostgresDocuments
     blobs: object
+    privacy: InMemoryPrivacy | PostgresPrivacy | None = None
     #: For tests: an httpx transport used when fetching project links.
     link_transport: object = None
 
@@ -129,6 +131,15 @@ def build_services(
     speaker_id = SpeakerIdRouter(cfg, **({"factory": speaker_factory} if speaker_factory else {}))
     sessions.plugin_factories.append(speaker_plugin_factory(speakers, speaker_id, cfg.speaker_id))
     profiles = PostgresProfiles(meetings) if pg else InMemoryProfiles()
+    privacy = PostgresPrivacy(meetings) if pg else InMemoryPrivacy(meetings)
+
+    async def opted_in(user_id: str) -> bool:
+        try:
+            return (await privacy.get(user_id)).allow_test_providers
+        except Exception:
+            return False  # unknown means no
+
+    router.opt_in = opted_in
     cards = PostgresCards(meetings) if pg else InMemoryCards()
     standups = PostgresStandups(meetings) if pg else InMemoryStandups()
     standup = StandupService(standups, meetings, router, profiles)
@@ -155,6 +166,7 @@ def build_services(
         projects,
         PostgresDocuments(meetings) if pg else InMemoryDocuments(),
         default_blobs(),
+        privacy=privacy,
     )
 
 

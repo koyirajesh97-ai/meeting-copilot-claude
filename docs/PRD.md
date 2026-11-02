@@ -213,7 +213,12 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `POST /projects/{id}/documents` (file), `POST /projects/{id}/links` (URL), `GET /projects/{id}/documents`, `DELETE /projects/{id}/documents/{doc_id}` | Project knowledge: text, Markdown, HTML and (with the `documents` extra) PDF; stored in Supabase Storage (local folder in development), chunked and embedded; search, Ask and answer cards cite them for members only |
 | `POST /meetings` | Create a meeting (project, type, title, mode, visibility); returns meeting_id, ws_url, ws_token |
 | `GET /meetings?project_id=&q=`, `GET /meetings/{id}` | List and open meetings with transcript, summary and action items |
-| `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, project and visibility (owner only; sharing needs a project you're an owner or member of; `project_id: ""` makes it personal and private); delete everything for a meeting |
+| `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, project and visibility (owner only; sharing needs a project you're an owner or member of; `project_id: ""` makes it personal and private); delete everything for a meeting (transcript, search chunks, summaries, cards, action items, decisions, speaker names, consent events; the desktop app also deletes its cached copy and the WAV files) |
+| `POST /meetings/{id}/consent`, `GET /meetings/{id}/consent` | Log "announced" or "objection" (owner); the consent log, including pause and resume, for anyone who can read the meeting. Live-only meetings log nothing |
+| `GET /me/privacy`, `PUT /me/privacy` | Your privacy settings: `allow_test_providers` (off by default), `retention_days` (null keeps meetings), `consent_message` |
+| `GET /providers` | Each provider's `trains_on_data`, whether it runs on this machine (`local`), the tasks that use it, and whether your meeting data may reach it |
+| `GET /me/export` | A zip: one Markdown and one JSON file per meeting you recorded, plus `account.json` (profile, settings, enrolled voice names; never a voiceprint) |
+| `POST /me/delete` with `{"confirm": "delete my account"}` | Delete your account: meetings, voiceprints, profile, standups, documents you uploaded, memberships. Projects where you're the only member are deleted; where you're the only owner, the next member becomes owner |
 | `POST /meetings/{id}/watch` | A short-lived token for the read-only watch socket (members of the meeting's project, while it's live and shared) |
 | `POST /meetings/{id}/ws-token` | A fresh short-lived socket token, for reconnecting |
 | `POST /meetings/{id}/end` | Close the meeting and queue the summary |
@@ -234,7 +239,7 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 ### WebSocket `/ws/meetings/{id}?token=…`
 
 - **Audio up:** binary frames; byte 0 is the channel (0 = mic, 1 = system), then 20 ms of 16 kHz mono PCM16 (640 bytes).
-- **Controls up:** JSON `{"type": "control", "action": "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback", ...}`, plus a ping every 15 s. `catch_up` takes `minutes` (2, or 5 on a long press); `card_feedback` takes `card_id` and `useful`. Catch me up, Clarify and I'll follow up answer with a card (`kind` catch_up, clarify, follow_up); I'll follow up also saves an action item (source `follow_up`, with the question and who asked), and after the meeting a reply is drafted for it (prompt 7) and shown on Meeting detail.
+- **Controls up:** JSON `{"type": "control", "action": "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback", ...}`, plus a ping every 15 s. `pause` drops audio until `resume`; both are logged as consent events (except in Live-only). `catch_up` takes `minutes` (2, or 5 on a long press); `card_feedback` takes `card_id` and `useful`. Catch me up, Clarify and I'll follow up answer with a card (`kind` catch_up, clarify, follow_up); I'll follow up also saves an action item (source `follow_up`, with the question and who asked), and after the meeting a reply is drafted for it (prompt 7) and shown on Meeting detail.
 - **Topic cards** (`kind: topic`) appear when someone mentions one of your systems or tickets and a past meeting has something relevant: at most one per minute, never the same system twice in a meeting.
 - **Events down:** JSON events with an increasing `seq`. After a reconnect the client connects with `?token=…&last_seq=N` and the server replays every stored event after N (finals, cards and the rest; partials are not replayed).
 - **Several frames per message** are allowed (a replayed backlog): each 641-byte block is one frame.
@@ -493,15 +498,16 @@ Recording your own meetings is allowed in Texas and Indiana, but anyone dialing 
 ### Built-in safeguards
 
 - Visible recording indicator in the overlay and the tray at all times.
-- "Announce" button that copies a short consent message for the meeting chat, and a "Pause" button if anyone objects (logged in consent events).
-- Live-only mode: help during the call, audio and transcript discarded at the end.
-- Local-only mode: transcription and LLM run on the laptop; nothing is sent anywhere.
-- Retention settings, per-meeting delete, full account export and delete.
+- "Announce" on Start meeting copies the consent message (editable there and in Settings; your edit becomes the default) and logs an "announced" consent event, for the meeting being recorded or the next one started within 15 minutes.
+- "Pause" in the overlay stops capture at once (nothing written, metered or sent) and logs a "paused" event; "Resume" asks "Resume recording?" first, then logs "resumed". The indicator shows PAUSED meanwhile.
+- Live-only mode: help during the call; no WAV files, nothing in the local cache, no transcript, summary, cards or consent rows in the database, and the meeting row and its replay log are deleted when it ends (abandoned ones after 12 hours).
+- Local-only mode: transcription with local faster-whisper, LLM tasks only with providers marked `local: true` in config/providers.yaml (Ollama on 127.0.0.1:11434; without it they fail with "install Ollama"), embeddings on this machine, and a "Local" badge in the overlay. The desktop app only connects to a backend on localhost (otherwise it records to the laptop only), and the backend refuses Local-only meetings when its database isn't on localhost. Search and Ask never send excerpts of Local-only meetings to a cloud model. A test fails if any DNS lookup or connection leaves localhost during a Local-only meeting.
+- Retention setting (7–365 days or keep): an hourly job deletes older meetings; the desktop app drops them from its cache at the next sync. Per-meeting delete, full account export (zip of Markdown + JSON) and account delete (type "delete my account").
 - Secrets in the OS keychain, never in config files; API keys never shipped in the app bundle.
 
 ### Free AI services and meeting data
 
-Free tiers treat your data differently. Google's free Gemini tier may use prompts to improve its products, with human review, while Groq doesn't retain inputs by default and Mistral's API data isn't used for training. The router enforces this: real meeting content goes only to providers flagged as not training on it, and test-only providers need an explicit opt-in in Settings.
+Free tiers treat your data differently. Google's free Gemini tier may use prompts to improve its products, with human review, while Groq doesn't retain inputs by default and Mistral's API data isn't used for training. The router enforces this: real meeting content goes only to providers flagged as not training on it, and test-only providers need an explicit opt-in in Settings (Settings → Privacy lists every provider's flag; the opt-in is off by default and applies only to your own meetings).
 
 ### Your government client work
 

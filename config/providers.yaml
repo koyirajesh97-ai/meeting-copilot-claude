@@ -1,13 +1,14 @@
 # Free providers, limits, fallback order and data policy.
+# Providers marked `local: true` run on this machine; Local-only meetings use nothing else.
 # Verify current limits in each provider's console; they change often.
 tasks:                     # tried in order; next one on 429, timeout or bad JSON
-  detect:  [groq/llama-3.1-8b-instant, groq/openai/gpt-oss-20b]
-  card:    [groq/openai/gpt-oss-20b, groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
-  catchup: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest]
-  clarify: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest]
-  standup: [groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
-  summary: [mistral/mistral-small-latest, groq/openai/gpt-oss-120b, gemini/gemini-flash]
-  ask:     [mistral/mistral-small-latest, groq/openai/gpt-oss-120b]
+  detect:  [groq/llama-3.1-8b-instant, groq/openai/gpt-oss-20b, ollama/llama3.2:3b]
+  card:    [groq/openai/gpt-oss-20b, groq/openai/gpt-oss-120b, mistral/mistral-small-latest, ollama/llama3.2:3b]
+  catchup: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest, ollama/llama3.2:3b]
+  clarify: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest, ollama/llama3.2:3b]
+  standup: [groq/openai/gpt-oss-120b, mistral/mistral-small-latest, ollama/llama3.2:3b]
+  summary: [mistral/mistral-small-latest, groq/openai/gpt-oss-120b, gemini/gemini-flash, ollama/llama3.2:3b]
+  ask:     [mistral/mistral-small-latest, groq/openai/gpt-oss-120b, ollama/llama3.2:3b]
   stt_live: [deepgram/nova-3, gladia/live, groq/whisper-large-v3, local/faster-whisper]
   # 384-dimension embeddings for search; every model in this list must produce 384 dims.
   embed:   [local/bge-small-en-v1.5, cloudflare/bge-small-en-v1.5]
@@ -64,3 +65,8 @@ providers:
     kind: stt_local
     model: small.en
     trains_on_data: false     # runs on this machine
+    local: true
+  ollama:                     # optional: https://ollama.com, then `ollama pull llama3.2:3b`
+    base_url: http://127.0.0.1:11434/v1
+    trains_on_data: false     # runs on this machine
+    local: true

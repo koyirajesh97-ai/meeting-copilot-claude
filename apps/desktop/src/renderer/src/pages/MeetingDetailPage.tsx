@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { speakerLabel, type CachedMeetingDetail } from "../../../shared/ipc";
-import { buttonClass, EmptyState, inputClass, PageHeader } from "../components/EmptyState";
+import { buttonClass, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
 import { ShareControl } from "../projects/ShareControl";
 import { SummaryPanel } from "../summary/SummaryPanel";
 import { formatWhen } from "./MeetingsHome";
@@ -74,6 +74,7 @@ export function MeetingDetailPage() {
             <Link to={`/meetings/${meeting.id}/live`} className={buttonClass}>Watch live</Link>
           )}
           {meeting.is_mine && <ShareControl meeting={meeting} />}
+          {meeting.is_mine && <DeleteMeeting id={meeting.id} />}
         </div>
       </PageHeader>
       <p className="-mt-4 mb-6 text-sm text-gray-500 dark:text-gray-400">
@@ -104,5 +105,39 @@ export function MeetingDetailPage() {
         </ol>
       )}
     </section>
+  );
+}
+
+/** Two clicks: "Delete" then "Delete for good". Removes the server copy, the cache and the WAVs. */
+function DeleteMeeting({ id }: { id: string }) {
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
+  if (!confirming) {
+    return (
+      <button type="button" className={secondaryButtonClass} onClick={() => setConfirming(true)}>
+        Delete
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-2 text-xs">
+      {error ?? "Transcript, summary and audio will be deleted."}
+      <button
+        type="button"
+        className={`${buttonClass} bg-red-600 hover:bg-red-700`}
+        onClick={() =>
+          void window.copilot.privacy.deleteMeeting(id).then(
+            () => navigate("/"),
+            (e: Error) => setError(e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, "")),
+          )
+        }
+      >
+        Delete for good
+      </button>
+      <button type="button" className={secondaryButtonClass} onClick={() => setConfirming(false)}>
+        Cancel
+      </button>
+    </span>
   );
 }

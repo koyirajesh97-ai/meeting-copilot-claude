@@ -93,6 +93,9 @@ async def summarize(
     template: Template,
     names: dict[str, str] | None = None,
     data_class: DataClass = "meeting",
+    *,
+    owner_id: str | None = None,
+    local_only: bool = False,
 ) -> SummaryResult:
     t0 = time.perf_counter()
     lines = transcript_lines(segments, names or {})
@@ -111,6 +114,8 @@ async def summarize(
                 map_prompt.render(meeting_type=template.label, chunk=chunk),
                 data_class,
                 MapExtract,
+                owner_id=owner_id,
+                local_only=local_only,
             )
             return out.json
 
@@ -125,6 +130,8 @@ async def summarize(
         ),
         data_class,
         Summary,
+        owner_id=owner_id,
+        local_only=local_only,
     )
     summary: Summary = out.json
     # Keep exactly the template's sections, in order, even if the model skipped or renamed one.
