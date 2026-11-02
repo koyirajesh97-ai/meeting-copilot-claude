@@ -27,6 +27,8 @@ os.environ.setdefault("BACKEND_SECRET", "test-secret-test-secret-test-secret-012
 # Only the Postgres fixtures use DATABASE_URL. Take it out of the environment so services built in
 # other tests don't silently connect to a database that has no migrations applied.
 DATABASE_URL = os.environ.pop("DATABASE_URL", None)
+# Tests never call real AI providers: services built without an explicit client use the Fakes.
+os.environ["COPILOT_FAKE_PROVIDERS"] = "1"
 backend_secret.cache_clear()
 
 

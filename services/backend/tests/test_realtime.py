@@ -50,6 +50,7 @@ class Env:
         )
         set_services(self.services)
         self.client = TestClient(app)
+        self.client.__enter__()  # one event loop for the whole test
         self.headers = {"Authorization": f"Bearer {issue_token('user-1', email='sai@example.com')}"}
 
     def create(self, **body) -> dict:
@@ -77,6 +78,7 @@ def env():
     e = Env(adapters)
     metrics.reset()
     yield e
+    e.client.__exit__(None, None, None)
     set_services(None)
 
 

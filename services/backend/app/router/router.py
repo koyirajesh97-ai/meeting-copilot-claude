@@ -232,7 +232,7 @@ class Router:
             try:
                 resp = await asyncio.wait_for(
                     self.client.complete(
-                        d, provider, messages, timeout=timeout, json_mode=want_json
+                        d, provider, messages, timeout=timeout, json_mode=want_json, task=task
                     ),
                     timeout=timeout,
                 )

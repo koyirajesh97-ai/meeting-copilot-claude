@@ -8,6 +8,12 @@ export async function syncMeeting(backend: BackendClient, cache: Cache, id: stri
   const m = await backend.getMeeting(id);
   cache.upsertMeeting(m);
   for (const s of m.transcript) cache.upsertSegment(id, s);
+  cache.upsertExtras(id, {
+    summary: m.summary,
+    action_items: m.action_items,
+    decisions: m.decisions,
+    speaker_names: m.speaker_names,
+  });
   cache.markSynced(id, Date.now() / 1000);
   return m.transcript.length;
 }
@@ -25,4 +31,22 @@ export async function syncAll(backend: BackendClient, cache: Cache): Promise<num
     }
   }
   return server.length;
+}
+
+/** After a meeting ends, wait for its summary (pending -> ready/failed), then sync it. */
+export async function waitForSummary(
+  backend: BackendClient,
+  cache: Cache,
+  id: string,
+  { intervalMs = 3000, timeoutMs = 180_000 } = {},
+): Promise<string> {
+  const end = Date.now() + timeoutMs;
+  let status = "pending";
+  while (Date.now() < end) {
+    status = (await backend.getSummary(id)).status;
+    if (status !== "pending") break;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+  await syncMeeting(backend, cache, id);
+  return status;
 }

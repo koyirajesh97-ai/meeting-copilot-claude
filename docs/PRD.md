@@ -215,8 +215,11 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, visibility; delete everything for a meeting |
 | `POST /meetings/{id}/ws-token` | A fresh short-lived socket token, for reconnecting |
 | `POST /meetings/{id}/end` | Close the meeting and queue the summary |
+| `GET /meetings/{id}/summary` | Summary status (none, pending, ready, failed) and content |
+| `PUT /meetings/{id}/summary` | Save edits; edited action items and decisions replace the summary's (manual ones stay) |
 | `POST /meetings/{id}/summary/regenerate` | Rebuild the summary with another template |
-| `GET /meetings/{id}/export?format=md` | Markdown export |
+| `GET /templates` | Summary templates per meeting type |
+| `GET /meetings/{id}/export?format=md&transcript=true` | Markdown export (`transcript=false` for a summary to paste into email or Teams) |
 | `POST /speakers/enroll`, `DELETE /speakers/{id}` | Voice enrollment (audio + consent flag) and deletion |
 | `POST /meetings/{id}/speakers/{label}/rename` | Name "Speaker 2" for this meeting (no voiceprint) |
 | `GET /search?q=`, `POST /ask` | Hybrid search; cited answers across meetings |
@@ -280,7 +283,7 @@ Example event:
 
 ## The app's own AI prompts
 
-The app sends seven prompts to the free LLMs. Each is short, because small free models follow short prompts better, returns JSON where the app needs structure, and is told to say "no answer" instead of guessing.
+The app sends eight prompts to the free LLMs (the seven below plus `ask`, for "Ask my meetings"; all live in `services/backend/app/prompts/`, where catch-up and follow-up also return JSON). Each is short, because small free models follow short prompts better, returns JSON where the app needs structure, and is told to say "no answer" instead of guessing.
 
 ### Rules for all prompts
 
@@ -415,8 +418,9 @@ Postgres is the single source of truth, and project membership decides who sees 
 | speakers | id, project_id, user_id (nullable), display_name, voiceprint (encrypted), consent_at | A voiceprint is stored only with that person's consent |
 | transcript_segments | meeting_id, speaker_id, channel (mic, system), start_ms, end_ms, text, is_final | Streamed in live, finalized after |
 | suggestions | meeting_id, kind (answer, topic, clarify, catch-up), trigger_segment_id, text, sources[], used (bool) | Lets you see which suggestions helped |
-| summaries | meeting_id, template, sections (JSON), model, created_at | Regenerable with another template |
-| action_items | project_id, meeting_id, owner, text, due_date, status | Feeds the project board and the next brief |
+| summaries | meeting_id, template, sections (JSON), model, created_at | Regenerable with another template; meetings.summary_status tracks the job |
+| meeting_speakers | meeting_id, label, display_name | "Speaker 2" renamed for one meeting; text only, never a voiceprint |
+| action_items | project_id, meeting_id, owner, text, due_date, due_text, status, source (summary, manual, follow_up) | Feeds the project board and the next brief; summary items are replaced on regenerate |
 | decisions | project_id, meeting_id, text, rationale | Searchable across meetings |
 | standup_entries | user_id, project_id, date, done, doing, blockers, script | Typed notes and the generated script |
 | documents | project_id, title, source_url or file, uploaded_by | Project knowledge for grounding |

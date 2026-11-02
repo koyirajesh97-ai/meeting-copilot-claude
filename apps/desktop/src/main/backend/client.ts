@@ -1,6 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
-import type { CachedSegment, StartOptions } from "../../shared/ipc";
+import type { ActionItem, CachedSegment, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
   constructor(
@@ -29,6 +29,10 @@ export interface MeetingOut {
 
 export interface MeetingDetailOut extends MeetingOut {
   transcript: CachedSegment[];
+  summary: SummaryInfo;
+  action_items: ActionItem[];
+  decisions: { id: string; text: string; rationale: string }[];
+  speaker_names: Record<string, string>;
 }
 
 export interface SessionOut {
@@ -73,7 +77,9 @@ export class BackendClient {
       }
       throw new BackendError(`${method} ${path}: ${res.status} ${detail}`, res.status);
     }
-    return (res.status === 204 ? undefined : await res.json()) as T;
+    if (res.status === 204) return undefined as T;
+    const type = res.headers.get("content-type") ?? "";
+    return (type.includes("json") ? await res.json() : await res.text()) as T;
   }
 
   health(): Promise<{ status: string; dev_login: boolean }> {
@@ -106,5 +112,29 @@ export class BackendClient {
 
   getMeeting(meetingId: string): Promise<MeetingDetailOut> {
     return this.request("GET", `/meetings/${encodeURIComponent(meetingId)}`);
+  }
+
+  getSummary(meetingId: string): Promise<SummaryInfo> {
+    return this.request("GET", `/meetings/${encodeURIComponent(meetingId)}/summary`);
+  }
+
+  regenerate(meetingId: string, template: string): Promise<SummaryInfo> {
+    return this.request("POST", `/meetings/${encodeURIComponent(meetingId)}/summary/regenerate`, { template });
+  }
+
+  saveSummary(meetingId: string, data: SummaryData): Promise<SummaryInfo> {
+    return this.request("PUT", `/meetings/${encodeURIComponent(meetingId)}/summary`, { data });
+  }
+
+  renameSpeaker(meetingId: string, label: string, name: string): Promise<void> {
+    return this.request(
+      "POST",
+      `/meetings/${encodeURIComponent(meetingId)}/speakers/${encodeURIComponent(label)}/rename`,
+      { display_name: name },
+    );
+  }
+
+  markdown(meetingId: string, withTranscript: boolean): Promise<string> {
+    return this.request("GET", `/meetings/${encodeURIComponent(meetingId)}/export?format=md&transcript=${withTranscript}`);
   }
 }

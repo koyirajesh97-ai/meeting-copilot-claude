@@ -43,6 +43,41 @@ class Segment:
     provider: str
 
 
+SummaryStatus = Literal["none", "pending", "ready", "failed"]
+
+
+@dataclass
+class StoredSummary:
+    id: str
+    meeting_id: str
+    template: str
+    #: The validated Summary (app.summaries.schema) as JSON-ready data.
+    sections: dict
+    model: str
+    created_at: float = field(default_factory=time.time)
+
+
+@dataclass
+class ActionItemRecord:
+    id: str
+    meeting_id: str | None
+    text: str
+    owner: str | None = None
+    due_text: str | None = None
+    status: Literal["open", "done", "dropped"] = "open"
+    source: Literal["summary", "manual", "follow_up"] = "manual"
+    created_at: float = field(default_factory=time.time)
+
+
+@dataclass
+class DecisionRecord:
+    id: str
+    meeting_id: str | None
+    text: str
+    rationale: str = ""
+    source: Literal["summary", "manual"] = "manual"
+
+
 class MeetingStore(Protocol):
     async def upsert_user(
         self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
@@ -53,6 +88,29 @@ class MeetingStore(Protocol):
     async def end(self, meeting_id: str) -> Meeting | None: ...
     async def add_segment(self, segment: Segment) -> None: ...
     async def segments(self, meeting_id: str) -> list[Segment]: ...
+    # summaries
+    async def set_summary_status(
+        self, meeting_id: str, status: SummaryStatus, error: str | None = None
+    ) -> None: ...
+    async def summary_status(self, meeting_id: str) -> tuple[SummaryStatus, str | None]: ...
+    async def save_summary(self, s: StoredSummary) -> StoredSummary: ...
+    async def latest_summary(self, meeting_id: str) -> StoredSummary | None: ...
+    async def update_summary(self, summary_id: str, sections: dict) -> None: ...
+    async def replace_summary_items(
+        self, meeting: Meeting, items: list[ActionItemRecord], decisions: list[DecisionRecord]
+    ) -> None: ...
+    async def add_action_item(
+        self, meeting: Meeting, item: ActionItemRecord
+    ) -> ActionItemRecord: ...
+    async def action_items(self, meeting_id: str) -> list[ActionItemRecord]: ...
+    async def decisions(self, meeting_id: str) -> list[DecisionRecord]: ...
+    # speaker names given in a meeting (text only; never a voiceprint)
+    async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None: ...
+    async def speaker_names(self, meeting_id: str) -> dict[str, str]: ...
+
+
+def new_id() -> str:
+    return str(uuid.uuid4())
 
 
 def new_meeting_id() -> str:
@@ -63,6 +121,11 @@ class InMemoryMeetingStore:
     def __init__(self) -> None:
         self._meetings: dict[str, Meeting] = {}
         self._segments: dict[str, list[Segment]] = {}
+        self._summary_status: dict[str, tuple[SummaryStatus, str | None]] = {}
+        self._summaries: dict[str, list[StoredSummary]] = {}
+        self._items: dict[str, list[ActionItemRecord]] = {}
+        self._decisions: dict[str, list[DecisionRecord]] = {}
+        self._names: dict[str, dict[str, str]] = {}
 
     async def upsert_user(
         self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
@@ -92,3 +155,50 @@ class InMemoryMeetingStore:
 
     async def segments(self, meeting_id: str) -> list[Segment]:
         return sorted(self._segments.get(meeting_id, []), key=lambda s: (s.start_ms, s.segment_id))
+
+    async def set_summary_status(
+        self, meeting_id: str, status: SummaryStatus, error: str | None = None
+    ) -> None:
+        self._summary_status[meeting_id] = (status, error)
+
+    async def summary_status(self, meeting_id: str) -> tuple[SummaryStatus, str | None]:
+        return self._summary_status.get(meeting_id, ("none", None))
+
+    async def save_summary(self, s: StoredSummary) -> StoredSummary:
+        self._summaries.setdefault(s.meeting_id, []).append(s)
+        return s
+
+    async def latest_summary(self, meeting_id: str) -> StoredSummary | None:
+        found = self._summaries.get(meeting_id)
+        return found[-1] if found else None
+
+    async def update_summary(self, summary_id: str, sections: dict) -> None:
+        for lst in self._summaries.values():
+            for s in lst:
+                if s.id == summary_id:
+                    s.sections = sections
+
+    async def replace_summary_items(
+        self, meeting: Meeting, items: list[ActionItemRecord], decisions: list[DecisionRecord]
+    ) -> None:
+        mid = meeting.id
+        self._items[mid] = [i for i in self._items.get(mid, []) if i.source != "summary"] + items
+        self._decisions[mid] = [
+            d for d in self._decisions.get(mid, []) if d.source != "summary"
+        ] + decisions
+
+    async def add_action_item(self, meeting: Meeting, item: ActionItemRecord) -> ActionItemRecord:
+        self._items.setdefault(meeting.id, []).append(item)
+        return item
+
+    async def action_items(self, meeting_id: str) -> list[ActionItemRecord]:
+        return list(self._items.get(meeting_id, []))
+
+    async def decisions(self, meeting_id: str) -> list[DecisionRecord]:
+        return list(self._decisions.get(meeting_id, []))
+
+    async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None:
+        self._names.setdefault(meeting_id, {})[label] = name
+
+    async def speaker_names(self, meeting_id: str) -> dict[str, str]:
+        return dict(self._names.get(meeting_id, {}))

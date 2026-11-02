@@ -28,7 +28,48 @@ export const IPC = {
   meetingsList: "meetings:list",
   meetingsGet: "meetings:get",
   meetingsSync: "meetings:sync",
+  meetingsRegenerate: "meetings:regenerate",
+  meetingsSaveSummary: "meetings:save-summary",
+  meetingsRenameSpeaker: "meetings:rename-speaker",
+  meetingsMarkdown: "meetings:markdown",
+  meetingsExport: "meetings:export",
 } as const;
+
+// ---------- summaries (mirrors services/backend/app/summaries/schema.py) ----------
+
+export interface SummaryActionItem {
+  owner: string | null;
+  text: string;
+  due_date: string | null;
+}
+
+export interface SummaryData {
+  overview: string;
+  sections: { key: string; title: string; items: string[] }[];
+  decisions: { text: string; rationale: string }[];
+  takeaways: string[];
+  action_items: SummaryActionItem[];
+  blockers: string[];
+  open_questions: string[];
+  per_person: { person: string; done: string[]; doing: string[]; blockers: string[] }[];
+}
+
+export interface SummaryInfo {
+  status: "none" | "pending" | "ready" | "failed";
+  error: string | null;
+  id: string | null;
+  template: string | null;
+  data: SummaryData | null;
+}
+
+export interface ActionItem {
+  id: string;
+  text: string;
+  owner: string | null;
+  due: string | null;
+  status: string;
+  source: string;
+}
 
 export interface AuthState {
   signedIn: boolean;
@@ -72,10 +113,15 @@ export interface CachedMeeting {
 
 export interface CachedMeetingDetail extends CachedMeeting {
   transcript: CachedSegment[];
+  summary: SummaryInfo;
+  action_items: ActionItem[];
+  decisions: { id: string; text: string; rationale: string }[];
+  speaker_names: Record<string, string>;
 }
 
-/** Display name for a transcript speaker id: "me" is You; "spk_1" is Speaker 2. */
-export function speakerLabel(id: string): string {
+/** Display name for a transcript speaker id: "me" is You; "spk_1" is Speaker 2 unless renamed. */
+export function speakerLabel(id: string, names: Record<string, string> = {}): string {
+  if (names[id]) return names[id];
   if (id === "me") return "You";
   const m = /^spk_(\d+)$/.exec(id);
   return m ? `Speaker ${Number(m[1]) + 1}` : id;
@@ -179,6 +225,13 @@ export interface CopilotApi {
     list(): Promise<CachedMeeting[]>;
     get(id: string): Promise<CachedMeetingDetail | null>;
     sync(): Promise<{ meetings: number; error?: string }>;
+    regenerate(id: string, template: string): Promise<SummaryInfo>;
+    saveSummary(id: string, data: SummaryData): Promise<SummaryInfo>;
+    renameSpeaker(id: string, label: string, name: string): Promise<void>;
+    /** Markdown of the meeting; withTranscript false gives a summary to paste into email or Teams. */
+    markdown(id: string, withTranscript: boolean): Promise<string>;
+    /** Save the Markdown to a file the user picks. Returns the path, or null if cancelled. */
+    exportMarkdown(id: string): Promise<string | null>;
   };
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
@@ -215,5 +268,5 @@ export const ROUTES = {
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */
 export function isAllowedRoute(route: string): boolean {
   if (Object.values(ROUTES).includes(route as never) && !route.includes(":")) return true;
-  return /^\/meetings\/[\w-]{1,64}$/.test(route);
+  return /^\/meetings\/[\w-]{1,64}(\?t=\d{1,9})?$/.test(route);
 }

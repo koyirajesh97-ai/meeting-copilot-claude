@@ -1,0 +1,19 @@
+{
+  "title": "Payments standup",
+  "meeting_type": "standup",
+  "transcript": [
+    ["Sai", "Morning everyone, let's start."],
+    ["Sai", "Yesterday I finished the certificate renewal for the payments cluster."],
+    ["Sai", "Today I'll move the prod deploy to Thursday after the cert check."],
+    ["Priya", "I'm blocked on VPN access for the staging box."],
+    ["Priya", "I'll ping the infra team about the VPN access today."],
+    ["Alex", "I'm working on the flaky login tests this week."],
+    ["Alex", "Can you review my PR for the retry logic, Sai?"],
+    ["Sai", "Sure, I can look this afternoon."]
+  ],
+  "expected_action_items": [
+    {"keywords": ["deploy", "thursday"], "owner": "Sai", "due": "thursday"},
+    {"keywords": ["vpn", "infra"], "owner": "Priya"},
+    {"keywords": ["review", "retry"], "owner": "Sai"}
+  ]
+}

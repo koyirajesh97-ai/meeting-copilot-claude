@@ -69,6 +69,14 @@ class SessionManager:
         if mark_ended:
             await self.store.end(meeting_id)
 
+    async def notify_summary(self, meeting_id: str, summary_id: str) -> None:
+        """Tell anyone still connected that the summary is saved."""
+        from app.events import SummaryReady
+
+        s = self._sessions.get(meeting_id)
+        if s:
+            await s.emit(SummaryReady, summary_id=summary_id)
+
     async def shutdown(self) -> None:
         for mid in list(self._sessions):
             await self.end(mid, mark_ended=False)

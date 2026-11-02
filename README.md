@@ -5,10 +5,20 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–6 are done (repo, shared event schema, desktop shell and overlay, two-channel
+Status: Prompts 0–7 are done (repo, shared event schema, desktop shell and overlay, two-channel
 audio capture to local WAV files, provider router, realtime gateway with live transcription,
-database with row-level security, sign-in, live captions and the offline meeting cache). Next is
-Prompt 7: summaries.
+database with row-level security, sign-in, live captions and the offline meeting cache, summaries
+by meeting type). Phase 1 is complete.
+
+### Evals
+
+```bash
+cd services/backend && uv run python ../../evals/summaries/run.py
+```
+
+Scores action-item recall on the fixtures in `evals/summaries/fixtures` (target 90%). CI runs it
+with the Fake provider; add `--real` to use the free providers and `--long` to time a 60-minute
+transcript.
 
 ## 1. Create the free accounts and keys
 

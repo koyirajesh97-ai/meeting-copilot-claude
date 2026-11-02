@@ -1,0 +1,18 @@
+{
+  "title": "Retry logic design review",
+  "meeting_type": "review",
+  "transcript": [
+    ["Alex", "This change adds exponential backoff to the payment retries."],
+    ["Priya", "We decided to keep the retry limit at three to protect the bank API."],
+    ["Priya", "Alex will add metrics for the retry path by Friday."],
+    ["Sai", "I'll update the runbook with the new rollback steps."],
+    ["Priya", "Please rename the config flag before merging, the old name is confusing."],
+    ["Sai", "Should we also cover the timeout case in the tests?"],
+    ["Alex", "Good point, the timeout path has no coverage right now."]
+  ],
+  "expected_action_items": [
+    {"keywords": ["metrics", "retry"], "owner": "Alex", "due": "friday"},
+    {"keywords": ["runbook"], "owner": "Sai"},
+    {"keywords": ["rename", "flag"]}
+  ]
+}

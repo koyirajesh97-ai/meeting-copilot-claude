@@ -1,0 +1,61 @@
+{
+  "title": "Acme renewal call",
+  "meeting_type": "client",
+  "transcript": [
+    [
+      "Maria",
+      "Thanks for joining, we want to finalize the renewal this month."
+    ],
+    [
+      "Sai",
+      "We'll send the revised quote by Wednesday with the volume discount."
+    ],
+    [
+      "Sai",
+      "Can you share the security questionnaire, Maria?"
+    ],
+    [
+      "Maria",
+      "Yes, and I will set up the demo environment for our team next week."
+    ],
+    [
+      "Sai",
+      "Agreed, we're going with the annual plan then."
+    ],
+    [
+      "Maria",
+      "What's the timeline for SSO support?"
+    ],
+    [
+      "Sai",
+      "It's planned for next quarter, I'll confirm the exact month."
+    ]
+  ],
+  "expected_action_items": [
+    {
+      "keywords": [
+        "quote"
+      ],
+      "due": "wednesday"
+    },
+    {
+      "keywords": [
+        "questionnaire"
+      ],
+      "owner": "Maria"
+    },
+    {
+      "keywords": [
+        "demo"
+      ],
+      "owner": "Maria"
+    },
+    {
+      "keywords": [
+        "confirm",
+        "month"
+      ],
+      "owner": "Sai"
+    }
+  ]
+}

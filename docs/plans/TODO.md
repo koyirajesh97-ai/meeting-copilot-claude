@@ -20,5 +20,8 @@ Follow-ups that were out of scope for the prompt that found them.
 - Live-only mode still writes the local WAV files; Prompt 14 should skip them.
 - Sign-in by magic link (deep link into the app) in addition to the emailed code.
 - Meetings home lists only your own meetings; add project-shared ones in Prompt 13.
+- With real keys: run `evals/summaries/run.py --real --long` and confirm a 60-minute meeting
+  summarizes in under 60 s; tune the prompts if recall is below 90%.
+- Add more summary fixtures from real (consented) meetings; the current three are short.
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).

@@ -49,8 +49,56 @@ class SegmentOut(BaseModel):
     end_ms: int
 
 
+class SummaryOut(BaseModel):
+    status: str  # none | pending | ready | failed
+    error: str | None = None
+    id: str | None = None
+    template: str | None = None
+    model: str | None = None
+    created_at: float | None = None
+    #: app.summaries.schema.Summary
+    data: dict | None = None
+
+
+class ActionItemOut(BaseModel):
+    id: str
+    text: str
+    owner: str | None
+    due: str | None
+    status: str
+    source: str
+
+
+class DecisionOut(BaseModel):
+    id: str
+    text: str
+    rationale: str
+
+
 class MeetingDetail(MeetingOut):
     transcript: list[SegmentOut]
+    summary: SummaryOut
+    action_items: list[ActionItemOut]
+    decisions: list[DecisionOut]
+    #: Names given to diarized speakers in this meeting, e.g. {"spk_1": "Priya"}.
+    speaker_names: dict[str, str]
+
+
+async def summary_out(meeting_id: str) -> SummaryOut:
+    store = services().meetings
+    status_, error = await store.summary_status(meeting_id)
+    s = await store.latest_summary(meeting_id)
+    if s is None:
+        return SummaryOut(status=status_, error=error)
+    return SummaryOut(
+        status=status_,
+        error=error,
+        id=s.id,
+        template=s.template,
+        model=s.model,
+        created_at=s.created_at,
+        data=s.sections,
+    )
 
 
 def _out(m: Meeting) -> MeetingOut:
@@ -114,20 +162,42 @@ async def list_meetings(user: CurrentUser, limit: int = 100) -> list[MeetingOut]
 @router.get("/meetings/{meeting_id}", response_model=MeetingDetail)
 async def get_meeting(meeting_id: str, user: CurrentUser) -> MeetingDetail:
     m = await _owned(meeting_id, user.user_id)
-    segs = await services().meetings.segments(m.id)
+    store = services().meetings
+    segs = await store.segments(m.id)
     return MeetingDetail(
         **_out(m).model_dump(),
         transcript=[
             SegmentOut(**{k: getattr(s, k) for k in SegmentOut.model_fields}) for s in segs
         ],
+        summary=await summary_out(m.id),
+        action_items=[
+            ActionItemOut(
+                id=a.id,
+                text=a.text,
+                owner=a.owner,
+                due=a.due_text,
+                status=a.status,
+                source=a.source,
+            )
+            for a in await store.action_items(m.id)
+        ],
+        decisions=[
+            DecisionOut(id=d.id, text=d.text, rationale=d.rationale)
+            for d in await store.decisions(m.id)
+        ],
+        speaker_names=await store.speaker_names(m.id),
     )
 
 
 @router.post("/meetings/{meeting_id}/end", status_code=status.HTTP_204_NO_CONTENT)
 async def end_meeting(meeting_id: str, user: CurrentUser) -> None:
-    """Close the live session (final transcripts are flushed). The summary job arrives in Prompt 7."""
-    await _owned(meeting_id, user.user_id)
+    """Close the live session (final transcripts are flushed) and queue the summary."""
+    m = await _owned(meeting_id, user.user_id)
+    already_ended = m.ended_at is not None
     await services().sessions.end(meeting_id)
+    # Live-only meetings keep nothing, so there's nothing to summarize.
+    if not already_ended and m.mode != "live-only":
+        await services().summaries.enqueue(meeting_id)
 
 
 @router.get("/metrics")

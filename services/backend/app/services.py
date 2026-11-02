@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.jobs.summary import SummaryJobs
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
 from app.providers.stt.base import FakeSttAdapter
 from app.realtime.manager import SessionManager
@@ -42,6 +43,7 @@ class Services:
     stt: SttRegistry
     meetings: MeetingStore
     sessions: SessionManager
+    summaries: SummaryJobs
 
 
 def build_services(
@@ -54,7 +56,9 @@ def build_services(
     cfg = config or load_config()
     if fake_providers_enabled():
         # Offline dev and end-to-end tests: every provider is a Fake (no network, no keys).
-        client = client or FakeClient()
+        from app.router.fake_responses import fake_responder
+
+        client = client or FakeClient(responder=fake_responder)
         stt_factory = stt_factory or fake_stt_factory
     if store is None:
         dsn = os.environ.get("DATABASE_URL")
@@ -76,7 +80,9 @@ def build_services(
             meetings = PostgresStore(dsn)
         else:
             meetings = InMemoryMeetingStore()
-    return Services(cfg, quota, router, stt, meetings, SessionManager(stt, meetings))
+    sessions = SessionManager(stt, meetings)
+    summaries = SummaryJobs(meetings, router, notify=sessions.notify_summary)
+    return Services(cfg, quota, router, stt, meetings, sessions, summaries)
 
 
 _services: Services | None = None

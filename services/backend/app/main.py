@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, meetings, usage
+from app.api import auth, meetings, summaries, usage
 from app.api.auth import dev_login_enabled
 from app.services import services
 from app.ws import meetings as ws_meetings
@@ -26,6 +26,7 @@ app = FastAPI(title="Meeting Copilot backend", version="0.0.0", lifespan=lifespa
 app.include_router(auth.router)
 app.include_router(usage.router)
 app.include_router(meetings.router)
+app.include_router(summaries.router)
 app.include_router(ws_meetings.router)
 
 

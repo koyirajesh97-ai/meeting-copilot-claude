@@ -42,7 +42,8 @@ def supabase_token(
 def client(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
     set_services(build_services(store=InMemoryQuotaStore()))
-    yield TestClient(app)
+    with TestClient(app) as c:
+        yield c
     set_services(None)
 
 
@@ -122,8 +123,13 @@ def test_meetings_and_transcripts_persist_in_postgres(
                 ),
             )
         )
-        return TestClient(app), store
+        # One event loop per "process", so background jobs (the summary) aren't cut off.
+        c = TestClient(app)
+        c.__enter__()
+        clients.append(c)
+        return c, store
 
+    clients: list[TestClient] = []
     try:
         client, _ = boot()
         token = client.post("/auth/session", json={"access_token": supabase_token(uid)}).json()[
@@ -149,6 +155,19 @@ def test_meetings_and_transcripts_persist_in_postgres(
                 pass
             assert e["text"] == "sounds good"
         assert client.post(f"/meetings/{m['meeting_id']}/end", headers=h).status_code == 204
+        # Let the summary job finish before "restarting", so no work is cut off mid-flight.
+        for _ in range(200):
+            if client.get(f"/meetings/{m['meeting_id']}/summary", headers=h).json()["status"] in (
+                "ready",
+                "failed",
+            ):
+                break
+            time.sleep(0.01)
+        assert (
+            client.get(f"/meetings/{m['meeting_id']}/summary", headers=h).json()["status"]
+            == "ready"
+        )
+        clients.pop().__exit__(None, None, None)  # shut the first "backend" down cleanly
 
         # "Restart" the backend: a fresh process state reading the same database.
         client, _ = boot()
@@ -176,6 +195,8 @@ def test_meetings_and_transcripts_persist_in_postgres(
             row = c.execute("select email from public.users where id = %s", (uid,)).fetchone()
             assert row == ("sai@example.com",)
     finally:
+        for c in clients:
+            c.__exit__(None, None, None)
         set_services(None)
 
 
@@ -183,11 +204,11 @@ def test_dev_login_works_with_postgres(pg_dsn: str, monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("ALLOW_DEV_LOGIN", "1")
     set_services(build_services(store=InMemoryQuotaStore(), meetings=PostgresStore(pg_dsn)))
     try:
-        client = TestClient(app)
-        token = client.post("/auth/dev-session").json()["token"]
-        r = client.post(
-            "/meetings", json={"title": "Dev"}, headers={"Authorization": f"Bearer {token}"}
-        )
-        assert r.status_code == 201
+        with TestClient(app) as client:
+            token = client.post("/auth/dev-session").json()["token"]
+            r = client.post(
+                "/meetings", json={"title": "Dev"}, headers={"Authorization": f"Bearer {token}"}
+            )
+            assert r.status_code == 201
     finally:
         set_services(None)

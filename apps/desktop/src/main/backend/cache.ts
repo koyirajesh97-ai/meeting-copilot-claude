@@ -3,7 +3,7 @@
 // so Meetings home and Meeting detail work offline and survive restarts.
 
 import { DatabaseSync } from "node:sqlite";
-import type { CachedMeeting, CachedMeetingDetail, CachedSegment } from "../../shared/ipc";
+import type { CachedMeeting, CachedMeetingDetail, CachedSegment, SummaryInfo } from "../../shared/ipc";
 
 const SCHEMA = `
 create table if not exists meetings (
@@ -26,7 +26,16 @@ create table if not exists segments (
   primary key (meeting_id, segment_id)
 );
 create index if not exists segments_by_time on segments (meeting_id, start_ms);
+create table if not exists details (
+  meeting_id  text primary key references meetings (id) on delete cascade,
+  json        text not null   -- summary, action items, decisions, speaker names (as the backend sent them)
+);
 `;
+
+export type MeetingExtras = Pick<CachedMeetingDetail, "summary" | "action_items" | "decisions" | "speaker_names">;
+
+export const NO_SUMMARY: SummaryInfo = { status: "none", error: null, id: null, template: null, data: null };
+const EMPTY_EXTRAS: MeetingExtras = { summary: NO_SUMMARY, action_items: [], decisions: [], speaker_names: {} };
 
 export interface MeetingRow {
   id: string;
@@ -79,6 +88,23 @@ export class Cache {
       .run(meetingId, s.segment_id, s.channel, s.speaker_id, s.text, s.start_ms, s.end_ms);
   }
 
+  upsertExtras(meetingId: string, extras: Partial<MeetingExtras>): void {
+    const merged = { ...this.extras(meetingId), ...extras };
+    this.db
+      .prepare("insert into details (meeting_id, json) values (?, ?) on conflict (meeting_id) do update set json = excluded.json")
+      .run(meetingId, JSON.stringify(merged));
+  }
+
+  extras(meetingId: string): MeetingExtras {
+    const row = this.db.prepare("select json from details where meeting_id = ?").get(meetingId) as { json: string } | undefined;
+    if (!row) return { ...EMPTY_EXTRAS };
+    try {
+      return { ...EMPTY_EXTRAS, ...(JSON.parse(row.json) as Partial<MeetingExtras>) };
+    } catch {
+      return { ...EMPTY_EXTRAS };
+    }
+  }
+
   listMeetings(limit = 200): CachedMeeting[] {
     return this.db
       .prepare(
@@ -104,7 +130,7 @@ export class Cache {
          where meeting_id = ? order by start_ms, segment_id`,
       )
       .all(id) as unknown as CachedSegment[];
-    return { ...m, transcript };
+    return { ...m, transcript, ...this.extras(id) };
   }
 
   /** Meetings that may be missing segments: not synced since they ended. */

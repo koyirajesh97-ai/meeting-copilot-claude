@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   globalShortcut,
   ipcMain,
   Menu,
@@ -18,7 +19,8 @@ import { AuthManager, SIGNED_OUT } from "./backend/auth";
 import { Cache } from "./backend/cache";
 import { BackendClient } from "./backend/client";
 import { LiveConnection } from "./backend/live";
-import { syncAll, syncMeeting } from "./backend/sync";
+import { syncAll, syncMeeting, waitForSummary } from "./backend/sync";
+import { writeFile } from "node:fs/promises";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
 import { trayIcons } from "./icons";
@@ -188,8 +190,12 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
       broadcast();
       if (id && cache && backend) {
         cache.markEnded(id, Date.now() / 1000);
-        // Fill in anything the live socket missed.
-        void syncMeeting(backend, cache, id)
+        // Fill in anything the live socket missed, then pick up the summary when it's ready.
+        const b = backend;
+        const c = cache;
+        void syncMeeting(b, c, id)
+          .then(() => sendToWindows(IPC.state, state))
+          .then(() => waitForSummary(b, c, id))
           .then(() => sendToWindows(IPC.state, state))
           .catch((err) => console.warn("[sync] meeting sync failed:", (err as Error).message));
       }
@@ -354,6 +360,47 @@ function registerIpc(): void {
   handle(IPC.meetingsList, () => cache!.listMeetings());
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
+  const meetingId = (id: unknown) => {
+    if (typeof id !== "string" || !/^[\w-]{1,64}$/.test(id)) throw new Error("Bad meeting id");
+    return id;
+  };
+  const refresh = async (id: string) => {
+    await syncMeeting(backend!, cache!, id);
+    sendToWindows(IPC.state, state);
+  };
+  handle(IPC.meetingsRegenerate, async (id, template) => {
+    const mid = meetingId(id);
+    const info = await backend!.regenerate(mid, String(template));
+    cache!.upsertExtras(mid, { summary: info });
+    sendToWindows(IPC.state, state);
+    void waitForSummary(backend!, cache!, mid).then(() => sendToWindows(IPC.state, state));
+    return info;
+  });
+  handle(IPC.meetingsSaveSummary, async (id, data) => {
+    const mid = meetingId(id);
+    const info = await backend!.saveSummary(mid, data as never);
+    await refresh(mid);
+    return info;
+  });
+  handle(IPC.meetingsRenameSpeaker, async (id, label, name) => {
+    const mid = meetingId(id);
+    await backend!.renameSpeaker(mid, String(label), String(name).slice(0, 100));
+    await refresh(mid);
+  });
+  handle(IPC.meetingsMarkdown, (id, withTranscript) => backend!.markdown(meetingId(id), withTranscript !== false));
+  handle(IPC.meetingsExport, async (id) => {
+    const mid = meetingId(id);
+    const md = await backend!.markdown(mid, true);
+    const title = cache!.getMeeting(mid)?.title ?? "meeting";
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      title: "Export meeting",
+      defaultPath: `${title.replace(/[^\w .-]+/g, "_").slice(0, 80)}.md`,
+      filters: [{ name: "Markdown", extensions: ["md"] }],
+    });
+    if (canceled || !filePath) return null;
+    await writeFile(filePath, md, "utf8");
+    return filePath;
+  });
   handle(IPC.getSettings, () => getSettings());
   handle(IPC.setSettings, (patch) => {
     const next = updateSettings(patch);

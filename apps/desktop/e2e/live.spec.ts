@@ -119,6 +119,15 @@ test("record a meeting with live captions, then find its transcript after a rest
   const lines = main.getByTestId("transcript-line");
   await expect(lines.first()).toContainText("You:Morning everyone, let's start the standup.");
   const count = await lines.count();
+
+  // The summary arrives shortly after the meeting ends (standup template: per-person updates).
+  const summary = main.getByTestId("summary");
+  await expect(summary).toBeVisible({ timeout: 30_000 });
+  await expect(summary).toContainText("Yesterday I finished the certificate renewal");
+  // Regenerate with another template.
+  await main.getByLabel("Template").selectOption("incident");
+  await main.getByRole("button", { name: "Regenerate" }).click();
+  await expect(summary.getByRole("heading", { name: "Timeline" })).toBeVisible({ timeout: 30_000 });
   expect(count).toBeGreaterThanOrEqual(2);
 
 
@@ -130,5 +139,6 @@ test("record a meeting with live captions, then find its transcript after a rest
   main = await windowByTitle(app, "Meeting Copilot");
   await main.getByRole("list", { name: "Meetings" }).getByRole("link", { name: /E2E standup/ }).click();
   await expect(main.getByTestId("transcript-line")).toHaveCount(count);
+  await expect(main.getByTestId("summary").getByRole("heading", { name: "Timeline" })).toBeVisible();
   await app.close();
 });

@@ -46,6 +46,7 @@ class CompletionClient(Protocol):
         *,
         timeout: float,
         json_mode: bool,
+        task: str = "",
     ) -> ProviderResponse: ...
 
 
@@ -60,6 +61,7 @@ class LiteLLMClient:
         *,
         timeout: float,
         json_mode: bool,
+        task: str = "",
     ) -> ProviderResponse:
         import litellm
 
@@ -115,9 +117,16 @@ class FakeClient:
     or a callable(messages) -> reply.
     """
 
-    def __init__(self, script: dict[str, list[Behavior]] | None = None, latency_s: float = 0.0):
+    def __init__(
+        self,
+        script: dict[str, list[Behavior]] | None = None,
+        latency_s: float = 0.0,
+        responder: Callable[[str, list[dict[str, str]], bool], str] | None = None,
+    ):
         self.script = script or {}
         self.latency_s = latency_s
+        #: Fallback for deployments without a script: (task, messages, json_mode) -> reply.
+        self.responder = responder
         self.calls: list[str] = []
 
     async def complete(
@@ -128,9 +137,15 @@ class FakeClient:
         *,
         timeout: float,
         json_mode: bool,
+        task: str = "",
     ) -> ProviderResponse:
         self.calls.append(deployment.id)
-        steps = self.script.get(deployment.id, ['{"ok": true}' if json_mode else "ok"])
+        default: Behavior = (
+            (lambda msgs: self.responder(task, msgs, json_mode))  # type: ignore[misc]
+            if self.responder
+            else ('{"ok": true}' if json_mode else "ok")
+        )
+        steps = self.script.get(deployment.id, [default])
         step = steps.pop(0) if len(steps) > 1 else steps[0]
         if self.latency_s:
             await asyncio.sleep(self.latency_s)

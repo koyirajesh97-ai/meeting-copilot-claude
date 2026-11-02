@@ -124,7 +124,7 @@ Acceptance: record, stop, reopen the app and the transcript is in Meetings home;
 network mid-meeting loses nothing.
 ```
 
-## Prompt 7: Summaries by meeting type
+## Prompt 7: Summaries by meeting type — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (Meeting types table; prompt 6 in "The app's own AI prompts").
