@@ -5,8 +5,8 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–3 are done (repo, shared event schema, desktop shell and overlay, two-channel
-audio capture to local WAV files). Nothing is sent to the backend yet.
+Status: Prompts 0–4 are done (repo, shared event schema, desktop shell and overlay, two-channel
+audio capture to local WAV files, provider router). Nothing is sent to the backend yet.
 
 ## 1. Create the free accounts and keys
 
@@ -64,6 +64,17 @@ pnpm -C apps/desktop dev
 
 Opens the main window and the overlay, and puts an icon in the tray. Hotkeys: Ctrl/Cmd+Shift plus
 R (record), C (catch up), L (clarify), F (follow up), E (expand the overlay).
+
+### Check your AI keys
+
+```bash
+scripts/check-providers
+```
+
+Sends one tiny request to every provider in `config/providers.yaml` and prints status, latency
+and remaining quota where the provider reports it. A GitHub Actions job runs it nightly; add your
+keys as repository secrets (Settings → Secrets and variables → Actions) with the same names as
+in `.env`.
 
 ## 5. Check everything
 

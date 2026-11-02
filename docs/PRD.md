@@ -183,10 +183,10 @@ All the LLM providers above speak the OpenAI chat-completions format, so one cli
 
 ### How the router works
 
-1. It is built on LiteLLM's open-source Router: each task is a model group with an ordered list of deployments, each with its own requests-per-minute and tokens-per-minute limit.
+1. LiteLLM is the client for every provider. The fallback loop is the app's own (`services/backend/app/router`) so the data-policy guard, quota tracking and provider.switched events sit in one place: each task has an ordered list of deployments, each with its own requests-per-minute and tokens-per-minute limit.
 2. On a 429, timeout or error, the call moves to the next deployment, and a deployment that keeps failing goes on a cooldown timer.
 3. A quota tracker counts requests, tokens and audio seconds per provider per day in Postgres. It warns at 80% of a daily quota and skips the provider at 95%.
-4. Every provider in `config/providers.yaml` carries a `trains_on_data` flag. Each request carries `data_class: meeting | test`; meeting content never goes to a provider flagged true.
+4. Every provider in `config/providers.yaml` carries a `trains_on_data` flag (Deepgram is `false` because every request sends `mip_opt_out=true`; Gladia stays `unknown` until its free-plan terms are checked; `local` is `false`). Each request carries `data_class: meeting | test`; meeting content never goes to a provider flagged true.
 5. Live tasks get a short timeout (1.5 s for cards) before falling back, so a slow provider can't stall a card.
 6. Streaming transcription uses its own adapters (WebSocket), with the same quota tracking and fallback order.
 7. A usage screen shows quota left per provider today and which provider served each card.

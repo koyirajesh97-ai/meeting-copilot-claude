@@ -32,6 +32,15 @@ providers:
     base_url: https://openrouter.ai/api/v1
     key_env: OPENROUTER_API_KEY
     trains_on_data: unknown   # treated as true until you verify the model's provider
-  deepgram: {key_env: DEEPGRAM_API_KEY, kind: stt_stream}
-  gladia:   {key_env: GLADIA_API_KEY, kind: stt_stream}
-  local:    {kind: stt_local, model: small.en}
+  deepgram:
+    key_env: DEEPGRAM_API_KEY
+    kind: stt_stream
+    trains_on_data: false     # every request sets mip_opt_out=true (Model Improvement Program opt-out)
+  gladia:
+    key_env: GLADIA_API_KEY
+    kind: stt_stream
+    trains_on_data: unknown   # free-plan data terms not verified; meeting audio skips it until you check
+  local:
+    kind: stt_local
+    model: small.en
+    trains_on_data: false     # runs on this machine

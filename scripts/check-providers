@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Ping every provider in config/providers.yaml with one tiny request (keys from .env).
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [ -f .env ]; then set -a; . ./.env; set +a; fi
+cd services/backend
+exec uv run python -m app.router.check "$@"

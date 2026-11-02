@@ -66,7 +66,7 @@ Acceptance: a 2-minute call produces two WAVs and correct meters; unit tests cov
 framing, ring buffer and VAD gating.
 ```
 
-## Prompt 4: Provider router for free AI APIs
+## Prompt 4: Provider router for free AI APIs — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("Free AI services and the provider router").
