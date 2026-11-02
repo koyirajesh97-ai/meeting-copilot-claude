@@ -365,6 +365,15 @@ function registerIpc(): void {
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.profileGet, () => backend!.getProfile());
+  handle(IPC.profilePut, (p) => backend!.putProfile(p as never));
+  handle(IPC.profilePresets, () => backend!.profilePresets());
+  handle(IPC.cardFeedback, (cardId, useful) => {
+    if (typeof cardId !== "string" || typeof useful !== "boolean") throw new Error("Bad feedback");
+    if (!live?.send({ type: "control", action: "card_feedback", card_id: cardId, useful })) {
+      throw new Error("Not connected to the meeting");
+    }
+  });
   handle(IPC.voiceList, () => backend!.listVoices());
   handle(IPC.voiceDelete, (id) => backend!.deleteVoice(String(id)));
   handle(IPC.voiceEnroll, async (name, consent) => {

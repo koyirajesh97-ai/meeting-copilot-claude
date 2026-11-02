@@ -35,6 +35,12 @@ const api: CopilotApi = {
       return () => ipcRenderer.removeListener(IPC.voiceProgress, wrapped);
     },
   },
+  profile: {
+    get: () => ipcRenderer.invoke(IPC.profileGet),
+    put: (p) => ipcRenderer.invoke(IPC.profilePut, p),
+    presets: () => ipcRenderer.invoke(IPC.profilePresets),
+  },
+  cardFeedback: (cardId, useful) => ipcRenderer.invoke(IPC.cardFeedback, cardId, useful),
   search: (query) => ipcRenderer.invoke(IPC.search, query),
   ask: (question) => ipcRenderer.invoke(IPC.ask, question),
   meetings: {

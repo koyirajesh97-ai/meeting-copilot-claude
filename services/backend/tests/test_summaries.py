@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,8 +19,9 @@ from app.summaries.pipeline import chunk_lines, ground, summarize, transcript_li
 from app.summaries.schema import ActionItem, Summary
 from app.summaries.templates import TEMPLATES, template_for
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "evals" / "summaries"))
-import run as summary_eval  # noqa: E402
+from .conftest import load_eval
+
+summary_eval = load_eval("summaries")
 
 LINES = [
     ("spk_0", "We decided to keep the retry limit at three."),

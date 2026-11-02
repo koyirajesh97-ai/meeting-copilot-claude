@@ -235,16 +235,44 @@ def _best(question: str, items: list[tuple[str, str]]) -> list[tuple[int, str, s
     return sorted([s for s in scored if s[0] >= 2], key=lambda s: (-s[0], not timed(s[2])))
 
 
+def _sentences(body: str) -> list[str]:
+    """Sentences of an excerpt, without "[00:12] Speaker 1:" prefixes."""
+    body = re.sub(r"\[\d{2}:\d{2}(?::\d{2})?\]\s*[^:]{1,40}:\s*", "\n", body)
+    body = (
+        body.split(": ", 1)[-1]
+        if re.match(r"^[^\n:]{1,80}(?: at \d{2}:\d{2}| \(summary\))?:", body)
+        else body
+    )
+    parts = re.split(r"(?<=[.!?])\s+|\n+", body)
+    return [p.strip() for p in parts if len(p.strip().split()) >= 3]
+
+
 def answer_card(messages: list[dict[str, str]]) -> str:
     user = _user(messages)
     question = section(user, "QUESTION")
-    best = _best(question, _context_items(user, "s"))
+    items = _context_items(user, "s")
+    # The recent-transcript entry contains the question itself; answer from the other facts first.
+    facts = [
+        (sid, body)
+        for sid, body in items
+        if not body.startswith(("Last ", "Today's standup notes: none"))
+    ]
+    q = words(question)
+    scored = sorted(
+        ((len(q & words(sent)), sid, sent) for sid, body in facts for sent in _sentences(body)),
+        key=lambda x: -x[0],
+    )
+    best = [x for x in scored if x[0] >= 2]
     if not best:
         return json.dumps({"bullets": [], "confidence": 0})
-    bullets = []
-    for _score, sid, body in best[:2]:
-        sentence = re.split(r"(?<=[.!?])\s", body.split(": ", 1)[-1])[0]
-        bullets.append({"text": " ".join(sentence.split()[:14]), "source": sid})
+    bullets, seen = [], set()
+    for _score, sid, sent in best:
+        if sent.lower() in seen:
+            continue
+        seen.add(sent.lower())
+        bullets.append({"text": " ".join(sent.split()[:14]), "source": sid})
+        if len(bullets) == 2:
+            break
     return json.dumps({"bullets": bullets, "confidence": 0.8})
 
 

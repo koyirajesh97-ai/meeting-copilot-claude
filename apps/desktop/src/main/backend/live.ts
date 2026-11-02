@@ -158,6 +158,14 @@ export class LiveConnection extends EventEmitter<{ event: [MeetingEvent]; state:
     }
   }
 
+  /** Send a client message (control or ping). Returns false if not connected. */
+  send(message: object): boolean {
+    const ws = this.ws;
+    if (!ws || ws.readyState !== OPEN) return false;
+    ws.send(JSON.stringify(message));
+    return true;
+  }
+
   /** Wait until queued audio has left, end the meeting on the server, collect trailing finals. */
   async stop(): Promise<string | null> {
     const id = this.meetingId;

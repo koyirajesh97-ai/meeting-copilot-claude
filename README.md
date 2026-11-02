@@ -5,11 +5,11 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–9 are done (repo, shared event schema, desktop shell and overlay, two-channel
+Status: Prompts 0–10 are done (repo, shared event schema, desktop shell and overlay, two-channel
 audio capture to local WAV files, provider router, realtime gateway with live transcription,
 database with row-level security, sign-in, live captions and the offline meeting cache, summaries
-by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 has started with
-voice enrollment and speaker recognition.
+by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 has started: voice
+enrollment, speaker recognition, the role profile and answer cards.
 
 ### Evals
 
@@ -20,6 +20,14 @@ cd services/backend && uv run python ../../evals/summaries/run.py
 Scores action-item recall on the fixtures in `evals/summaries/fixtures` (target 90%). CI runs it
 with the Fake provider; add `--real` to use the free providers and `--long` to time a 60-minute
 transcript.
+
+```bash
+cd services/backend && uv run python ../../evals/live/run.py
+```
+
+Live help: three questions to you get cited cards, a question to someone else gets none, and a
+question with no answer in your notes gets "No grounded answer". Reports question-to-card latency
+(target: median 2.5 s); `--real` uses the free providers for detection and cards.
 
 ## 1. Create the free accounts and keys
 

@@ -97,6 +97,18 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByRole("button", { name: "Use the local dev login" }).click();
   await expect(main.getByTestId("signed-in-as")).toContainText("dev@localhost");
 
+  // Your role: pick a preset, fill in names and systems, save, and see it come back.
+  await main.getByRole("navigation").getByRole("link", { name: "Your role" }).click();
+  await main.getByLabel("Start from a preset").selectOption("devops_sre");
+  await expect(main.getByLabel("Role title")).toHaveValue("DevOps/SRE");
+  await main.getByLabel("Your name (as people say it)").fill("Dev User");
+  await main.getByLabel("Systems you own").fill("payments cluster, ArgoCD");
+  await main.getByLabel("Systems you own").blur();
+  await main.getByRole("button", { name: "Save" }).click();
+  await expect(main.getByRole("status")).toHaveText("Saved");
+  const saved = await main.evaluate(() => window.copilot.profile.get());
+  expect(saved).toMatchObject({ name: "Dev User", title: "DevOps/SRE", systems_owned: ["payments cluster", "ArgoCD"] });
+
   // Enroll a voice: consent is required, the indicator shows while recording, and it can be deleted.
   await main.getByRole("navigation").getByRole("link", { name: "Your voice" }).click();
   const record = main.getByRole("button", { name: /Record \d+ seconds/ });

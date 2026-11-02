@@ -72,10 +72,19 @@ class SpeakerIdConfig(BaseModel):
     max_audio_s: float = Field(default=20.0, gt=0)
 
 
+class LiveHelpConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    card_min_confidence: float = Field(default=0.5, ge=0, le=1)
+    recent_minutes: float = Field(default=5, gt=0)
+    context_chunks: int = Field(default=3, ge=0, le=10)
+    topic_cooldown_s: float = Field(default=60, ge=0)
+
+
 class RouterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tasks: dict[str, list[Deployment]]
     speaker_id: SpeakerIdConfig = Field(default_factory=SpeakerIdConfig)
+    live_help: LiveHelpConfig = Field(default_factory=LiveHelpConfig)
     timeouts_s: dict[str, float] = Field(default_factory=dict)
     providers: dict[str, ProviderConfig]
     # Cooldown: after this many consecutive failures a deployment rests for cooldown_s.

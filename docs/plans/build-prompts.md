@@ -171,7 +171,7 @@ Read AGENTS.md and docs/PRD.md ("Privacy, consent and compliance").
 Acceptance: a 3-voice fixture names the 2 enrolled voices and leaves the third unnamed.
 ```
 
-## Prompt 10: Role profile, question detection and answer cards
+## Prompt 10: Role profile, question detection and answer cards — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (FR-11 to FR-15, latency budget, prompts 1 and 2).

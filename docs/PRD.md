@@ -205,7 +205,8 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 |---|---|
 | `POST /auth/session` | Exchange the Supabase session for a short-lived backend token |
 | `POST /auth/dev-session` | Local development only (`ALLOW_DEV_LOGIN=1`, localhost): a fixed dev user |
-| `GET /me`, `PUT /me/profile` | Current user and role profile |
+| `GET /me`, `GET /me/profile`, `PUT /me/profile`, `GET /profiles/presets` | Current user, role profile (name, aliases, title, responsibilities, systems owned, tickets, speaking style) and presets |
+| `GET /meetings/{id}/cards` | Cards shown during a meeting (owner only) and their Used / Not useful flag |
 | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}` | Project management |
 | `POST /projects/{id}/members` | Invite a member by email |
 | `GET /projects/{id}/vocabulary`, `PUT /projects/{id}/vocabulary` | Names and terms for transcription and Clarify |
@@ -399,6 +400,7 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 
 - **Compact** (default, about 360 × 120 px): recording dot and timer, the last caption line, the newest card's first bullet, and the three action buttons.
 - **Expanded** (about 360 × 520 px): scrolling captions with "You" and speaker names, the card stack with sources and Used / Not useful buttons, and a small chip naming the provider that served each card.
+- **Card streaming:** the card's first bullet arrives as `card.created`, the rest as `card.delta`. True token streaming from the model is a follow-up (TODO); today each bullet is a delta.
 - **Card priority:** an answer to a question aimed at you, then your standup script, then topic cards. At most two cards show; others queue. Cards collapse after 45 s unless pinned.
 - **Never steals focus:** the window is always on top but not focusable, so typing in Teams is never interrupted.
 - **Hotkeys:** Ctrl/Cmd+Shift plus R (record), C (catch up), L (clarify), F (follow up), E (expand).

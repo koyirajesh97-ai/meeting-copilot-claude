@@ -32,6 +32,17 @@ os.environ["COPILOT_FAKE_PROVIDERS"] = "1"
 backend_secret.cache_clear()
 
 
+def load_eval(name: str):
+    """Import evals/<name>/run.py under a unique module name (every eval has a run.py)."""
+    import importlib.util
+
+    path = ROOT / "evals" / name / "run.py"
+    spec = importlib.util.spec_from_file_location(f"eval_{name}", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
 def _pg_bin() -> Path | None:
     for base in sorted(Path("/usr/lib/postgresql").glob("*/bin"), reverse=True):
         if (base / "initdb").exists():

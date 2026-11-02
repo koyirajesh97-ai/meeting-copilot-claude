@@ -1,6 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
-import type { ActionItem, AskAnswer, EnrolledVoice, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
+import type { ActionItem, AskAnswer, EnrolledVoice, RoleProfile, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
   constructor(
@@ -135,6 +135,18 @@ export class BackendClient {
       throw new BackendError(`Enrollment failed: ${res.status} ${detail}`, res.status);
     }
     return (await res.json()) as EnrolledVoice;
+  }
+
+  getProfile(): Promise<RoleProfile> {
+    return this.request("GET", "/me/profile");
+  }
+
+  putProfile(p: RoleProfile): Promise<RoleProfile> {
+    return this.request("PUT", "/me/profile", p);
+  }
+
+  profilePresets(): Promise<Record<string, RoleProfile>> {
+    return this.request("GET", "/profiles/presets");
   }
 
   listVoices(): Promise<EnrolledVoice[]> {

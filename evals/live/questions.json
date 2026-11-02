@@ -1,0 +1,25 @@
+{
+  "profile": {
+    "name": "Sai", "aliases": ["SK"], "title": "DevOps/SRE",
+    "responsibilities": "Deployments, CI/CD, on-call",
+    "systems_owned": ["payments cluster", "ArgoCD"], "current_tickets": ["OPS-142"],
+    "speaking_style": "brief and direct"
+  },
+  "prior_meeting": {
+    "title": "Payments release review",
+    "lines": [
+      ["spk_0", "The payments cluster deploy moved to Thursday after the cert renewal."],
+      ["spk_1", "The rollback plan is documented in the payments runbook on the wiki."],
+      ["spk_0", "ArgoCD sync for prod uses the prod-east profile now."]
+    ]
+  },
+  "live": [
+    {"speaker": "0", "text": "Morning everyone, let's go through the release.", "expect": "none"},
+    {"speaker": "1", "text": "Sai, when is the payments cluster deploy?", "expect": "card", "cites": "Thursday"},
+    {"speaker": "1", "text": "Priya, can you share the test report today?", "expect": "not_me"},
+    {"speaker": "0", "text": "SK, where is the rollback plan documented?", "expect": "card", "cites": "runbook"},
+    {"speaker": "1", "text": "Sai, which profile does ArgoCD sync use for prod?", "expect": "card", "cites": "prod-east"},
+    {"speaker": "0", "text": "Sai, what's the marketing budget for next quarter?", "expect": "no_answer"},
+    {"speaker": "1", "text": "Great, thanks everyone.", "expect": "none"}
+  ]
+}

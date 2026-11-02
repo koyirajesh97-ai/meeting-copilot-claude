@@ -9,8 +9,11 @@ import os
 from dataclasses import dataclass
 
 from app.jobs.summary import SummaryJobs
+from app.live.help import live_help_factory
+from app.live.store import InMemoryCards, PostgresCards
 from app.meetings.speakers import InMemorySpeakers, PostgresSpeakers
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
+from app.profiles.store import InMemoryProfiles, PostgresProfiles
 from app.providers.embeddings import EmbeddingRouter, FakeEmbedder
 from app.providers.speaker_id import FakeSpeakerEmbedder, SpeakerIdRouter
 from app.providers.stt.base import FakeSttAdapter
@@ -53,6 +56,8 @@ class Services:
     search: SearchService
     speakers: InMemorySpeakers | PostgresSpeakers
     speaker_id: SpeakerIdRouter
+    profiles: InMemoryProfiles | PostgresProfiles
+    cards: InMemoryCards | PostgresCards
 
 
 def build_services(
@@ -105,8 +110,25 @@ def build_services(
     speakers = PostgresSpeakers(meetings) if hasattr(meetings, "connection") else InMemorySpeakers()
     speaker_id = SpeakerIdRouter(cfg, **({"factory": speaker_factory} if speaker_factory else {}))
     sessions.plugin_factories.append(speaker_plugin_factory(speakers, speaker_id, cfg.speaker_id))
+    pg = hasattr(meetings, "connection")
+    profiles = PostgresProfiles(meetings) if pg else InMemoryProfiles()
+    cards = PostgresCards(meetings) if pg else InMemoryCards()
+    sessions.plugin_factories.append(
+        live_help_factory(router, search, cards, profiles, cfg.live_help)
+    )
     return Services(
-        cfg, quota, router, stt, meetings, sessions, summaries, search, speakers, speaker_id
+        cfg,
+        quota,
+        router,
+        stt,
+        meetings,
+        sessions,
+        summaries,
+        search,
+        speakers,
+        speaker_id,
+        profiles,
+        cards,
     )
 
 

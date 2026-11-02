@@ -120,3 +120,31 @@ async def export(
         include_transcript=transcript,
     )
     return PlainTextResponse(text, media_type="text/markdown; charset=utf-8")
+
+
+class CardOut(BaseModel):
+    id: str
+    kind: str
+    text: str
+    sources: list[dict]
+    confidence: float
+    provider: str | None
+    used: bool | None
+
+
+@router.get("/meetings/{meeting_id}/cards", response_model=list[CardOut])
+async def meeting_cards(meeting_id: str, user: CurrentUser) -> list[CardOut]:
+    """Cards shown during the meeting (private to its owner) and whether they helped."""
+    await _owned(meeting_id, user.user_id)
+    return [
+        CardOut(
+            id=c.id,
+            kind=c.kind,
+            text=c.text,
+            sources=c.sources,
+            confidence=c.confidence,
+            provider=c.provider,
+            used=c.used,
+        )
+        for c in await services().cards.for_meeting(meeting_id)
+    ]

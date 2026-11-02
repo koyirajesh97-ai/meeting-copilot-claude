@@ -30,5 +30,11 @@ Follow-ups that were out of scope for the prompt that found them.
   the 0.75 threshold on consented recordings, and wire the `diarize` library as the CPU
   alternative (its API wasn't verified here, so it isn't in the chain yet).
 - Re-check unmatched speakers later in long meetings (today: up to max_audio_s, then give up).
+- Stream answer cards token by token (router streaming support); today the first bullet is sent
+  as soon as the model finishes and the rest follow as deltas.
+- Detect questions on partial captions too, to start earlier (risk table); today detection runs on
+  finals.
+- Answer cards can't be exercised in the desktop e2e on Linux (no system audio there); backend
+  tests and evals/live cover them. Check on Windows with a real call.
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).

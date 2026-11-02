@@ -37,6 +37,10 @@ export const IPC = {
   voiceList: "voice:list",
   voiceDelete: "voice:delete",
   voiceProgress: "voice:progress",
+  profileGet: "profile:get",
+  profilePut: "profile:put",
+  profilePresets: "profile:presets",
+  cardFeedback: "card:feedback",
   search: "search:query",
   ask: "search:ask",
 } as const;
@@ -56,6 +60,16 @@ export interface AskAnswer {
   found: boolean;
   citations: { id: string; meeting_id: string; title: string; start_ms: number | null; quote: string }[];
   provider: string | null;
+}
+
+export interface RoleProfile {
+  name: string;
+  aliases: string[];
+  title: string;
+  responsibilities: string;
+  systems_owned: string[];
+  current_tickets: string[];
+  speaking_style: string;
 }
 
 export interface EnrolledVoice {
@@ -274,6 +288,13 @@ export interface CopilotApi {
     delete(id: string): Promise<void>;
     onProgress(listener: (p: { elapsed: number; level: number; total: number }) => void): () => void;
   };
+  profile: {
+    get(): Promise<RoleProfile>;
+    put(p: RoleProfile): Promise<RoleProfile>;
+    presets(): Promise<Record<string, RoleProfile>>;
+  };
+  /** Used / Not useful on a live card. */
+  cardFeedback(cardId: string, useful: boolean): Promise<void>;
   /** Search all your meetings (backend; needs a connection). */
   search(query: string): Promise<SearchHit[]>;
   /** "Ask my meetings": a cited answer, or found: false when nothing relevant exists. */
@@ -321,6 +342,7 @@ export const ROUTES = {
   settings: "/settings",
   systemAudioHelp: "/help/system-audio",
   voice: "/voice",
+  profile: "/profile",
 } as const;
 
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */

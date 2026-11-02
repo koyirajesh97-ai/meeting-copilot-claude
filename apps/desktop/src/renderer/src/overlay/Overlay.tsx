@@ -3,6 +3,8 @@ import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
 import { visibleLines } from "../live/captions";
 import { Captions } from "../live/Captions";
+import { CardStack, useCards } from "../live/CardStack";
+import { visibleCards } from "../live/cards";
 import { useCaptions } from "../live/useCaptions";
 import { useAppState, useSettings } from "../useAppState";
 
@@ -37,6 +39,7 @@ export function Overlay() {
   const state = useAppState();
   const [settings] = useSettings();
   const captions = useCaptions();
+  const [cards, dispatchCards] = useCards();
   if (!state) return null;
   const expanded = state.overlayExpanded;
   const lines = visibleLines(captions);
@@ -78,7 +81,14 @@ export function Overlay() {
           <p data-testid="live-message" className="mb-1 truncate text-xs text-amber-300" title={state.live.message}>{state.live.message}</p>
         )}
         {expanded ? (
-          <Captions lines={lines} fontSize={fontSize} />
+          <>
+            <CardStack state={cards} dispatch={dispatchCards} />
+            <Captions lines={lines} fontSize={fontSize} />
+          </>
+        ) : visibleCards(cards, Date.now()).shown[0] ? (
+          <p data-testid="compact-card" className="truncate text-xs text-sky-200" title="Expand to see the card">
+            {visibleCards(cards, Date.now()).shown[0].text.split("\n")[0]}
+          </p>
         ) : (
           <p data-testid="caption-line" className={`truncate ${last && !last.final ? "text-gray-400 italic" : "text-gray-100"}`} style={{ fontSize: `${fontSize}px` }}>
             {last ? `${last.speaker}: ${last.text}` : state.capturing ? "Listening…" : "Captions appear here while recording."}
