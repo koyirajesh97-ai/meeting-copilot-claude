@@ -13,7 +13,9 @@
   },
   "dependencies": {
     "@meeting-copilot/shared": "workspace:*",
+    "@ricky0123/vad-web": "0.0.31",
     "electron-store": "^12.0.0",
+    "onnxruntime-web": "1.31.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "react-router-dom": "^7.18.5"
@@ -30,5 +32,8 @@
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.5"
   },
-  "main": "out/main/index.js"
+  "main": "out/main/index.js",
+  "optionalDependencies": {
+    "loopback-capture": "4.0.0"
+  }
 }

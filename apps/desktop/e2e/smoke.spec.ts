@@ -1,5 +1,5 @@
 import { _electron as electron, expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -18,7 +18,13 @@ async function windowByTitle(title: string): Promise<Page> {
 
 test.beforeAll(async () => {
   userData = mkdtempSync(join(tmpdir(), "copilot-e2e-"));
-  const args = [".", `--user-data-dir=${userData}`];
+  const args = [
+    ".",
+    `--user-data-dir=${userData}`,
+    // Chromium's built-in fake microphone (a periodic beep), with permission auto-granted.
+    "--use-fake-device-for-media-stream",
+    "--use-fake-ui-for-media-stream",
+  ];
   // Chromium refuses to start as root (containers, CI) without this. The app's own
   // renderer sandbox settings are unchanged.
   if (process.getuid?.() === 0) args.push("--no-sandbox");
@@ -57,7 +63,7 @@ test("renderer is isolated: no Node, only the typed bridge", async () => {
   expect(probe.require).toBe("undefined");
   expect(probe.process).toBe("undefined");
   expect(probe.bridge).toEqual(
-    ["getSettings", "getState", "onState", "openMain", "overlay", "secrets", "setSettings", "toggleCapture"].sort(),
+    ["capture", "getSettings", "getState", "onLevels", "onState", "openMain", "overlay", "secrets", "setSettings", "toggleCapture"].sort(),
   );
 });
 
@@ -87,6 +93,42 @@ test("overlay is always on top, never focusable, and shows the recording indicat
 
   await main.getByRole("button", { name: "Stop recording" }).click();
   await expect(indicator).toHaveAttribute("data-recording", "false");
+});
+
+test("records the mic to a WAV through the real capture path, with live meters", async () => {
+  const main = await windowByTitle("Meeting Copilot");
+  const overlay = await windowByTitle("Meeting Copilot overlay");
+  await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
+  await main.getByRole("button", { name: "Start recording" }).click();
+
+  const micMeter = overlay.getByTestId("meter-you");
+  await expect(micMeter).toHaveAttribute("data-state", "live", { timeout: 15_000 });
+  await expect
+    .poll(async () => Number(await micMeter.getAttribute("aria-valuenow")), { timeout: 10_000 })
+    .toBeGreaterThan(0);
+
+  // This Linux runner has no PipeWire, so system audio is reported, not silently missing.
+  if (process.platform === "linux") {
+    await expect(overlay.getByTestId("meter-mtg")).toHaveAttribute("data-state", /unavailable|error/);
+    await expect(overlay.getByTestId("system-audio-warning")).toBeVisible();
+  }
+
+  await new Promise((r) => setTimeout(r, 1500));
+  await main.getByRole("button", { name: "Stop recording" }).click();
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "false");
+
+  const recordings = join(userData, "recordings");
+  // Session folders are timestamps; earlier tests may have recorded too, so take the newest.
+  const latest = readdirSync(recordings).sort().at(-1)!;
+  const wav = join(recordings, latest, "mic.wav");
+  expect(existsSync(wav)).toBe(true);
+  const bytes = readFileSync(wav);
+  expect(bytes.toString("ascii", 0, 4)).toBe("RIFF");
+  expect(bytes.readUInt32LE(24)).toBe(16_000);
+  const dataBytes = bytes.readUInt32LE(40);
+  expect(dataBytes).toBe(bytes.length - 44);
+  // At least ~1.5 s of audio at 32 kB/s.
+  expect(dataBytes).toBeGreaterThan(48_000);
 });
 
 test("overlay expands to 360x520 and back", async () => {

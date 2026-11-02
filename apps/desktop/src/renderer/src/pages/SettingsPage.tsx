@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { CAPTION_FONT_RANGE, type Theme } from "../../../shared/ipc";
 import { inputClass, PageHeader } from "../components/EmptyState";
 import { useSettings } from "../useAppState";
@@ -42,6 +43,7 @@ export function SettingsPage() {
           />
         </label>
       </div>
+      <AudioSettings micDeviceId={settings.micDeviceId} systemAudioApp={settings.systemAudioApp} update={update} />
       <div className="space-y-2">
         <h2 className="font-medium">Backend</h2>
         <label className="block text-sm">
@@ -67,9 +69,55 @@ export function SettingsPage() {
         </table>
       </div>
       <div className="space-y-1">
-        <h2 className="font-medium">AI providers, audio devices, retention</h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400">These settings arrive with the provider router and audio capture.</p>
+        <h2 className="font-medium">AI providers, retention</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400">These settings arrive with the provider router and privacy modes.</p>
       </div>
     </section>
+  );
+}
+
+function AudioSettings({
+  micDeviceId,
+  systemAudioApp,
+  update,
+}: {
+  micDeviceId: string | null;
+  systemAudioApp: string | null;
+  update: (patch: { micDeviceId?: string | null; systemAudioApp?: string | null }) => Promise<void>;
+}) {
+  const [mics, setMics] = useState<MediaDeviceInfo[]>([]);
+  useEffect(() => {
+    void navigator.mediaDevices
+      ?.enumerateDevices()
+      .then((d) => setMics(d.filter((x) => x.kind === "audioinput" && x.deviceId !== "default")))
+      .catch(() => setMics([]));
+  }, []);
+  return (
+    <div className="space-y-4">
+      <h2 className="font-medium">Audio</h2>
+      <label className="block text-sm">
+        Microphone
+        <select className={`${inputClass} mt-1`} value={micDeviceId ?? ""} onChange={(e) => void update({ micDeviceId: e.target.value || null })}>
+          <option value="">System default</option>
+          {mics.map((m, i) => (
+            <option key={m.deviceId} value={m.deviceId}>
+              {m.label || `Microphone ${i + 1}`}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm">
+        Capture only this app's audio (Windows)
+        <input
+          className={`${inputClass} mt-1`}
+          placeholder="All system audio — or e.g. ms-teams.exe"
+          defaultValue={systemAudioApp ?? ""}
+          onBlur={(e) => void update({ systemAudioApp: e.target.value.trim() || null })}
+        />
+        <span className="mt-1 block text-xs text-gray-500 dark:text-gray-400">
+          Leave empty to record everything your computer plays. Per-app capture needs Windows 10 build 20348+ or Windows 11.
+        </span>
+      </label>
+    </div>
   );
 }

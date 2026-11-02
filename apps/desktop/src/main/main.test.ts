@@ -67,6 +67,14 @@ describe("settings", () => {
     });
     expect(next).toEqual(DEFAULT_SETTINGS);
   });
+  it("accepts a Windows app name for per-app capture and rejects anything else", () => {
+    expect(applySettingsPatch(DEFAULT_SETTINGS, { systemAudioApp: " ms-teams.exe " }).systemAudioApp).toBe("ms-teams.exe");
+    expect(applySettingsPatch(DEFAULT_SETTINGS, { systemAudioApp: "rm -rf /" }).systemAudioApp).toBeNull();
+    expect(applySettingsPatch({ ...DEFAULT_SETTINGS, systemAudioApp: "Zoom.exe" }, { systemAudioApp: "" }).systemAudioApp).toBeNull();
+    expect(applySettingsPatch(DEFAULT_SETTINGS, { micDeviceId: "abc123" }).micDeviceId).toBe("abc123");
+    expect(applySettingsPatch(DEFAULT_SETTINGS, { micDeviceId: 5 }).micDeviceId).toBeNull();
+  });
+
   it("clamps caption size and rounds positions", () => {
     const next = applySettingsPatch(DEFAULT_SETTINGS, {
       captionFontSize: 3,

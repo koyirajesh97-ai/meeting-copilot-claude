@@ -47,7 +47,7 @@ Acceptance: runs on Windows; the overlay stays above a full-screen Teams window 
 keyboard focus; a Playwright smoke test opens both windows.
 ```
 
-## Prompt 3: Two-channel audio capture
+## Prompt 3: Two-channel audio capture — DONE (see docs/plans/audio-capture.md)
 
 ```
 Read AGENTS.md and docs/PRD.md (Tech stack, system audio row). In the desktop main process build

@@ -9,7 +9,11 @@ import {
   type IpcMainInvokeEvent,
   type WebFrameMain,
 } from "electron";
-import { IPC, isAllowedRoute, type AppState, type OverlayAction } from "../shared/ipc";
+import { join } from "node:path";
+import { IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction } from "../shared/ipc";
+import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
+import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
+import { SileroDetector } from "./audio/silero";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
 import { trayIcons } from "./icons";
@@ -28,7 +32,47 @@ const state: AppState = {
   captureStartedAt: null,
   overlayExpanded: false,
   lastAction: null,
+  audio: { mic: OFF, system: OFF },
 };
+
+// Hidden capture windows have no user gesture; let their AudioContext start anyway.
+app.commandLine.appendSwitch("autoplay-policy", "no-user-gesture-required");
+if (process.platform === "darwin") {
+  // System-audio loopback for getDisplayMedia on macOS 14.2+.
+  app.commandLine.appendSwitch("enable-features", "MacLoopbackAudioForScreenShare,MacSckSystemAudioLoopbackOverride");
+}
+
+let capture: AudioCapture | null = null;
+let captureHost: CaptureWindowHost | null = null;
+/** Serializes start/stop so rapid toggles can't interleave. */
+let captureOp: Promise<unknown> = Promise.resolve();
+
+function recordingsDir(): string {
+  return join(app.getPath("userData"), "recordings");
+}
+
+function setupCapture(): void {
+  captureHost = new CaptureWindowHost();
+  installDisplayMediaHandler(captureHost);
+  const host = captureHost;
+  capture = new AudioCapture({
+    recordingsDir: recordingsDir(),
+    micSource: (deviceId) => new RendererSource(host, "mic", deviceId),
+    systemSource: (app) => systemSourceFor(host, app),
+    createDetector: () => SileroDetector.create(),
+  });
+  capture.on("status", (audio) => {
+    state.audio = audio;
+    broadcast();
+  });
+  capture.on("levels", (levels: AudioLevels) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send(IPC.levels, levels);
+    }
+  });
+  const fixed = repairRecordings(recordingsDir());
+  if (fixed.length) console.warn(`[audio] repaired ${fixed.length} recording(s) left by a crash`);
+}
 
 // ---------- state ----------
 
@@ -45,14 +89,28 @@ function showOverlay(): void {
   if (!win.isVisible()) win.showInactive();
 }
 
-function setCapturing(on: boolean): AppState {
-  if (state.capturing === on) return state;
-  state.capturing = on;
-  state.captureStartedAt = on ? Date.now() : null;
-  // Audio capture itself arrives in Prompt 3; the indicator is driven by this flag.
-  if (on) showOverlay();
-  broadcast();
-  return state;
+function setCapturing(on: boolean): Promise<AppState> {
+  const op = captureOp.then(async () => {
+    if (state.capturing === on) return state;
+    // The indicator turns on before any audio is read and off only after capture stops.
+    if (on) {
+      state.capturing = true;
+      state.captureStartedAt = Date.now();
+      showOverlay();
+      broadcast();
+      const settings = getSettings();
+      await capture?.start({ micDeviceId: settings.micDeviceId, systemApp: settings.systemAudioApp });
+    } else {
+      const summary = await capture?.stop();
+      if (summary) console.log(`[audio] saved recording to ${summary.dir}`);
+      state.capturing = false;
+      state.captureStartedAt = null;
+      broadcast();
+    }
+    return state;
+  });
+  captureOp = op.catch(() => undefined);
+  return op;
 }
 
 function setExpanded(expanded: boolean): AppState {
@@ -74,7 +132,7 @@ function overlayAction(action: OverlayAction): AppState {
 function runHotkey(command: HotkeyCommand): void {
   switch (command) {
     case "toggle_capture":
-      setCapturing(!state.capturing);
+      void setCapturing(!state.capturing);
       break;
     case "toggle_expand":
       showOverlay();
@@ -137,7 +195,7 @@ function refreshTray(): void {
       {
         label: state.capturing ? "Stop recording" : "Start recording",
         accelerator: "CommandOrControl+Shift+R",
-        click: () => setCapturing(!state.capturing),
+        click: () => void setCapturing(!state.capturing),
       },
       { label: "Open Meeting Copilot", click: () => openMain() },
       { label: "Show overlay", click: () => showOverlay() },
@@ -237,14 +295,20 @@ if (!app.requestSingleInstanceLock()) {
     state.overlayExpanded = getSettings().overlayExpanded;
     hardenSessions();
     registerIpc();
+    setupCapture();
     registerHotkeys();
     createTray();
     ensureMain();
     ensureOverlay();
   });
 
-  app.on("before-quit", () => {
+  app.on("before-quit", (e) => {
     quitting = true;
+    // Finish the WAV files before exiting.
+    if (capture?.isRunning) {
+      e.preventDefault();
+      void setCapturing(false).finally(() => app.quit());
+    }
   });
   app.on("will-quit", () => globalShortcut.unregisterAll());
   // Tray app: stay running when windows close (except on explicit Quit).

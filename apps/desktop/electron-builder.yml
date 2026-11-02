@@ -1,0 +1,19 @@
+# Packaging config (electron-builder is added in Prompt 17). Kept here now so the macOS
+# permission strings and native/wasm unpacking are decided alongside the capture code.
+appId: com.meetingcopilot.desktop
+productName: Meeting Copilot
+directories:
+  output: release
+files:
+  - out/**
+asarUnpack:
+  - node_modules/loopback-capture/prebuilds/**
+  - node_modules/onnxruntime-web/dist/*.wasm
+  - node_modules/@ricky0123/vad-web/dist/*.onnx
+mac:
+  category: public.app-category.productivity
+  extendInfo:
+    NSMicrophoneUsageDescription: Meeting Copilot records your microphone so it can transcribe what you say in meetings.
+    NSAudioCaptureUsageDescription: Meeting Copilot records the meeting audio your Mac plays so it can transcribe what others say.
+win:
+  target: nsis

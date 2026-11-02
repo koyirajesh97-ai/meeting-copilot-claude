@@ -7,7 +7,7 @@
     "outDir": "node_modules/.tsc/web",
     "jsx": "react-jsx",
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
-    "types": []
+    "types": ["vite/client"]
   },
   "include": ["src/renderer/src", "src/shared"]
 }

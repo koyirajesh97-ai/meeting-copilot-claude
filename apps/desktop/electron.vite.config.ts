@@ -19,10 +19,15 @@ function cspMeta(): Plugin {
 
 export default defineConfig({
   main: {
-    build: { rollupOptions: { input: resolve(__dirname, "src/main/index.ts") } },
+    build: {
+      // Bundle the workspace package (it ships TypeScript source); keep real deps external.
+      externalizeDeps: { exclude: ["@meeting-copilot/shared"] },
+      rollupOptions: { input: resolve(__dirname, "src/main/index.ts") },
+    },
   },
   preload: {
     build: {
+      externalizeDeps: { exclude: ["@meeting-copilot/shared"] },
       rollupOptions: {
         input: resolve(__dirname, "src/preload/index.ts"),
         // Sandboxed preload scripts must be CommonJS.
@@ -38,6 +43,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/renderer/index.html"),
           overlay: resolve(__dirname, "src/renderer/overlay.html"),
+          capture: resolve(__dirname, "src/renderer/capture.html"),
         },
       },
     },

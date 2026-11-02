@@ -1,4 +1,5 @@
 import type { OverlayAction } from "../../../shared/ipc";
+import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
 import { useAppState, useSettings } from "../useAppState";
 
@@ -29,7 +30,7 @@ export function Overlay() {
       <header className="drag flex items-center justify-between gap-2 border-b border-white/10 px-3 py-1.5">
         <RecordingIndicator state={state} compact />
         <div className="flex items-center gap-2">
-          {/* Level meters arrive with audio capture (Prompt 3). */}
+          {state.capturing && <LevelMeters mic={state.audio.mic} system={state.audio.system} />}
           <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-gray-300" title="Provider serving cards">
             no provider
           </span>
@@ -46,6 +47,17 @@ export function Overlay() {
       </header>
 
       <div className="flex-1 overflow-y-auto px-3 py-1.5" style={{ fontSize: settings ? `${settings.captionFontSize}px` : undefined }}>
+        {state.capturing && ["silent", "unavailable", "error"].includes(state.audio.system.state) && (
+          <p data-testid="system-audio-warning" className="mb-1 flex items-center gap-2 text-xs text-amber-300">
+            <span className="truncate">{state.audio.system.message ?? "No meeting audio"}</span>
+            <button type="button" className="no-drag shrink-0 underline" onClick={() => void window.copilot.openMain("/help/system-audio")}>
+              Help
+            </button>
+          </p>
+        )}
+        {state.capturing && state.audio.mic.state === "error" && (
+          <p className="mb-1 truncate text-xs text-amber-300" title={state.audio.mic.message}>Microphone isn't recording: {state.audio.mic.message}</p>
+        )}
         <p data-testid="caption-line" className="truncate text-gray-300">
           {state.capturing ? "Listening…" : "Captions appear here while recording."}
         </p>

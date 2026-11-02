@@ -8,6 +8,7 @@ import { ProjectsPage } from "./pages/ProjectsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StandupPage } from "./pages/StandupPage";
 import { StartMeetingPage } from "./pages/StartMeetingPage";
+import { SystemAudioHelpPage } from "./pages/SystemAudioHelpPage";
 import { useAppState, useSettings } from "./useAppState";
 
 const NAV = [
@@ -57,6 +58,7 @@ export function App() {
             <Route path={ROUTES.standup} element={<StandupPage />} />
             <Route path={ROUTES.projects} element={<ProjectsPage />} />
             <Route path={ROUTES.settings} element={<SettingsPage />} />
+            <Route path={ROUTES.systemAudioHelp} element={<SystemAudioHelpPage />} />
           </Routes>
         </main>
       </div>

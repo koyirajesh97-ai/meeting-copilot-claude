@@ -12,7 +12,38 @@ export const IPC = {
   secretSet: "secret:set",
   secretHas: "secret:has",
   secretDelete: "secret:delete",
+  levels: "audio:levels",
+  captureCommand: "capture:command",
+  captureChunk: "capture:chunk",
+  captureStatus: "capture:status",
 } as const;
+
+export type ChannelName = "mic" | "system";
+
+export interface ChannelState {
+  state: "off" | "starting" | "live" | "silent" | "unavailable" | "error";
+  /** Which source is feeding the channel, e.g. "native-system" or "renderer-mic". */
+  source?: string;
+  message?: string;
+}
+
+export interface ChannelStatus {
+  mic: ChannelState;
+  system: ChannelState;
+}
+
+/** 0..1 meter values, sent about 10 times a second while capturing. */
+export interface AudioLevels {
+  mic: number;
+  system: number;
+}
+
+/** Main -> hidden capture window. */
+export type CaptureCommand =
+  | { action: "start"; channel: ChannelName; deviceId?: string | null }
+  | { action: "stop"; channel: ChannelName };
+
+export type CaptureReport = { channel: ChannelName; state: "live" | "unavailable" | "error"; message?: string };
 
 /** Buttons on the overlay. Stubs until the live-help prompts wire them up. */
 export type OverlayAction = "catch_up" | "clarify" | "follow_up";
@@ -26,6 +57,10 @@ export interface Settings {
   overlayExpanded: boolean;
   overlayPosition: { x: number; y: number } | null;
   backendUrl: string;
+  /** Microphone deviceId, or null for the system default. */
+  micDeviceId: string | null;
+  /** Windows: capture only this app's audio (image name, e.g. "ms-teams.exe"); null = all. */
+  systemAudioApp: string | null;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -35,6 +70,8 @@ export const DEFAULT_SETTINGS: Settings = {
   overlayExpanded: false,
   overlayPosition: null,
   backendUrl: "http://127.0.0.1:8000",
+  micDeviceId: null,
+  systemAudioApp: null,
 };
 
 export const CAPTION_FONT_RANGE = { min: 11, max: 28 } as const;
@@ -46,6 +83,7 @@ export interface AppState {
   overlayExpanded: boolean;
   /** Last overlay action pressed, for the stub UI. */
   lastAction: { action: OverlayAction; at: number } | null;
+  audio: ChannelStatus;
 }
 
 /** Secret names the renderer may store. Values never come back to the renderer. */
@@ -63,11 +101,18 @@ export interface CopilotApi {
     setExpanded(expanded: boolean): Promise<AppState>;
     action(action: OverlayAction): Promise<AppState>;
   };
+  onLevels(listener: (levels: AudioLevels) => void): () => void;
   openMain(route?: string): Promise<void>;
   secrets: {
     set(name: SecretName, value: string): Promise<void>;
     has(name: SecretName): Promise<boolean>;
     delete(name: SecretName): Promise<void>;
+  };
+  /** Used only by the hidden capture window; main ignores these from any other window. */
+  capture: {
+    onCommand(listener: (cmd: CaptureCommand) => void): () => void;
+    chunk(channel: ChannelName, samples: Float32Array, sampleRate: number): void;
+    report(report: CaptureReport): void;
   };
 }
 
@@ -79,6 +124,7 @@ export const ROUTES = {
   standup: "/standup",
   projects: "/projects",
   settings: "/settings",
+  systemAudioHelp: "/help/system-audio",
 } as const;
 
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */

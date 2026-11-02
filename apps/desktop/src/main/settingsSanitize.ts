@@ -21,6 +21,13 @@ export function applySettingsPatch(current: Settings, patch: unknown): Settings 
     next.overlayPosition = { x: Math.round(p.overlayPosition.x), y: Math.round(p.overlayPosition.y) };
   }
   if (typeof p.backendUrl === "string" && isHttpUrl(p.backendUrl)) next.backendUrl = p.backendUrl;
+  if (p.micDeviceId === null || (typeof p.micDeviceId === "string" && p.micDeviceId.length <= 256)) {
+    next.micDeviceId = p.micDeviceId || null;
+  }
+  if (p.systemAudioApp === null || p.systemAudioApp === "") next.systemAudioApp = null;
+  else if (typeof p.systemAudioApp === "string" && /^[\w .-]{1,64}\.exe$/i.test(p.systemAudioApp.trim())) {
+    next.systemAudioApp = p.systemAudioApp.trim();
+  }
   return next;
 }
 

@@ -5,8 +5,8 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–2 are done (repo, shared event schema, desktop shell and overlay). The
-record button drives the indicator, but no audio is captured yet.
+Status: Prompts 0–3 are done (repo, shared event schema, desktop shell and overlay, two-channel
+audio capture to local WAV files). Nothing is sent to the backend yet.
 
 ## 1. Create the free accounts and keys
 
