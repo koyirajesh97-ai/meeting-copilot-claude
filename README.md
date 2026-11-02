@@ -6,7 +6,8 @@ the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/b
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
 Status: Prompts 0–4 are done (repo, shared event schema, desktop shell and overlay, two-channel
-audio capture to local WAV files, provider router). Nothing is sent to the backend yet.
+audio capture to local WAV files, provider router, realtime gateway with live transcription).
+The desktop app doesn't connect to the backend yet (Prompt 6).
 
 ## 1. Create the free accounts and keys
 

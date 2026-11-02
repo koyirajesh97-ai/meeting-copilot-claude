@@ -90,7 +90,7 @@ Acceptance: tests with fake providers that simulate 429s, timeouts, bad JSON and
 quotas prove the fallback order, cooldowns, 80/95% thresholds and the data-policy guard.
 ```
 
-## Prompt 5: Realtime gateway and live transcription
+## Prompt 5: Realtime gateway and live transcription — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("API and event contracts").

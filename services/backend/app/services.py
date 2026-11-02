@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.meetings.store import InMemoryMeetingStore, MeetingStore
+from app.realtime.manager import SessionManager
 from app.router.client import CompletionClient, LiteLLMClient
 from app.router.config import RouterConfig, load_config
 from app.router.quota import Cooldowns, InMemoryQuotaStore, QuotaStore, QuotaTracker
@@ -21,6 +23,8 @@ class Services:
     quota: QuotaTracker
     router: Router
     stt: SttRegistry
+    meetings: MeetingStore
+    sessions: SessionManager
 
 
 def build_services(
@@ -28,6 +32,7 @@ def build_services(
     client: CompletionClient | None = None,
     store: QuotaStore | None = None,
     stt_factory=None,
+    meetings: MeetingStore | None = None,
 ) -> Services:
     cfg = config or load_config()
     if store is None:
@@ -42,7 +47,8 @@ def build_services(
     cooldowns = Cooldowns(cfg)
     router = Router(cfg, client or LiteLLMClient(), quota, cooldowns=cooldowns)
     stt = SttRegistry(cfg, quota, cooldowns, **({"factory": stt_factory} if stt_factory else {}))
-    return Services(cfg, quota, router, stt)
+    meetings = meetings or InMemoryMeetingStore()
+    return Services(cfg, quota, router, stt, meetings, SessionManager(stt, meetings))
 
 
 _services: Services | None = None

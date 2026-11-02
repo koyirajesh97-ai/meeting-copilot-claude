@@ -212,6 +212,7 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `POST /meetings` | Create a meeting (project, type, title, mode, visibility); returns meeting_id, ws_url, ws_token |
 | `GET /meetings?project_id=&q=`, `GET /meetings/{id}` | List and open meetings with transcript, summary and action items |
 | `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, visibility; delete everything for a meeting |
+| `POST /meetings/{id}/ws-token` | A fresh short-lived socket token, for reconnecting |
 | `POST /meetings/{id}/end` | Close the meeting and queue the summary |
 | `POST /meetings/{id}/summary/regenerate` | Rebuild the summary with another template |
 | `GET /meetings/{id}/export?format=md` | Markdown export |
@@ -228,7 +229,12 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 
 - **Audio up:** binary frames; byte 0 is the channel (0 = mic, 1 = system), then 20 ms of 16 kHz mono PCM16 (640 bytes).
 - **Controls up:** JSON `{"type": "control", "action": "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback", ...}`, plus a ping every 15 s.
-- **Events down:** JSON events with an increasing `seq`. After a reconnect the client sends its last seq and the server replays what it missed.
+- **Events down:** JSON events with an increasing `seq`. After a reconnect the client connects with `?token=…&last_seq=N` and the server replays every stored event after N (finals, cards and the rest; partials are not replayed).
+- **Several frames per message** are allowed (a replayed backlog): each 641-byte block is one frame.
+- **Close codes:** 4401 bad or expired token (get a new one from `POST /meetings/{id}/ws-token`), 4404 meeting not found, 4409 meeting has ended, 1013 client too slow (reconnect with `last_seq`).
+- **Error codes** in `error` events: `stt_unavailable` (retryable; the server keeps retrying every 30 s), `bad_audio_frame`, `bad_message`, `not_implemented`.
+- `meeting.started.providers` maps `stt_live.mic` and `stt_live.system` to the transcription provider each channel started on.
+- Caption times (`start_ms`, `end_ms`) are milliseconds since the meeting started, kept continuous across provider switches and VAD gaps.
 
 ### Events
 

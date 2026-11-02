@@ -23,6 +23,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 
+from app.metrics import metrics
+
 from .client import CompletionClient, ProviderError, ProviderResponse
 from .config import Deployment, RouterConfig
 from .policy import DataClass, DataPolicyError, allowed
@@ -185,6 +187,7 @@ class Router:
             if result is not None:
                 resp, parsed, call_ms = result
                 latency = int((time.perf_counter() - started) * 1000)
+                metrics.record(f"llm.{task}", latency, d.id)
                 log.info(
                     "llm task=%s provider=%s call_ms=%d total_ms=%d tokens=%d attempts=%d",
                     task,

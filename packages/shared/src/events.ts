@@ -10,6 +10,8 @@ export type CardKind = "answer" | "topic" | "clarify" | "catch_up" | "standup" |
 
 export type SourceType = "meeting" | "document" | "standup" | "transcript";
 
+export type ControlAction = "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback";
+
 /** Fields every event carries. */
 export interface Envelope {
   /** Increases by one per event in a meeting; used to replay after a reconnect. */
@@ -177,7 +179,7 @@ export interface Error {
   retryable: boolean;
 }
 
-/** Events the backend sends down the meeting WebSocket. The only source of event types: run `pnpm -w gen:events` after editing. */
+/** Messages on the meeting WebSocket. `oneOf` lists server->client events; `x-client-messages` lists client->server messages. Run `pnpm -w gen:events` after editing. */
 export type MeetingEvent =
   | MeetingStarted
   | TranscriptPartial
@@ -206,3 +208,27 @@ export const EVENT_TYPES = [
   "summary.ready",
   "error",
 ] as const satisfies readonly MeetingEventType[];
+
+// ---------- client -> server ----------
+
+/** A button or hotkey in the overlay. Extra fields depend on the action. */
+export interface Control {
+  type: "control";
+  action: ControlAction;
+  /** catch_up: how far back to recap (2 or 5). */
+  minutes?: number;
+  /** card_feedback: the card being rated. */
+  card_id?: string;
+  /** card_feedback: Used (true) or Not useful (false). */
+  useful?: boolean;
+}
+
+/** Sent every 15 s so both sides know the socket is alive. */
+export interface Ping {
+  type: "ping";
+}
+
+/** Messages the client sends up the meeting WebSocket (besides binary audio frames). */
+export type ClientMessage =
+  | Control
+  | Ping;

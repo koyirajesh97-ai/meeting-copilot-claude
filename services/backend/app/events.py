@@ -18,6 +18,7 @@ MeetingMode = Literal["cloud", "local", "live-only"]
 Channel = Literal["mic", "system"]
 CardKind = Literal["answer", "topic", "clarify", "catch_up", "standup", "follow_up"]
 SourceType = Literal["meeting", "document", "standup", "transcript"]
+ControlAction = Literal["pause", "resume", "catch_up", "clarify", "follow_up", "card_feedback"]
 
 
 class Envelope(_Model):
@@ -258,3 +259,41 @@ def parse_event(data: str | bytes | dict[str, Any]) -> MeetingEvent:
 def dump_event(event: MeetingEvent) -> dict[str, Any]:
     """Serialize an event to a JSON-ready dict, omitting unset optional fields."""
     return event.model_dump(mode="json", exclude_none=True)
+
+
+# ---------- client -> server ----------
+
+
+class Control(_Model):
+    """A button or hotkey in the overlay. Extra fields depend on the action."""
+
+    type: Literal["control"] = Field(default="control")
+    action: ControlAction
+    minutes: int | None = Field(
+        default=None, ge=1, le=30, description="catch_up: how far back to recap (2 or 5)."
+    )
+    card_id: str | None = Field(default=None, description="card_feedback: the card being rated.")
+    useful: bool | None = Field(
+        default=None, description="card_feedback: Used (true) or Not useful (false)."
+    )
+
+
+class Ping(_Model):
+    """Sent every 15 s so both sides know the socket is alive."""
+
+    type: Literal["ping"] = Field(default="ping")
+
+
+ClientMessage = Annotated[
+    (Control | Ping),
+    Field(discriminator="type"),
+]
+
+_client_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)
+
+
+def parse_client_message(data: str | bytes | dict[str, Any]) -> ClientMessage:
+    """Parse one client message. Raises pydantic.ValidationError."""
+    if isinstance(data, str | bytes):
+        return _client_adapter.validate_json(data)
+    return _client_adapter.validate_python(data)

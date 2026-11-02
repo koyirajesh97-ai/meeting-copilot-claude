@@ -2,7 +2,8 @@
 // Generates TypeScript types and pydantic models from schema/events.json.
 //
 // Supports only the JSON Schema subset events.json uses, and fails loudly on anything else:
-//   - top-level oneOf of $refs: the event union (each event has a const "type")
+//   - top-level oneOf of $refs: the server->client event union (each has a const "type")
+//   - top-level x-client-messages: the client->server message union (same rules)
 //   - $defs: string enums, objects, and allOf of objects/$refs to objects (merged)
 //   - properties: $ref, const, string, integer, number, boolean, arrays,
 //     and objects with additionalProperties (maps); minimum/maximum on numbers
@@ -59,18 +60,23 @@ function flatten(name, s) {
 // ---------- classify defs ----------
 const eventNames = (schema.oneOf ?? []).map((r) => refName(r.$ref));
 if (eventNames.length === 0) fail("top-level oneOf must list the events");
+const clientNames = (schema["x-client-messages"] ?? []).map((r) => refName(r.$ref));
 const enumNames = Object.keys(defs).filter((n) => isEnum(defs[n]));
-const objectNames = Object.keys(defs).filter((n) => !isEnum(defs[n]) && !eventNames.includes(n));
+const objectNames = Object.keys(defs).filter(
+  (n) => !isEnum(defs[n]) && !eventNames.includes(n) && !clientNames.includes(n),
+);
 
-const events = eventNames.map((name) => {
+function message(name) {
   const flat = flatten(name, defs[name]);
   const typeConst = flat.properties.type?.const;
   if (typeof typeConst !== "string") fail(`${name}: needs a const "type" property`);
   // Put "type" first, then the envelope, then the rest (insertion order already does this
-  // except for "type", which lives in the event's own part).
+  // except for "type", which lives in the message's own part).
   const { type, ...rest } = flat.properties;
   return { name, typeConst, ...flat, properties: { type, ...rest } };
-});
+}
+const events = eventNames.map(message);
+const clientMessages = clientNames.map(message);
 
 // ---------- TypeScript ----------
 function tsType(s, ctx) {
@@ -109,6 +115,12 @@ for (const e of events) ts += tsInterface(e.name, e) + "\n";
 ts += `${doc(schema.description)}export type MeetingEvent =\n${events.map((e) => `  | ${e.name}`).join("\n")};\n\n`;
 ts += 'export type MeetingEventType = MeetingEvent["type"];\n\n';
 ts += `export const EVENT_TYPES = [\n${events.map((e) => `  ${JSON.stringify(e.typeConst)},`).join("\n")}\n] as const satisfies readonly MeetingEventType[];\n`;
+if (clientMessages.length) {
+  ts += "\n// ---------- client -> server ----------\n\n";
+  for (const m of clientMessages) ts += tsInterface(m.name, m) + "\n";
+  ts += `/** Messages the client sends up the meeting WebSocket (besides binary audio frames). */\n`;
+  ts += `export type ClientMessage =\n${clientMessages.map((m) => `  | ${m.name}`).join("\n")};\n`;
+}
 
 // ---------- Python ----------
 function pyType(s, ctx) {
@@ -181,7 +193,20 @@ py += "    return _adapter.validate_python(data)\n\n\n";
 py += "def dump_event(event: MeetingEvent) -> dict[str, Any]:\n";
 py += '    """Serialize an event to a JSON-ready dict, omitting unset optional fields."""\n';
 py += '    return event.model_dump(mode="json", exclude_none=True)\n';
+if (clientMessages.length) {
+  py += "\n\n# ---------- client -> server ----------\n\n\n";
+  for (const m of clientMessages) py += pyClass(m.name, m) + "\n\n";
+  py += "ClientMessage = Annotated[\n";
+  py += `    (\n${clientMessages.map((m, i) => `        ${i ? "| " : ""}${m.name}`).join("\n")}\n    ),\n`;
+  py += '    Field(discriminator="type"),\n]\n\n';
+  py += "_client_adapter: TypeAdapter[ClientMessage] = TypeAdapter(ClientMessage)\n\n\n";
+  py += "def parse_client_message(data: str | bytes | dict[str, Any]) -> ClientMessage:\n";
+  py += '    """Parse one client message. Raises pydantic.ValidationError."""\n';
+  py += "    if isinstance(data, str | bytes):\n";
+  py += "        return _client_adapter.validate_json(data)\n";
+  py += "    return _client_adapter.validate_python(data)\n";
+}
 
 writeFileSync(tsOut, ts);
 writeFileSync(pyOut, py);
-console.log(`gen-events: wrote ${events.length} events to\n  ${tsOut}\n  ${pyOut}`);
+console.log(`gen-events: wrote ${events.length} events and ${clientMessages.length} client messages to\n  ${tsOut}\n  ${pyOut}`);

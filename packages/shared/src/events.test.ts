@@ -2,10 +2,13 @@ import Ajv2020 from "ajv/dist/2020";
 import { describe, expect, it } from "vitest";
 import examples from "../schema/examples.json";
 import schema from "../schema/events.json";
-import { EVENT_TYPES, type CardCreated, type MeetingEvent, type ProviderSwitched } from "./events";
+import { EVENT_TYPES, type CardCreated, type ClientMessage, type MeetingEvent, type ProviderSwitched } from "./events";
 
 const ajv = new Ajv2020({ allErrors: true, strict: true });
+// Our own keyword listing client->server messages; not a validation rule.
+ajv.addKeyword({ keyword: "x-client-messages", schemaType: "array" });
 const validate = ajv.compile(schema);
+const validateClient = ajv.compile({ oneOf: schema["x-client-messages"], $defs: schema.$defs });
 
 function errors(): string {
   return ajv.errorsText(validate.errors);
@@ -56,5 +59,18 @@ describe("events schema", () => {
     ["confidence above 1", { type: "speaker.identified", seq: 0, meeting_id: "m", ts_ms: 0, speaker_id: "s", display_name: "A", confidence: 1.2 }],
   ])("rejects an event with %s", (_why, bad) => {
     expect(validate(bad)).toBe(false);
+  });
+
+  it("validates client messages", () => {
+    const ok: ClientMessage[] = [
+      { type: "ping" },
+      { type: "control", action: "pause" },
+      { type: "control", action: "catch_up", minutes: 5 },
+      { type: "control", action: "card_feedback", card_id: "c_1", useful: true },
+    ];
+    for (const m of ok) expect(validateClient(m), ajv.errorsText(validateClient.errors)).toBe(true);
+    expect(validateClient({ type: "control", action: "explode" })).toBe(false);
+    expect(validateClient({ type: "control", action: "catch_up", minutes: 99 })).toBe(false);
+    expect(validateClient({ type: "control" })).toBe(false);
   });
 });
