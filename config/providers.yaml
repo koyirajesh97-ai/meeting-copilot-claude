@@ -9,6 +9,8 @@ tasks:                     # tried in order; next one on 429, timeout or bad JSO
   summary: [mistral/mistral-small-latest, groq/openai/gpt-oss-120b, gemini/gemini-flash]
   ask:     [mistral/mistral-small-latest, groq/openai/gpt-oss-120b]
   stt_live: [deepgram/nova-3, gladia/live, groq/whisper-large-v3, local/faster-whisper]
+  # 384-dimension embeddings for search; every model in this list must produce 384 dims.
+  embed:   [local/bge-small-en-v1.5, cloudflare/bge-small-en-v1.5]
 timeouts_s: {detect: 1.0, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
 providers:
   groq:
@@ -40,6 +42,13 @@ providers:
     key_env: GLADIA_API_KEY
     kind: stt_stream
     trains_on_data: unknown   # free-plan data terms not verified; meeting audio skips it until you check
+  cloudflare:
+    kind: embed
+    key_env: CLOUDFLARE_API_TOKEN
+    account_env: CLOUDFLARE_ACCOUNT_ID
+    trains_on_data: false     # Workers AI terms: customer content isn't used for training
+    models:
+      bge-small-en-v1.5: {rpd: 10000}
   local:
     kind: stt_local
     model: small.en

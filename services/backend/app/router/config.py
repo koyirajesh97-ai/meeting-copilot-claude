@@ -33,7 +33,9 @@ class ProviderConfig(BaseModel):
     key_env: str | None = None
     # Unknown is treated as "trains on data": meeting content never goes there.
     trains_on_data: TrainsOnData = "unknown"
-    kind: Literal["llm", "stt_stream", "stt_local"] = "llm"
+    kind: Literal["llm", "stt_stream", "stt_local", "embed"] = "llm"
+    #: Some providers need an account id in the URL (Cloudflare).
+    account_env: str | None = None
     model: str | None = None  # default model for STT providers
     models: dict[str, Limits] = Field(default_factory=dict)
     # Hour (UTC) when the provider's daily quota resets.

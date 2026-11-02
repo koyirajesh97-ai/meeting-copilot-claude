@@ -33,7 +33,31 @@ export const IPC = {
   meetingsRenameSpeaker: "meetings:rename-speaker",
   meetingsMarkdown: "meetings:markdown",
   meetingsExport: "meetings:export",
+  search: "search:query",
+  ask: "search:ask",
 } as const;
+
+export interface SearchHit {
+  meeting_id: string;
+  title: string;
+  started_at: number;
+  source_type: "transcript" | "summary" | string;
+  text: string;
+  start_ms: number | null;
+  score: number;
+}
+
+export interface AskAnswer {
+  answer: string;
+  found: boolean;
+  citations: { id: string; meeting_id: string; title: string; start_ms: number | null; quote: string }[];
+  provider: string | null;
+}
+
+/** Route that opens a meeting, optionally at a moment (for citations). */
+export function meetingRoute(id: string, startMs?: number | null): string {
+  return startMs === null || startMs === undefined ? `/meetings/${id}` : `/meetings/${id}?t=${Math.max(0, Math.round(startMs))}`;
+}
 
 // ---------- summaries (mirrors services/backend/app/summaries/schema.py) ----------
 
@@ -221,6 +245,10 @@ export interface CopilotApi {
     devSignIn(): Promise<AuthState>;
     signOut(): Promise<AuthState>;
   };
+  /** Search all your meetings (backend; needs a connection). */
+  search(query: string): Promise<SearchHit[]>;
+  /** "Ask my meetings": a cited answer, or found: false when nothing relevant exists. */
+  ask(question: string): Promise<AskAnswer>;
   meetings: {
     list(): Promise<CachedMeeting[]>;
     get(id: string): Promise<CachedMeetingDetail | null>;

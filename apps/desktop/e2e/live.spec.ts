@@ -128,6 +128,18 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByLabel("Template").selectOption("incident");
   await main.getByRole("button", { name: "Regenerate" }).click();
   await expect(summary.getByRole("heading", { name: "Timeline" })).toBeVisible({ timeout: 30_000 });
+
+  // Ask my meetings: a cited answer whose citation opens the meeting at that moment.
+  await main.getByRole("navigation").getByRole("link", { name: "Ask my meetings" }).click();
+  await main.getByLabel("Question").fill("Who finished the certificate renewal?");
+  await main.getByRole("button", { name: "Ask" }).click();
+  const answer = main.getByTestId("answer");
+  await expect(answer).toHaveAttribute("data-found", "true", { timeout: 20_000 });
+  await expect(answer).toContainText("certificate renewal");
+  await answer.getByTestId("citation").filter({ hasText: / at \d\d:\d\d/ }).first().click();
+  await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
+  const highlighted = main.locator('[data-testid="transcript-line"][data-highlight="true"]');
+  await expect(highlighted).toHaveCount(1);
   expect(count).toBeGreaterThanOrEqual(2);
 
 

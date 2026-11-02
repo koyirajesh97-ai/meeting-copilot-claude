@@ -17,6 +17,8 @@ dependencies = [
 [project.optional-dependencies]
 # Local-only mode and last-resort fallback: transcription on this machine.
 local = ["faster-whisper>=1.1"]
+# Local embeddings for search (about 100 MB model, CPU).
+embeddings = ["fastembed>=0.4"]
 
 [dependency-groups]
 dev = [

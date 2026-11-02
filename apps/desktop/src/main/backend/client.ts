@@ -1,6 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
-import type { ActionItem, CachedSegment, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
+import type { ActionItem, AskAnswer, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
   constructor(
@@ -112,6 +112,14 @@ export class BackendClient {
 
   getMeeting(meetingId: string): Promise<MeetingDetailOut> {
     return this.request("GET", `/meetings/${encodeURIComponent(meetingId)}`);
+  }
+
+  search(q: string): Promise<SearchHit[]> {
+    return this.request("GET", `/search?q=${encodeURIComponent(q)}&limit=20`);
+  }
+
+  ask(question: string): Promise<AskAnswer> {
+    return this.request("POST", "/ask", { question }, { timeoutMs: 30_000 });
   }
 
   getSummary(meetingId: string): Promise<SummaryInfo> {

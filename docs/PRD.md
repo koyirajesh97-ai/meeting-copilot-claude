@@ -176,7 +176,7 @@ Every AI call goes through one provider router that picks a free hosted API for 
 | Question detection | Groq llama-3.1-8b-instant | Groq gpt-oss-20b → rules only | 30 requests/min, 14,400/day, 500K tokens/day (Groq limits, Jul 2026); rules filter first so few calls reach the LLM |
 | Answer cards, Catch up, Clarify, standup script | Groq gpt-oss-20b | Groq gpt-oss-120b → Mistral Free mode → OpenRouter :free models | Groq: 30 requests/min, 1K/day, 8K tokens/min, 200K tokens/day per model; OpenRouter: 20/min, 50/day (Oct 2026 limits) |
 | Summaries and "Ask my meetings" | Mistral Free mode; API data isn't used for training | Groq gpt-oss-120b in chunks under 6K tokens → Gemini Flash free tier, test data only | Mistral shows its limits only in your console; Groq's 8K tokens/min forces chunking |
-| Embeddings | Small local embedding model (fastembed, CPU, about 100 MB) | Cloudflare Workers AI embeddings (10,000 Neurons/day free) | Local embeddings cost nothing and never hit a quota |
+| Embeddings | Small local embedding model (fastembed bge-small-en-v1.5, 384 dims, CPU, about 100 MB; `uv sync --extra embeddings`) | Cloudflare Workers AI bge-small-en-v1.5 (10,000 Neurons/day free) | Local embeddings cost nothing and never hit a quota; the chain is `tasks.embed` in config/providers.yaml |
 | Speaker recognition | pyannote Community-1, local | diarize (Apache 2.0, CPU) | No free hosted equivalent; light enough for a laptop |
 
 All the LLM providers above speak the OpenAI chat-completions format, so one client covers them all. Free models and limits change often, so model names live in config, never in code.
@@ -222,7 +222,7 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `GET /meetings/{id}/export?format=md&transcript=true` | Markdown export (`transcript=false` for a summary to paste into email or Teams) |
 | `POST /speakers/enroll`, `DELETE /speakers/{id}` | Voice enrollment (audio + consent flag) and deletion |
 | `POST /meetings/{id}/speakers/{label}/rename` | Name "Speaker 2" for this meeting (no voiceprint) |
-| `GET /search?q=`, `POST /ask` | Hybrid search; cited answers across meetings |
+| `GET /search?q=`, `POST /ask` | Hybrid search (Postgres full-text + pgvector, merged by reciprocal rank fusion, filtered to meetings you may see); cited answers across meetings, with `found: false` when nothing relevant exists |
 | `POST /standup` | Rough notes in; done / doing / blockers and a 30-second script out |
 | `GET /brief?meeting_id=` | Pre-meeting brief |
 | `GET /action-items`, `PATCH /action-items/{id}` | Action-item board |

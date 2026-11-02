@@ -42,7 +42,8 @@ class PostgresStore:
         )
         self._opened = False
 
-    async def _conn(self):
+    async def connection(self):
+        """A pooled connection (opens the pool on first use)."""
         if not self._opened:
             await self.pool.open()
             self._opened = True
@@ -57,7 +58,7 @@ class PostgresStore:
     async def upsert_user(
         self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
     ) -> None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             if ensure_auth_user:  # dev login only: there is no Supabase Auth user behind it
                 await conn.execute(
                     "insert into auth.users (id, email) values (%s, %s) on conflict (id) do nothing",
@@ -72,7 +73,7 @@ class PostgresStore:
     # ---------- meetings ----------
 
     async def create(self, m: Meeting) -> Meeting:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 """insert into public.meetings (id, project_id, owner_id, type, title, started_at, visibility, mode, vocabulary)
                    values (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
@@ -91,7 +92,7 @@ class PostgresStore:
         return m
 
     async def get(self, meeting_id: str) -> Meeting | None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = conn.cursor(row_factory=dict_row)
             try:
                 await cur.execute("select * from public.meetings where id = %s", (meeting_id,))
@@ -101,7 +102,7 @@ class PostgresStore:
             return _meeting(row) if row else None
 
     async def list_for(self, owner_id: str, limit: int = 100) -> list[Meeting]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = conn.cursor(row_factory=dict_row)
             await cur.execute(
                 "select * from public.meetings where owner_id = %s order by started_at desc limit %s",
@@ -110,7 +111,7 @@ class PostgresStore:
             return [_meeting(r) for r in await cur.fetchall()]
 
     async def end(self, meeting_id: str) -> Meeting | None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 "update public.meetings set ended_at = coalesce(ended_at, now()) where id = %s",
                 (meeting_id,),
@@ -120,7 +121,7 @@ class PostgresStore:
     # ---------- transcript ----------
 
     async def add_segment(self, s: Segment) -> None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 """insert into public.transcript_segments
                    (meeting_id, segment_id, speaker_id, channel, start_ms, end_ms, text, is_final, provider)
@@ -139,7 +140,7 @@ class PostgresStore:
             )
 
     async def segments(self, meeting_id: str) -> list[Segment]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 """select segment_id, channel, speaker_id, text, start_ms, end_ms, coalesce(provider, '')
                    from public.transcript_segments where meeting_id = %s order by start_ms, segment_id""",
@@ -152,14 +153,14 @@ class PostgresStore:
     async def set_summary_status(
         self, meeting_id: str, status: SummaryStatus, error: str | None = None
     ) -> None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 "update public.meetings set summary_status = %s, summary_error = %s where id = %s",
                 (status, error, meeting_id),
             )
 
     async def summary_status(self, meeting_id: str) -> tuple[SummaryStatus, str | None]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 "select summary_status, summary_error from public.meetings where id = %s",
                 (meeting_id,),
@@ -168,7 +169,7 @@ class PostgresStore:
             return (row[0], row[1]) if row else ("none", None)
 
     async def save_summary(self, s: StoredSummary) -> StoredSummary:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 "insert into public.summaries (id, meeting_id, template, sections, model, created_at) "
                 "values (%s, %s, %s, %s, %s, %s)",
@@ -177,7 +178,7 @@ class PostgresStore:
         return s
 
     async def latest_summary(self, meeting_id: str) -> StoredSummary | None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 "select id, template, sections, model, created_at from public.summaries "
                 "where meeting_id = %s order by created_at desc limit 1",
@@ -192,7 +193,7 @@ class PostgresStore:
             )
 
     async def update_summary(self, summary_id: str, sections: dict) -> None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 "update public.summaries set sections = %s where id = %s",
                 (Jsonb(sections), summary_id),
@@ -201,7 +202,7 @@ class PostgresStore:
     async def replace_summary_items(
         self, meeting: Meeting, items: list[ActionItemRecord], decisions: list[DecisionRecord]
     ) -> None:
-        async with await self._conn() as conn, conn.transaction():
+        async with await self.connection() as conn, conn.transaction():
             await conn.execute(
                 "delete from public.action_items where meeting_id = %s and source = 'summary'",
                 (meeting.id,),
@@ -252,12 +253,12 @@ class PostgresStore:
         )
 
     async def add_action_item(self, meeting: Meeting, item: ActionItemRecord) -> ActionItemRecord:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await self._insert_item(conn, meeting, item)
         return item
 
     async def action_items(self, meeting_id: str) -> list[ActionItemRecord]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 "select id, text, owner, due_text, status, source, created_at from public.action_items "
                 "where meeting_id = %s order by created_at, id",
@@ -271,7 +272,7 @@ class PostgresStore:
             ]
 
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 "select id, text, rationale, source from public.decisions where meeting_id = %s order by created_at, id",
                 (meeting_id,),
@@ -282,7 +283,7 @@ class PostgresStore:
             ]
 
     async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             await conn.execute(
                 "insert into public.meeting_speakers (meeting_id, label, display_name) values (%s, %s, %s) "
                 "on conflict (meeting_id, label) do update set display_name = excluded.display_name",
@@ -290,7 +291,7 @@ class PostgresStore:
             )
 
     async def speaker_names(self, meeting_id: str) -> dict[str, str]:
-        async with await self._conn() as conn:
+        async with await self.connection() as conn:
             cur = await conn.execute(
                 "select label, display_name from public.meeting_speakers where meeting_id = %s",
                 (meeting_id,),

@@ -360,6 +360,8 @@ function registerIpc(): void {
   handle(IPC.meetingsList, () => cache!.listMeetings());
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
+  handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.ask, (q) => backend!.ask(String(q).slice(0, 1000)));
   const meetingId = (id: unknown) => {
     if (typeof id !== "string" || !/^[\w-]{1,64}$/.test(id)) throw new Error("Bad meeting id");
     return id;

@@ -140,7 +140,7 @@ Acceptance: a 60-minute fixture summarizes in under 60 s with real free provider
 the eval with the Fake provider.
 ```
 
-## Prompt 8: Search and "Ask my meetings"
+## Prompt 8: Search and "Ask my meetings" — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md.

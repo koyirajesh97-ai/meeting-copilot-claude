@@ -230,7 +230,9 @@ def _context_items(text: str, prefix: str) -> list[tuple[str, str]]:
 def _best(question: str, items: list[tuple[str, str]]) -> list[tuple[int, str, str]]:
     q = words(question)
     scored = [(len(q & words(body)), sid, body) for sid, body in items]
-    return sorted([s for s in scored if s[0] >= 2], key=lambda s: -s[0])
+    # On ties, prefer excerpts with a time ("at 01:23"): they can be opened at that moment.
+    timed = lambda body: bool(re.search(r" at \d{2}:\d{2}", body))  # noqa: E731
+    return sorted([s for s in scored if s[0] >= 2], key=lambda s: (-s[0], not timed(s[2])))
 
 
 def answer_card(messages: list[dict[str, str]]) -> str:

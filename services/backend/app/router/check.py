@@ -83,6 +83,25 @@ async def check_stt(cfg: RouterConfig, d: Deployment) -> dict:
     return {"status": "ok", "latency_ms": ms}
 
 
+async def check_embed(cfg: RouterConfig, d: Deployment) -> dict:
+    from app.providers.embeddings import DIMS, default_factory
+
+    a = default_factory(d, cfg)
+    if a is None or not a.available():
+        return {"status": "skipped", "detail": "not installed or no key"}
+    t0 = time.perf_counter()
+    try:
+        [v] = await a.embed(["provider check"])
+    except Exception as e:
+        return {"status": "fail", "detail": str(e)[:200]}
+    ms = int((time.perf_counter() - t0) * 1000)
+    return {
+        "status": "ok" if len(v) == DIMS else "fail",
+        "latency_ms": ms,
+        "detail": f"{len(v)} dims",
+    }
+
+
 async def run(cfg: RouterConfig) -> list[dict]:
     seen: dict[str, tuple[Deployment, str]] = {}
     for task, chain in cfg.tasks.items():
@@ -90,7 +109,7 @@ async def run(cfg: RouterConfig) -> list[dict]:
             seen.setdefault(d.id, (d, task))
     jobs = []
     for d, task in seen.values():
-        fn = check_stt if task.startswith("stt_") else check_llm
+        fn = check_stt if task.startswith("stt_") else check_embed if task == "embed" else check_llm
         jobs.append(fn(cfg, d))
     results = await asyncio.gather(*jobs)
     return [{"deployment": d.id, **r} for (d, _), r in zip(seen.values(), results, strict=True)]

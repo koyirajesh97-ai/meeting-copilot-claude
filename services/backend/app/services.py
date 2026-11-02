@@ -10,6 +10,7 @@ from dataclasses import dataclass
 
 from app.jobs.summary import SummaryJobs
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
+from app.providers.embeddings import EmbeddingRouter, FakeEmbedder
 from app.providers.stt.base import FakeSttAdapter
 from app.realtime.manager import SessionManager
 from app.router.client import CompletionClient, FakeClient, LiteLLMClient
@@ -17,6 +18,8 @@ from app.router.config import Deployment, RouterConfig, load_config
 from app.router.quota import Cooldowns, InMemoryQuotaStore, QuotaStore, QuotaTracker
 from app.router.router import Router
 from app.router.stt import SttRegistry
+from app.search.index import InMemoryIndex, PostgresIndex
+from app.search.service import SearchService
 
 
 def fake_providers_enabled() -> bool:
@@ -44,6 +47,7 @@ class Services:
     meetings: MeetingStore
     sessions: SessionManager
     summaries: SummaryJobs
+    search: SearchService
 
 
 def build_services(
@@ -52,6 +56,7 @@ def build_services(
     store: QuotaStore | None = None,
     stt_factory=None,
     meetings: MeetingStore | None = None,
+    embed_factory=None,
 ) -> Services:
     cfg = config or load_config()
     if fake_providers_enabled():
@@ -60,6 +65,7 @@ def build_services(
 
         client = client or FakeClient(responder=fake_responder)
         stt_factory = stt_factory or fake_stt_factory
+        embed_factory = embed_factory or (lambda _d, _c: FakeEmbedder())
     if store is None:
         dsn = os.environ.get("DATABASE_URL")
         if dsn:
@@ -82,7 +88,14 @@ def build_services(
             meetings = InMemoryMeetingStore()
     sessions = SessionManager(stt, meetings)
     summaries = SummaryJobs(meetings, router, notify=sessions.notify_summary)
-    return Services(cfg, quota, router, stt, meetings, sessions, summaries)
+    embedder = EmbeddingRouter(
+        cfg, quota, cooldowns, **({"factory": embed_factory} if embed_factory else {})
+    )
+    index = PostgresIndex(meetings) if hasattr(meetings, "connection") else InMemoryIndex()
+    search = SearchService(index, embedder, router, meetings)
+    # Index each meeting once its summary is saved (and again after a regenerate).
+    summaries.after_ready.append(search.index_meeting)
+    return Services(cfg, quota, router, stt, meetings, sessions, summaries, search)
 
 
 _services: Services | None = None

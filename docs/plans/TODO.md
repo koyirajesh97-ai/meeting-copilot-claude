@@ -23,5 +23,8 @@ Follow-ups that were out of scope for the prompt that found them.
 - With real keys: run `evals/summaries/run.py --real --long` and confirm a 60-minute meeting
   summarizes in under 60 s; tune the prompts if recall is below 90%.
 - Add more summary fixtures from real (consented) meetings; the current three are short.
+- Meetings are indexed for search when their summary is saved; a meeting whose summary failed
+  isn't searchable until Regenerate succeeds. Index on meeting end as well.
+- Install the `embeddings` extra by default once the desktop bundles the backend, or document it.
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).

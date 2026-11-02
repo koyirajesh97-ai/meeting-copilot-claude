@@ -25,6 +25,8 @@ const api: CopilotApi = {
     devSignIn: () => ipcRenderer.invoke(IPC.authDevSignIn),
     signOut: () => ipcRenderer.invoke(IPC.authSignOut),
   },
+  search: (query) => ipcRenderer.invoke(IPC.search, query),
+  ask: (question) => ipcRenderer.invoke(IPC.ask, question),
   meetings: {
     list: () => ipcRenderer.invoke(IPC.meetingsList),
     get: (id) => ipcRenderer.invoke(IPC.meetingsGet, id),
