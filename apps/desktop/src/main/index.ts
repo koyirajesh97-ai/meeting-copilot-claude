@@ -21,7 +21,9 @@ import { AuthManager, SIGNED_OUT } from "./backend/auth";
 import { Cache } from "./backend/cache";
 import { BackendClient } from "./backend/client";
 import { LiveConnection } from "./backend/live";
+import { projectCall } from "./backend/projects";
 import { syncAll, syncMeeting, waitForSummary } from "./backend/sync";
+import { WatchConnection } from "./backend/watch";
 import { writeFile } from "node:fs/promises";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
@@ -367,6 +369,30 @@ function registerIpc(): void {
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.projects, (call) =>
+    projectCall(backend!, call as never, async () => {
+      const r = await dialog.showOpenDialog({
+        title: "Add a document to the project",
+        properties: ["openFile"],
+        filters: [{ name: "Documents", extensions: ["md", "txt", "html", "htm", "pdf", "csv", "json", "yaml", "yml"] }],
+      });
+      return r.canceled ? null : (r.filePaths[0] ?? null);
+    }),
+  );
+  handle(IPC.meetingEdit, async (id, patch) => {
+    if (typeof id !== "string" || !/^[\w-]{1,64}$/.test(id)) throw new Error("Bad meeting id");
+    const p = (patch ?? {}) as Record<string, unknown>;
+    const clean = Object.fromEntries(["title", "type", "visibility", "project_id"].filter((k) => typeof p[k] === "string").map((k) => [k, p[k]]));
+    await backend!.editMeeting(id, clean);
+    await runSync();
+  });
+  const watcher = new WatchConnection(backend!);
+  watcher.on("event", (e) => sendToWindows(IPC.watchEvent, e));
+  watcher.on("closed", (message) =>
+    sendToWindows(IPC.watchEvent, { type: "error", seq: 0, meeting_id: "", ts_ms: Date.now(), code: "watch_closed", message, retryable: false }),
+  );
+  handle(IPC.watchStart, (id) => watcher.start(String(id)));
+  handle(IPC.watchStop, () => watcher.stop());
   handle(IPC.profileGet, () => backend!.getProfile());
   handle(IPC.standupGenerate, (notes) => backend!.standup(String(notes).slice(0, 4000)));
   handle(IPC.standupToday, () => backend!.standupToday());

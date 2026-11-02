@@ -24,7 +24,7 @@ ISSUER = "meeting-copilot-backend"
 SESSION_TTL_S = 60 * 60  # 1 hour
 WS_TTL_S = 5 * 60  # enough to connect; reconnects ask for a fresh one
 
-Scope = Literal["api", "ws"]
+Scope = Literal["api", "ws", "watch"]
 
 
 @lru_cache(maxsize=1)
@@ -60,7 +60,7 @@ def issue_token(
         "scope": scope,
         "iat": now,
         "exp": now
-        + (ttl_s if ttl_s is not None else (WS_TTL_S if scope == "ws" else SESSION_TTL_S)),
+        + (ttl_s if ttl_s is not None else (SESSION_TTL_S if scope == "api" else WS_TTL_S)),
     }
     if email:
         claims["email"] = email

@@ -19,7 +19,6 @@ Follow-ups that were out of scope for the prompt that found them.
   transcript has no gap (today only the last 60 s are replayed).
 - Live-only mode still writes the local WAV files; Prompt 14 should skip them.
 - Sign-in by magic link (deep link into the app) in addition to the emailed code.
-- Meetings home lists only your own meetings; add project-shared ones in Prompt 13.
 - With real keys: run `evals/summaries/run.py --real --long` and confirm a 60-minute meeting
   summarizes in under 60 s; tune the prompts if recall is below 90%.
 - Add more summary fixtures from real (consented) meetings; the current three are short.
@@ -36,7 +35,15 @@ Follow-ups that were out of scope for the prompt that found them.
   finals.
 - Answer cards can't be exercised in the desktop e2e on Linux (no system audio there); backend
   tests and evals/live cover them. Check on Windows with a real call.
-- Clarify uses the meeting's vocabulary; add the project vocabulary once projects exist (Prompt 13).
 - Follow-up drafts run after the summary; if the summary fails, drafts wait for a regenerate.
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).
+- Two-machine check by hand (Prompt 13 acceptance): two accounts on two computers watch the same
+  shared meeting live. The backend test covers it with two users on one server.
+- Invites need SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY on the backend to send the magic-link
+  email; without them the invite is stored and applied when that email first signs in.
+- Edit an action item's owner and due date from the board (the API supports it; the board only
+  toggles done today).
+- Watch socket fan-out is per backend process; run one backend (or add a shared pub/sub) before
+  scaling out.
+- Link documents are fetched once; add "refresh" for wiki pages that change.

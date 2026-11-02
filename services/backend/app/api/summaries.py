@@ -13,7 +13,7 @@ from app.summaries.markdown import meeting_markdown
 from app.summaries.schema import Summary
 from app.summaries.templates import TEMPLATES
 
-from .meetings import SummaryOut, _owned, summary_out
+from .meetings import SummaryOut, _owned, _readable, summary_out
 
 router = APIRouter()
 
@@ -40,7 +40,7 @@ async def list_templates(_user: CurrentUser) -> list[TemplateOut]:
 
 @router.get("/meetings/{meeting_id}/summary", response_model=SummaryOut)
 async def get_summary(meeting_id: str, user: CurrentUser) -> SummaryOut:
-    await _owned(meeting_id, user.user_id)
+    await _readable(meeting_id, user.user_id)
     return await summary_out(meeting_id)
 
 
@@ -108,7 +108,7 @@ async def export(
 ) -> PlainTextResponse:
     if format != "md":
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Only format=md is supported")
-    m = await _owned(meeting_id, user.user_id)
+    m = await _readable(meeting_id, user.user_id)
     store = services().meetings
     s = await store.latest_summary(meeting_id)
     text = meeting_markdown(

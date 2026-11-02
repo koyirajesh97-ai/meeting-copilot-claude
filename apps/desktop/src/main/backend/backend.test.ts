@@ -35,7 +35,10 @@ describe("local cache", () => {
     c.close();
     c = new Cache(path);
     expect(c.listMeetings()).toEqual([
-      { id: "m1", title: "Standup", type: "standup", mode: "cloud", started_at: 100, ended_at: 200, segment_count: 2 },
+      {
+        id: "m1", title: "Standup", type: "standup", mode: "cloud", started_at: 100, ended_at: 200, segment_count: 2,
+        is_mine: true, is_live: false, visibility: "private", project_id: null,
+      },
     ]);
     expect(c.getMeeting("m1")!.transcript.map((s) => s.text)).toEqual(["edited", "seg_2"]);
     expect(c.getMeeting("nope")).toBeNull();
@@ -49,6 +52,51 @@ describe("local cache", () => {
     c.markSynced("a", 10);
     expect(c.unsyncedMeetingIds()).toEqual(["b"]);
     c.close();
+  });
+});
+
+describe("projects", () => {
+  it("stores who owns a cached meeting, and migrates an old cache", async () => {
+    const path = join(dir, "old.sqlite");
+    const { DatabaseSync } = await import("node:sqlite");
+    const old = new DatabaseSync(path);
+    old.exec("create table meetings (id text primary key, title text not null, type text not null, mode text not null, started_at real not null, ended_at real, synced_at real)");
+    old.exec("insert into meetings values ('old', 'Old', 'custom', 'cloud', 1, 2, null)");
+    old.close();
+    const c = new Cache(path);
+    expect(c.getMeeting("old")!.is_mine).toBe(true);
+    c.upsertMeeting({ id: "s", title: "Theirs", type: "review", mode: "cloud", started_at: 3, ended_at: null, is_mine: false, is_live: true, visibility: "project", project_id: "p1" });
+    expect(c.listMeetings()[0]).toMatchObject({ id: "s", is_mine: false, is_live: true, visibility: "project", project_id: "p1" });
+    c.close();
+  });
+
+  it("maps each projects call to one backend route and rejects odd ids", async () => {
+    const { projectCall } = await import("./projects");
+    const seen: string[] = [];
+    const backend = {
+      call: async (method: string, path: string, body?: unknown) => (seen.push(`${method} ${path} ${JSON.stringify(body ?? null)}`), []),
+      upload: async (path: string, form: FormData) => (seen.push(`UPLOAD ${path} ${(form.get("file") as File).name}`), {}),
+    } as never;
+    const file = join(dir, "runbook.md");
+    (await import("node:fs")).writeFileSync(file, "# Runbook");
+    await projectCall(backend, { op: "invite", id: "p1", email: "a@b.co", role: "viewer" }, async () => null);
+    await projectCall(backend, { op: "board", id: "p1", filter: "overdue" }, async () => null);
+    await projectCall(backend, { op: "editItem", itemId: "i1", status: "done" }, async () => null);
+    expect(await projectCall(backend, { op: "uploadDocument", id: "p1" }, async () => null)).toBeNull(); // dialog cancelled
+    await projectCall(backend, { op: "uploadDocument", id: "p1" }, async () => file);
+    expect(seen).toEqual([
+      'POST /projects/p1/members {"email":"a@b.co","role":"viewer"}',
+      "GET /action-items?project_id=p1&filter=overdue null",
+      'PATCH /action-items/i1 {"status":"done"}',
+      "UPLOAD /projects/p1/documents runbook.md",
+    ]);
+    await expect(projectCall(backend, { op: "get", id: "../admin" }, async () => null)).rejects.toThrow("Bad id");
+  });
+
+  it("only shares a meeting that has a project", () => {
+    const now = new Date();
+    expect(sanitizeStartOptions({ title: "x", visibility: "project", project_id: "p1" }, now)).toMatchObject({ visibility: "project", project_id: "p1" });
+    expect(sanitizeStartOptions({ title: "x", visibility: "project", project_id: "../x" }, now)).toMatchObject({ visibility: "private", project_id: null });
   });
 });
 
@@ -80,7 +128,7 @@ describe("start options", () => {
   it("validates what the renderer sends", () => {
     const now = new Date("2026-11-02T09:00:00Z");
     expect(sanitizeStartOptions({ title: "  Standup ", type: "standup", mode: "local", visibility: "project" }, now)).toEqual({
-      title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "",
+      title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "", project_id: null,
     });
     expect(sanitizeStartOptions({ type: "party", mode: "evil" }, now)).toEqual(defaultStartOptions(now));
     expect(sanitizeStartOptions("junk", now).title).toContain("Meeting");

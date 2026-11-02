@@ -375,3 +375,106 @@ class PostgresStore:
                 if series_key(r["title"]) == series:
                     return _meeting(r)
         return None
+
+    async def list_shared(
+        self, project_ids: list[str], exclude_owner: str, limit: int = 100
+    ) -> list[Meeting]:
+        if not project_ids:
+            return []
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(
+                "select * from public.meetings where visibility = 'project' and project_id = any(%s::uuid[]) "
+                "and owner_id <> %s order by started_at desc limit %s",
+                (project_ids, exclude_owner, limit),
+            )
+            return [_meeting(r) for r in await cur.fetchall()]
+
+    async def update_meeting(self, m: Meeting) -> Meeting:
+        async with await self.connection() as conn:
+            await conn.execute(
+                "update public.meetings set title = %s, type = %s, visibility = %s, project_id = %s, agenda = %s "
+                "where id = %s",
+                (m.title, m.type, m.visibility, m.project_id, m.agenda, m.id),
+            )
+        return m
+
+    _ITEM_COLS = (
+        "a.id as a_id, a.text as a_text, a.owner as a_owner, a.due_text as a_due, a.status as a_status, "
+        "a.source as a_source, a.created_at as a_created, a.question as a_q, a.asker as a_asker, a.draft as a_draft, m.*"
+    )
+
+    @staticmethod
+    def _item_row(r) -> tuple[ActionItemRecord, Meeting]:
+        return (
+            ActionItemRecord(
+                str(r["a_id"]),
+                str(r["id"]),
+                r["a_text"],
+                r["a_owner"],
+                r["a_due"],
+                r["a_status"],
+                r["a_source"],
+                r["a_created"].timestamp(),
+                r["a_q"],
+                r["a_asker"],
+                r["a_draft"],
+            ),
+            _meeting(r),
+        )
+
+    async def project_action_items(self, project_id: str) -> list[tuple[ActionItemRecord, Meeting]]:
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(
+                f"select {self._ITEM_COLS} from public.action_items a join public.meetings m on m.id = a.meeting_id "
+                "where m.project_id = %s and m.visibility = 'project' order by a.created_at",
+                (project_id,),
+            )
+            return [self._item_row(r) for r in await cur.fetchall()]
+
+    async def get_action_item(self, item_id: str) -> tuple[ActionItemRecord, Meeting] | None:
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            try:
+                await cur.execute(
+                    f"select {self._ITEM_COLS} from public.action_items a join public.meetings m on m.id = a.meeting_id "
+                    "where a.id = %s",
+                    (item_id,),
+                )
+            except Exception:
+                return None
+            r = await cur.fetchone()
+            return self._item_row(r) if r else None
+
+    async def update_action_item(
+        self, item_id: str, *, status: str | None, owner: str | None, due_text: str | None
+    ) -> None:
+        sets, params = [], []
+        if status is not None:
+            sets.append("status = %s")
+            params.append(status)
+        if owner is not None:
+            sets.append("owner = %s")
+            params.append(owner or None)
+        if due_text is not None:
+            try:
+                due = date.fromisoformat(due_text) if due_text else None
+            except ValueError:
+                due = None
+            sets += ["due_text = %s", "due_date = %s"]
+            params += [due_text or None, due]
+        if not sets:
+            return
+        async with await self.connection() as conn:
+            await conn.execute(
+                f"update public.action_items set {', '.join(sets)} where id = %s",
+                (*params, item_id),
+            )
+
+    async def detach_project(self, project_id: str) -> None:
+        async with await self.connection() as conn:
+            await conn.execute(
+                "update public.meetings set project_id = null, visibility = 'private' where project_id = %s",
+                (project_id,),
+            )

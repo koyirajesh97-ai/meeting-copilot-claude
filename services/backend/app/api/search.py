@@ -19,6 +19,7 @@ class HitOut(BaseModel):
     text: str
     start_ms: int | None
     score: float
+    document_id: str | None = None
 
 
 @router.get("/search", response_model=list[HitOut])
@@ -37,6 +38,7 @@ class CitationOut(BaseModel):
     title: str
     start_ms: int | None
     quote: str
+    document_id: str | None = None
 
 
 class AnswerOut(BaseModel):

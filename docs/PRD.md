@@ -207,13 +207,14 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `POST /auth/dev-session` | Local development only (`ALLOW_DEV_LOGIN=1`, localhost): a fixed dev user |
 | `GET /me`, `GET /me/profile`, `PUT /me/profile`, `GET /profiles/presets` | Current user, role profile (name, aliases, title, responsibilities, systems owned, tickets, speaking style) and presets |
 | `GET /meetings/{id}/cards` | Cards shown during a meeting (owner only) and their Used / Not useful flag |
-| `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}` | Project management |
-| `POST /projects/{id}/members` | Invite a member by email |
-| `GET /projects/{id}/vocabulary`, `PUT /projects/{id}/vocabulary` | Names and terms for transcription and Clarify |
-| `POST /projects/{id}/documents` | Upload a doc or link; chunked and embedded for grounding |
+| `GET /projects`, `POST /projects`, `GET /projects/{id}`, `PATCH /projects/{id}`, `DELETE /projects/{id}` | Project management (members see a project; owners edit and delete it; deleting keeps its meetings, as private, with their owners) |
+| `GET /projects/{id}/members`, `POST /projects/{id}/members`, `PATCH /projects/{id}/members/{user_id}`, `DELETE /projects/{id}/members/{user_id}` | Members and pending invites; invite by email (added at once if they have an account, else invited by Supabase magic link and added when they first sign in); owners change roles and remove members; anyone can leave; the last owner can't. Leaving a project deletes your voiceprint enrolled for it |
+| `GET /projects/{id}/vocabulary`, `PUT /projects/{id}/vocabulary` | Names and terms for transcription and Clarify (owners and members edit; merged into each project meeting's key terms) |
+| `POST /projects/{id}/documents` (file), `POST /projects/{id}/links` (URL), `GET /projects/{id}/documents`, `DELETE /projects/{id}/documents/{doc_id}` | Project knowledge: text, Markdown, HTML and (with the `documents` extra) PDF; stored in Supabase Storage (local folder in development), chunked and embedded; search, Ask and answer cards cite them for members only |
 | `POST /meetings` | Create a meeting (project, type, title, mode, visibility); returns meeting_id, ws_url, ws_token |
 | `GET /meetings?project_id=&q=`, `GET /meetings/{id}` | List and open meetings with transcript, summary and action items |
-| `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, visibility; delete everything for a meeting |
+| `PATCH /meetings/{id}`, `DELETE /meetings/{id}` | Edit title, type, project and visibility (owner only; sharing needs a project you're an owner or member of; `project_id: ""` makes it personal and private); delete everything for a meeting |
+| `POST /meetings/{id}/watch` | A short-lived token for the read-only watch socket (members of the meeting's project, while it's live and shared) |
 | `POST /meetings/{id}/ws-token` | A fresh short-lived socket token, for reconnecting |
 | `POST /meetings/{id}/end` | Close the meeting and queue the summary |
 | `GET /meetings/{id}/summary` | Summary status (none, pending, ready, failed) and content |
@@ -226,7 +227,7 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `GET /search?q=`, `POST /ask` | Hybrid search (Postgres full-text + pgvector, merged by reciprocal rank fusion, filtered to meetings you may see); cited answers across meetings, with `found: false` when nothing relevant exists |
 | `POST /standup`, `GET /standup/today`, `PUT /standup/today` | Rough notes in; done / doing / blockers and a 30-second script out (one entry per day, editable) |
 | `GET /brief?meeting_id=` or `?title=&type=&agenda=` | Pre-meeting brief: your open action items, the last decisions, blockers and open questions of this series (same title apart from dates and numbers, same type), the agenda |
-| `GET /action-items`, `PATCH /action-items/{id}` | Action-item board |
+| `GET /action-items?project_id=&filter=all\|mine\|overdue`, `PATCH /action-items/{id}` | Project action-item board from shared meetings (owner, status, due); "mine" matches your name or aliases; members and the meeting owner edit, viewers read |
 | `GET /usage` | Free quota left per provider and task today |
 | `GET /health`, `GET /metrics` | Liveness and per-stage latency |
 
@@ -241,6 +242,10 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 - **Error codes** in `error` events: `stt_unavailable` (retryable; the server keeps retrying every 30 s), `bad_audio_frame`, `bad_message`, `not_implemented`.
 - `meeting.started.providers` maps `stt_live.mic` and `stt_live.system` to the transcription provider each channel started on.
 - Caption times (`start_ms`, `end_ms`) are milliseconds since the meeting started, kept continuous across provider switches and VAD gaps.
+
+### Watch socket `/ws/meetings/{id}/watch?token=…&last_seq=N`
+
+Read-only, for project members watching a teammate's shared meeting live. It carries only `meeting.started`, `transcript.partial`, `transcript.final`, `speaker.identified`, `provider.switched` and `summary.ready`; question detections and cards stay private to the person recording. Audio and controls are ignored. Same replay and close codes as the meeting socket; 4409 once the meeting has ended (its summary is then on the meeting page). Members see shared meetings in their Meetings list with a "Shared" badge and "Watch live" while they're in progress; someone else's meeting is read-only (no summary edits, regenerate or speaker renames).
 
 ### Events
 
@@ -435,7 +440,7 @@ Postgres is the single source of truth, and project membership decides who sees 
 
 1. The desktop app writes to a local SQLite cache (Node's built-in `node:sqlite`, so there's no native module to rebuild for Electron), so recordings and transcripts stay readable offline. Audio is always written to local WAV files first.
 2. Transcription runs on the backend, which stores finals in Postgres as they happen. Live finals are also written to the local cache, and a sync worker pulls meetings and transcripts from the backend (on start, after each meeting, every 5 minutes) to fill in anything missed. If the connection drops, the last 60 s of audio are buffered and replayed and the server replays missed events; audio from a longer outage stays in the local WAV only (see TODO).
-3. Project members subscribe to a realtime channel per live meeting and see captions and cards as they arrive.
+3. Project members watch a live shared meeting through the backend's read-only watch socket (see "Watch socket") and see captions as they arrive and the summary when it's ready; cards stay with the person recording. (The backend already holds the live stream and the membership check, so this replaces a Supabase Realtime channel: one less service to secure, and the same replay on reconnect.)
 4. Private meetings never leave the owner's account; changing a meeting to "project" shares the transcript, summary and action items, never the raw audio unless the owner chooses to.
 5. In Local-only mode nothing syncs; the meeting stays on the laptop until the owner exports it.
 

@@ -303,6 +303,9 @@ class LiveHelp(Plugin):
     def build_context(self, hits: list[Hit]) -> Context:
         ctx = Context()
         for h in hits:
+            if h.document_id:  # project knowledge (runbooks, specs)
+                ctx.add(f"Document {h.text}", {"type": "document", "id": h.document_id})
+                continue
             when = f" at {clock(h.start_ms)}" if h.start_ms is not None else " (summary)"
             ctx.add(
                 f"{h.title}{when}: {h.text}",
@@ -481,7 +484,7 @@ class LiveHelp(Plugin):
         bullets = [
             b
             for b in out.json.bullets
-            if b.source in ctx.sources and ctx.sources[b.source]["type"] == "meeting"
+            if b.source in ctx.sources and ctx.sources[b.source]["type"] in ("meeting", "document")
         ]
         if not bullets or out.json.confidence < self.cfg.card_min_confidence:
             return

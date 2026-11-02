@@ -115,6 +115,19 @@ class MeetingStore(Protocol):
     async def previous_in_series(
         self, owner_id: str, meeting_type: str, series: str, before: float, exclude_id: str | None
     ) -> Meeting | None: ...
+    # projects
+    async def detach_project(self, project_id: str) -> None: ...
+    async def list_shared(
+        self, project_ids: list[str], exclude_owner: str, limit: int = 100
+    ) -> list[Meeting]: ...
+    async def update_meeting(self, m: Meeting) -> Meeting: ...
+    async def project_action_items(
+        self, project_id: str
+    ) -> list[tuple[ActionItemRecord, Meeting]]: ...
+    async def get_action_item(self, item_id: str) -> tuple[ActionItemRecord, Meeting] | None: ...
+    async def update_action_item(
+        self, item_id: str, *, status: str | None, owner: str | None, due_text: str | None
+    ) -> None: ...
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]: ...
     # speaker names given in a meeting (text only; never a voiceprint)
     async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None: ...
@@ -253,3 +266,53 @@ class InMemoryMeetingStore:
             and series_key(m.title) == series
         ]
         return max(cands, key=lambda m: m.started_at, default=None)
+
+    async def list_shared(
+        self, project_ids: list[str], exclude_owner: str, limit: int = 100
+    ) -> list[Meeting]:
+        shared = [
+            m
+            for m in self._meetings.values()
+            if m.visibility == "project"
+            and m.project_id in project_ids
+            and m.owner_id != exclude_owner
+        ]
+        return sorted(shared, key=lambda m: m.started_at, reverse=True)[:limit]
+
+    async def update_meeting(self, m: Meeting) -> Meeting:
+        self._meetings[m.id] = m
+        return m
+
+    async def project_action_items(self, project_id: str) -> list[tuple[ActionItemRecord, Meeting]]:
+        out = []
+        for mid, items in self._items.items():
+            m = self._meetings.get(mid)
+            if m and m.project_id == project_id and m.visibility == "project":
+                out += [(i, m) for i in items]
+        return sorted(out, key=lambda x: x[0].created_at)
+
+    async def get_action_item(self, item_id: str) -> tuple[ActionItemRecord, Meeting] | None:
+        for mid, items in self._items.items():
+            for i in items:
+                if i.id == item_id and mid in self._meetings:
+                    return i, self._meetings[mid]
+        return None
+
+    async def update_action_item(
+        self, item_id: str, *, status: str | None, owner: str | None, due_text: str | None
+    ) -> None:
+        found = await self.get_action_item(item_id)
+        if found:
+            i = found[0]
+            if status is not None:
+                i.status = status  # type: ignore[assignment]
+            if owner is not None:
+                i.owner = owner or None
+            if due_text is not None:
+                i.due_text = due_text or None
+
+    async def detach_project(self, project_id: str) -> None:
+        """The project is being deleted: its meetings stay with their owners, as private."""
+        for m in self._meetings.values():
+            if m.project_id == project_id:
+                m.project_id, m.visibility = None, "private"

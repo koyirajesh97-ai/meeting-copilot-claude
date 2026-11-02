@@ -93,8 +93,8 @@ export function MeetingsHome() {
       ) : (
         <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800" aria-label="Meetings">
           {shown.map((m) => (
-            <li key={m.id}>
-              <Link to={`/meetings/${m.id}`} className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900">
+            <li key={m.id} className="flex items-center">
+              <Link to={`/meetings/${m.id}`} className="flex flex-1 items-center justify-between gap-4 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-900">
                 <span>
                   <span className="block font-medium">{m.title}</span>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -102,8 +102,19 @@ export function MeetingsHome() {
                     {m.ended_at === null ? " · in progress" : ""}
                   </span>
                 </span>
+                {!m.is_mine && (
+                  <span className="shrink-0 rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200" data-testid="shared-badge">
+                    Shared
+                  </span>
+                )}
+
                 <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">{m.segment_count} lines</span>
               </Link>
+              {!m.is_mine && m.is_live && (
+                <Link to={`/meetings/${m.id}/live`} className="shrink-0 px-4 text-xs font-medium text-blue-600 underline">
+                  Watch live
+                </Link>
+              )}
             </li>
           ))}
         </ul>

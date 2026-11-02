@@ -44,6 +44,11 @@ class InMemorySpeakers:
             or (project_id and s.project_id == project_id)
         ]
 
+    async def delete_for_member(self, project_id: str, user_id: str) -> None:
+        for k, s in list(self.rows.items()):
+            if s.project_id == project_id and s.user_id == user_id:
+                del self.rows[k]
+
     async def delete(self, speaker_id: str, user_id: str) -> bool:
         s = self.rows.get(speaker_id)
         if s is None or s.user_id != user_id:
@@ -106,3 +111,11 @@ class PostgresSpeakers:
                 "delete from public.speakers where id = %s and user_id = %s", (speaker_id, user_id)
             )
             return cur.rowcount > 0
+
+    async def delete_for_member(self, project_id: str, user_id: str) -> None:
+        # The project_members delete trigger does this too; doing it here keeps both stores alike.
+        async with await self.store.connection() as conn:
+            await conn.execute(
+                "delete from public.speakers where project_id = %s and user_id = %s",
+                (project_id, user_id),
+            )

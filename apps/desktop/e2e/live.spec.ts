@@ -129,9 +129,25 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByRole("button", { name: "Delete my voiceprint" }).click();
   await expect(main.getByTestId("enrolled-voice")).toHaveCount(0);
 
-  // Start a meeting from the Start meeting screen.
+  // A project with a pending invite and key terms; the meeting is shared with it.
+  await main.getByRole("navigation").getByRole("link", { name: "Projects" }).click();
+  await main.getByLabel("New project name").fill("Payments");
+  await main.getByRole("button", { name: "Create" }).click();
+  await main.getByRole("list", { name: "Projects" }).getByRole("link", { name: /Payments/ }).click();
+  await expect(main.getByRole("heading", { name: "Payments", level: 1 })).toBeVisible();
+  await main.getByLabel("Invite by email").fill("teammate@example.com");
+  await main.getByRole("button", { name: "Invite" }).click();
+  await expect(main.getByTestId("members")).toContainText("teammate@example.com");
+  await main.getByRole("textbox", { name: "Key terms" }).fill("OPS-142\nKubernetes");
+  await main.getByRole("button", { name: "Save terms" }).click();
+  await expect(main.getByRole("button", { name: "Save terms" })).toBeHidden();
+  await expect(main.getByTestId("board")).toContainText("Nothing here");
+
+  // Start a meeting from the Start meeting screen, in the project and shared with it.
   await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
   await main.getByLabel("Title").fill("E2E standup");
+  await main.getByRole("combobox", { name: "Project", exact: true }).selectOption({ label: "Payments" });
+  await main.getByLabel("Share with the project").check();
   await main.getByRole("button", { name: "Start recording" }).click();
 
   // Live: the backend's (fake) transcriber turns the mic audio into captions in the overlay.
@@ -165,6 +181,7 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(row).toBeVisible();
   await row.click();
   await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
+  await expect(main.getByLabel("Sharing")).toHaveValue(/\|project$/);
   const lines = main.getByTestId("transcript-line");
   await expect(lines.first()).toContainText("You:Morning everyone, let's start the standup.");
   const count = await lines.count();

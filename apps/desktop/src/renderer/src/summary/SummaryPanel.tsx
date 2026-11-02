@@ -59,14 +59,18 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
           </option>
         ))}
       </select>
-      <button type="button" className={secondaryButtonClass} disabled={busy || summary.status === "pending"} onClick={() => void act(() => window.copilot.meetings.regenerate(meeting.id, template))}>
-        Regenerate
-      </button>
+      {meeting.is_mine && (
+        <button type="button" className={secondaryButtonClass} disabled={busy || summary.status === "pending"} onClick={() => void act(() => window.copilot.meetings.regenerate(meeting.id, template))}>
+          Regenerate
+        </button>
+      )}
       {summary.data && !editing && (
         <>
-          <button type="button" className={secondaryButtonClass} onClick={() => setEditing(toEditable(summary.data!))}>
-            Edit
-          </button>
+          {meeting.is_mine && (
+            <button type="button" className={secondaryButtonClass} onClick={() => setEditing(toEditable(summary.data!))}>
+              Edit
+            </button>
+          )}
           <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => void act(async () => {
             await navigator.clipboard.writeText(await window.copilot.meetings.markdown(meeting.id, false));
           }, "Copied the summary. Paste it into an email, Teams or Slack.")}>

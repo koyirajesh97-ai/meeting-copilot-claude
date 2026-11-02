@@ -62,6 +62,14 @@ def enroll(
     )
 
 
+def project_with_teammate(env) -> str:
+    """A project owned by u1 with u2 as a member."""
+    s, _, client = env
+    pid = client.post("/projects", json={"name": "Payments"}, headers=h("u1")).json()["id"]
+    client.portal.call(s.projects.set_member, pid, "u2", "member")
+    return pid
+
+
 @pytest.fixture
 def env():
     cfg = load_config()
@@ -151,10 +159,11 @@ def test_voiceprints_are_encrypted(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_three_voices_two_enrolled_are_named_and_the_third_is_not(env) -> None:
     s, store, client = env
     enroll(client, "u1", "A", "Sai")  # the meeting owner's own voice
-    enroll(client, "u2", "B", "Priya", project_id="p1")  # a teammate, in the meeting's project
+    pid = project_with_teammate(env)
+    enroll(client, "u2", "B", "Priya", project_id=pid)  # a teammate, in the meeting's project
     m = client.post(
         "/meetings",
-        json={"type": "review", "title": "3 voices", "project_id": "p1"},
+        json={"type": "review", "title": "3 voices", "project_id": pid},
         headers=h("u1"),
     ).json()
     # Meeting audio: A, B, C speaking in turn, 3 s each, three rounds (matches the fake script).
@@ -195,10 +204,9 @@ def test_three_voices_two_enrolled_are_named_and_the_third_is_not(env) -> None:
 
 def test_voices_from_other_projects_are_not_matched(env) -> None:
     _, _, client = env
+    pid = project_with_teammate(env)
     enroll(client, "u2", "B", "Priya", project_id="other-project")
-    m = client.post(
-        "/meetings", json={"type": "review", "project_id": "p1"}, headers=h("u1")
-    ).json()
+    m = client.post("/meetings", json={"type": "review", "project_id": pid}, headers=h("u1")).json()
     pcm = b"".join(voice(VOICE[v], 3, 20 + i) for i in range(3) for v in "ABC")
     with client.websocket_connect(f"/ws/meetings/{m['meeting_id']}?token={m['ws_token']}") as ws:
         ws.receive_json()

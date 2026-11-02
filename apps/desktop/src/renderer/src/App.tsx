@@ -4,7 +4,8 @@ import { RecordingIndicator } from "./components/RecordingIndicator";
 import { AskPage } from "./pages/AskPage";
 import { MeetingDetailPage } from "./pages/MeetingDetailPage";
 import { MeetingsHome } from "./pages/MeetingsHome";
-import { ProjectsPage } from "./pages/ProjectsPage";
+import { ProjectDetailPage, ProjectsPage } from "./pages/ProjectsPage";
+import { LiveViewerPage } from "./projects/LiveViewerPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { StandupPage } from "./pages/StandupPage";
 import { StartMeetingPage } from "./pages/StartMeetingPage";
@@ -61,6 +62,8 @@ export function App() {
             <Route path={ROUTES.ask} element={<AskPage />} />
             <Route path={ROUTES.standup} element={<StandupPage />} />
             <Route path={ROUTES.projects} element={<ProjectsPage />} />
+            <Route path={ROUTES.project} element={<ProjectDetailPage />} />
+            <Route path={ROUTES.meetingLive} element={<LiveViewerPage />} />
             <Route path={ROUTES.settings} element={<SettingsPage />} />
             <Route path={ROUTES.systemAudioHelp} element={<SystemAudioHelpPage />} />
             <Route path={ROUTES.voice} element={<VoicePage />} />

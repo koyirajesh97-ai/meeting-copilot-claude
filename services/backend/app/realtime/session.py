@@ -351,7 +351,8 @@ class MeetingSession:
             return data
 
     async def attach(self, peer: Peer, last_seq: int = 0) -> int:
-        """Replay everything after `last_seq`, then stream live. Returns how many were replayed."""
+        """Replay everything after `last_seq`, then stream live. Returns how many were replayed.
+        A peer that filters events (watchers) only gets what it accepts."""
         async with self._lock:
             missed = [e for e in self._log if e["seq"] > last_seq]
             for e in missed:

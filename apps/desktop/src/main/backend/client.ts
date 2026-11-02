@@ -23,8 +23,11 @@ export interface MeetingOut {
   title: string;
   mode: string;
   visibility: string;
+  project_id?: string | null;
   started_at: number;
   ended_at: number | null;
+  is_mine?: boolean;
+  is_live?: boolean;
 }
 
 export interface MeetingDetailOut extends MeetingOut {
@@ -172,6 +175,35 @@ export class BackendClient {
 
   deleteVoice(id: string): Promise<void> {
     return this.request("DELETE", `/speakers/${encodeURIComponent(id)}`);
+  }
+
+  /** Raw call for the Projects screens; paths come from main, never from a renderer. */
+  call<T>(method: string, path: string, body?: unknown): Promise<T> {
+    return this.request(method, path, body);
+  }
+
+  async upload<T>(path: string, form: FormData): Promise<T> {
+    const t = await this.token();
+    if (!t) throw new BackendError("Not signed in", 401);
+    const res = await this.fetchImpl(`${this.baseUrl()}${path}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}` },
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) {
+      const detail = await res.json().then((j) => (j as { detail?: string }).detail ?? res.statusText, () => res.statusText);
+      throw new BackendError(`Upload failed: ${res.status} ${detail}`, res.status);
+    }
+    return (await res.json()) as T;
+  }
+
+  editMeeting(id: string, patch: object): Promise<MeetingOut> {
+    return this.request("PATCH", `/meetings/${encodeURIComponent(id)}`, patch);
+  }
+
+  watchToken(id: string): Promise<MeetingSocket> {
+    return this.request("POST", `/meetings/${encodeURIComponent(id)}/watch`);
   }
 
   search(q: string): Promise<SearchHit[]> {

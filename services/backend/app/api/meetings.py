@@ -39,6 +39,11 @@ class MeetingOut(BaseModel):
     project_id: str | None
     started_at: float
     ended_at: float | None
+    owner_id: str = ""
+    #: False for project-shared meetings someone else recorded (read-only for you).
+    is_mine: bool = True
+    #: Being recorded right now (members can watch it live).
+    is_live: bool = False
 
 
 class SegmentOut(BaseModel):
@@ -106,8 +111,13 @@ async def summary_out(meeting_id: str) -> SummaryOut:
     )
 
 
-def _out(m: Meeting) -> MeetingOut:
-    return MeetingOut(**{k: getattr(m, k) for k in MeetingOut.model_fields})
+def _out(m: Meeting, user_id: str | None = None) -> MeetingOut:
+    base = {k: getattr(m, k) for k in MeetingOut.model_fields if hasattr(m, k)}
+    return MeetingOut(
+        **base,
+        is_mine=user_id is None or m.owner_id == user_id,
+        is_live=services().sessions.get(m.id) is not None and m.ended_at is None,
+    )
 
 
 def _ws_url(request: Request, meeting_id: str) -> str:
@@ -116,15 +126,51 @@ def _ws_url(request: Request, meeting_id: str) -> str:
 
 
 async def _owned(meeting_id: str, user_id: str) -> Meeting:
+    """The meeting, if the caller owns it (needed to change anything)."""
     m = await services().meetings.get(meeting_id)
     if m is None or m.owner_id != user_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found")
     return m
 
 
+async def can_read(m: Meeting, user_id: str) -> bool:
+    """Owners always; project members when the meeting is shared with the project."""
+    if m.owner_id == user_id:
+        return True
+    return (
+        m.visibility == "project"
+        and await services().projects.role(m.project_id, user_id) is not None
+    )
+
+
+async def _readable(meeting_id: str, user_id: str) -> Meeting:
+    m = await services().meetings.get(meeting_id)
+    if m is None or not await can_read(m, user_id):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Meeting not found")
+    return m
+
+
+async def check_project(project_id: str | None, visibility: str, user_id: str) -> list[str]:
+    """Validate a meeting's project and visibility; returns the project's vocabulary."""
+    if visibility == "project" and not project_id:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, "Sharing with a project needs a project"
+        )
+    if not project_id:
+        return []
+    s = services()
+    role = await s.projects.role(project_id, user_id)
+    if role not in ("owner", "member"):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "You can't add meetings to this project")
+    p = await s.projects.get(project_id)
+    return list(p.vocabulary) if p else []
+
+
 @router.post("/meetings", response_model=MeetingSocket, status_code=status.HTTP_201_CREATED)
 async def create_meeting(body: CreateMeeting, request: Request, user: CurrentUser) -> MeetingSocket:
-    vocab = sorted({t.strip() for t in body.vocabulary if t.strip()})
+    project_vocab = await check_project(body.project_id, body.visibility, user.user_id)
+    # Project vocabulary feeds transcription key terms and Clarify.
+    vocab = sorted({t.strip() for t in [*body.vocabulary, *project_vocab] if t.strip()})
     m = Meeting(
         id=new_meeting_id(),
         owner_id=user.user_id,
@@ -159,19 +205,69 @@ async def refresh_ws_token(meeting_id: str, request: Request, user: CurrentUser)
 
 @router.get("/meetings", response_model=list[MeetingOut])
 async def list_meetings(user: CurrentUser, limit: int = 100) -> list[MeetingOut]:
-    """Your meetings, newest first. (Project-shared meetings join this list in Phase 3.)"""
-    return [
-        _out(m) for m in await services().meetings.list_for(user.user_id, min(max(limit, 1), 500))
-    ]
+    """Your meetings plus meetings shared with your projects, newest first."""
+    s = services()
+    n = min(max(limit, 1), 500)
+    mine = await s.meetings.list_for(user.user_id, n)
+    projects = [p.id for p, _role in await s.projects.for_user(user.user_id)]
+    shared = await s.meetings.list_shared(projects, user.user_id, n)
+    both = sorted(mine + shared, key=lambda m: m.started_at, reverse=True)[:n]
+    return [_out(m, user.user_id) for m in both]
+
+
+class EditMeeting(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    type: MeetingType | None = None
+    visibility: Visibility | None = None
+    #: "" moves the meeting out of its project.
+    project_id: str | None = None
+
+
+@router.patch("/meetings/{meeting_id}", response_model=MeetingOut)
+async def edit_meeting(meeting_id: str, body: EditMeeting, user: CurrentUser) -> MeetingOut:
+    """Rename, change type, assign to a project, or share/unshare with it (owner only)."""
+    m = await _owned(meeting_id, user.user_id)
+    if body.project_id is not None:
+        m.project_id = body.project_id or None
+        if m.project_id is None:
+            m.visibility = "private"
+    if body.visibility is not None:
+        m.visibility = body.visibility
+    await check_project(m.project_id, m.visibility, user.user_id)
+    if body.title is not None:
+        m.title = body.title
+    if body.type is not None:
+        m.type = body.type
+    await services().meetings.update_meeting(m)
+    return _out(m, user.user_id)
+
+
+class WatchSocket(BaseModel):
+    meeting_id: str
+    ws_url: str
+    ws_token: str
+
+
+@router.post("/meetings/{meeting_id}/watch", response_model=WatchSocket)
+async def watch_token(meeting_id: str, request: Request, user: CurrentUser) -> WatchSocket:
+    """Watch a shared meeting live (captions and the summary; never the owner's cards)."""
+    m = await _readable(meeting_id, user.user_id)
+    if m.ended_at is not None and not services().sessions.watchable(m.id):
+        raise HTTPException(status.HTTP_409_CONFLICT, "Meeting has ended")
+    return WatchSocket(
+        meeting_id=m.id,
+        ws_url=_ws_url(request, m.id) + "/watch",
+        ws_token=issue_token(user.user_id, scope="watch", meeting_id=m.id),
+    )
 
 
 @router.get("/meetings/{meeting_id}", response_model=MeetingDetail)
 async def get_meeting(meeting_id: str, user: CurrentUser) -> MeetingDetail:
-    m = await _owned(meeting_id, user.user_id)
+    m = await _readable(meeting_id, user.user_id)
     store = services().meetings
     segs = await store.segments(m.id)
     return MeetingDetail(
-        **_out(m).model_dump(),
+        **_out(m, user.user_id).model_dump(),
         transcript=[
             SegmentOut(**{k: getattr(s, k) for k in SegmentOut.model_fields}) for s in segs
         ],

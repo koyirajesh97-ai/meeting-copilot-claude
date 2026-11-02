@@ -15,6 +15,8 @@ from app.live.store import InMemoryCards, PostgresCards
 from app.meetings.speakers import InMemorySpeakers, PostgresSpeakers
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
 from app.profiles.store import InMemoryProfiles, PostgresProfiles
+from app.projects.documents import InMemoryDocuments, PostgresDocuments, default_blobs
+from app.projects.store import InMemoryProjects, PostgresProjects
 from app.providers.embeddings import EmbeddingRouter, FakeEmbedder
 from app.providers.speaker_id import FakeSpeakerEmbedder, SpeakerIdRouter
 from app.providers.stt.base import FakeSttAdapter
@@ -63,6 +65,11 @@ class Services:
     cards: InMemoryCards | PostgresCards
     standups: InMemoryStandups | PostgresStandups
     standup: StandupService
+    projects: InMemoryProjects | PostgresProjects
+    documents: InMemoryDocuments | PostgresDocuments
+    blobs: object
+    #: For tests: an httpx transport used when fetching project links.
+    link_transport: object = None
 
 
 def build_services(
@@ -108,14 +115,19 @@ def build_services(
     embedder = EmbeddingRouter(
         cfg, quota, cooldowns, **({"factory": embed_factory} if embed_factory else {})
     )
-    index = PostgresIndex(meetings) if hasattr(meetings, "connection") else InMemoryIndex()
+    pg = hasattr(meetings, "connection")
+    projects = PostgresProjects(meetings) if pg else InMemoryProjects()
+
+    async def is_member(project_id: str, user_id: str) -> bool:
+        return await projects.role(project_id, user_id) is not None
+
+    index = PostgresIndex(meetings) if pg else InMemoryIndex(is_member)
     search = SearchService(index, embedder, router, meetings)
     # Index each meeting once its summary is saved (and again after a regenerate).
     summaries.after_ready.append(search.index_meeting)
     speakers = PostgresSpeakers(meetings) if hasattr(meetings, "connection") else InMemorySpeakers()
     speaker_id = SpeakerIdRouter(cfg, **({"factory": speaker_factory} if speaker_factory else {}))
     sessions.plugin_factories.append(speaker_plugin_factory(speakers, speaker_id, cfg.speaker_id))
-    pg = hasattr(meetings, "connection")
     profiles = PostgresProfiles(meetings) if pg else InMemoryProfiles()
     cards = PostgresCards(meetings) if pg else InMemoryCards()
     standups = PostgresStandups(meetings) if pg else InMemoryStandups()
@@ -140,6 +152,9 @@ def build_services(
         cards,
         standups,
         standup,
+        projects,
+        PostgresDocuments(meetings) if pg else InMemoryDocuments(),
+        default_blobs(),
     )
 
 

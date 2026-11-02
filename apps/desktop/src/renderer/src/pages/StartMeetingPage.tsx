@@ -9,6 +9,7 @@ import {
   type Visibility,
 } from "../../../shared/meetings";
 import { buttonClass, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
+import { useProjects } from "../projects/useProjects";
 
 export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [title, setTitle] = useState("");
@@ -18,6 +19,8 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [copied, setCopied] = useState(false);
   const [agenda, setAgenda] = useState("");
   const [brief, setBrief] = useState<Brief | null>(null);
+  const { projects } = useProjects();
+  const [projectId, setProjectId] = useState("");
 
   // Pre-meeting brief: your open action items and what happened last time in this series.
   useEffect(() => {
@@ -44,8 +47,13 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
         </label>
         <label className="block text-sm">
           Project
-          <select className={`${inputClass} mt-1`} disabled>
-            <option>Personal (projects arrive in Phase 3)</option>
+          <select aria-label="Project" className={`${inputClass} mt-1`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+            <option value="">Personal</option>
+            {projects?.filter((p) => p.role !== "viewer").map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
           </select>
         </label>
         <label className="block text-sm">
@@ -75,8 +83,8 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             ))}
           </div>
         </fieldset>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={visibility === "project"} onChange={(e) => setVisibility(e.target.checked ? "project" : "private")} />
+        <label className={`flex items-center gap-2 text-sm ${projectId ? "" : "opacity-50"}`}>
+          <input type="checkbox" disabled={!projectId} checked={visibility === "project" && !!projectId} onChange={(e) => setVisibility(e.target.checked ? "project" : "private")} />
           Share with the project
         </label>
         <div className="flex gap-2 pt-2">
@@ -84,7 +92,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             type="button"
             className={buttonClass}
             onClick={() =>
-              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility, agenda }))
+              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null }))
             }
           >
             {state?.capturing ? "Stop recording" : "Start recording"}

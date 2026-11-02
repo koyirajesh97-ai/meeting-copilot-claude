@@ -40,13 +40,21 @@ class Me(BaseModel):
     email: str | None
 
 
+async def _signed_in(user_id: str, email: str | None, ensure_auth_user: bool = False) -> None:
+    """Record the user and turn any pending project invites for their email into memberships."""
+    s = services()
+    await s.meetings.upsert_user(user_id, email, ensure_auth_user=ensure_auth_user)
+    await s.projects.register_user(user_id, email)
+    await s.projects.accept_invites(user_id, email)
+
+
 @router.post("/auth/session", response_model=SessionOut)
 async def create_session(body: SessionIn) -> SessionOut:
     try:
         user = verify_supabase_token(body.access_token)
     except SupabaseTokenError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Sign-in not accepted: {e}") from e
-    await services().meetings.upsert_user(user.id, user.email)
+    await _signed_in(user.id, user.email)
     return SessionOut(
         token=issue_token(user.id, email=user.email),
         expires_at=int(time.time()) + SESSION_TTL_S,
@@ -61,7 +69,7 @@ async def dev_session(request: Request) -> SessionOut:
     client = request.client.host if request.client else ""
     if not dev_login_enabled() or client not in {"127.0.0.1", "::1", "localhost", "testclient"}:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
-    await services().meetings.upsert_user(DEV_USER_ID, DEV_USER_EMAIL, ensure_auth_user=True)
+    await _signed_in(DEV_USER_ID, DEV_USER_EMAIL, ensure_auth_user=True)
     return SessionOut(
         token=issue_token(DEV_USER_ID, email=DEV_USER_EMAIL),
         expires_at=int(time.time()) + SESSION_TTL_S,

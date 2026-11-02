@@ -26,6 +26,7 @@ create table if not exists segments (
   primary key (meeting_id, segment_id)
 );
 create index if not exists segments_by_time on segments (meeting_id, start_ms);
+-- added in Phase 3; see migrate()
 create table if not exists details (
   meeting_id  text primary key references meetings (id) on delete cascade,
   json        text not null   -- summary, action items, decisions, speaker names (as the backend sent them)
@@ -44,6 +45,10 @@ export interface MeetingRow {
   mode: string;
   started_at: number;
   ended_at: number | null;
+  is_mine?: boolean;
+  is_live?: boolean;
+  visibility?: string;
+  project_id?: string | null;
 }
 
 export class Cache {
@@ -53,6 +58,19 @@ export class Cache {
     this.db = new DatabaseSync(path);
     this.db.exec("pragma journal_mode = wal; pragma foreign_keys = on;");
     this.db.exec(SCHEMA);
+    this.migrate();
+  }
+
+  /** Columns added after the first release (SQLite has no "add column if not exists"). */
+  private migrate(): void {
+    const cols = new Set((this.db.prepare("pragma table_info(meetings)").all() as { name: string }[]).map((c) => c.name));
+    const add: [string, string][] = [
+      ["is_mine", "integer not null default 1"],
+      ["is_live", "integer not null default 0"],
+      ["visibility", "text not null default 'private'"],
+      ["project_id", "text"],
+    ];
+    for (const [name, def] of add) if (!cols.has(name)) this.db.exec(`alter table meetings add column ${name} ${def}`);
   }
 
   close(): void {
@@ -62,11 +80,14 @@ export class Cache {
   upsertMeeting(m: MeetingRow): void {
     this.db
       .prepare(
-        `insert into meetings (id, title, type, mode, started_at, ended_at) values (?, ?, ?, ?, ?, ?)
+        `insert into meetings (id, title, type, mode, started_at, ended_at, is_mine, is_live, visibility, project_id)
+         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          on conflict (id) do update set title = excluded.title, type = excluded.type, mode = excluded.mode,
-           ended_at = coalesce(excluded.ended_at, meetings.ended_at)`,
+           ended_at = coalesce(excluded.ended_at, meetings.ended_at), is_mine = excluded.is_mine,
+           is_live = excluded.is_live, visibility = excluded.visibility, project_id = excluded.project_id`,
       )
-      .run(m.id, m.title, m.type, m.mode, m.started_at, m.ended_at);
+      .run(m.id, m.title, m.type, m.mode, m.started_at, m.ended_at, m.is_mine === false ? 0 : 1, m.is_live ? 1 : 0,
+        m.visibility ?? "private", m.project_id ?? null);
   }
 
   markEnded(id: string, at: number): void {
@@ -108,21 +129,22 @@ export class Cache {
   listMeetings(limit = 200): CachedMeeting[] {
     return this.db
       .prepare(
-        `select m.id, m.title, m.type, m.mode, m.started_at, m.ended_at,
+        `select m.id, m.title, m.type, m.mode, m.started_at, m.ended_at, m.is_mine, m.is_live, m.visibility, m.project_id,
                 (select count(*) from segments s where s.meeting_id = m.id) as segment_count
          from meetings m order by m.started_at desc limit ?`,
       )
-      .all(limit) as unknown as CachedMeeting[];
+      .all(limit)
+      .map(toMeeting);
   }
 
   getMeeting(id: string): CachedMeetingDetail | null {
     const m = this.db
       .prepare(
-        `select id, title, type, mode, started_at, ended_at,
+        `select id, title, type, mode, started_at, ended_at, is_mine, is_live, visibility, project_id,
                 (select count(*) from segments s where s.meeting_id = meetings.id) as segment_count
          from meetings where id = ?`,
       )
-      .get(id) as unknown as CachedMeeting | undefined;
+      .get(id);
     if (!m) return null;
     const transcript = this.db
       .prepare(
@@ -130,7 +152,7 @@ export class Cache {
          where meeting_id = ? order by start_ms, segment_id`,
       )
       .all(id) as unknown as CachedSegment[];
-    return { ...m, transcript, ...this.extras(id) };
+    return { ...toMeeting(m), transcript, ...this.extras(id) };
   }
 
   /** Meetings that may be missing segments: not synced since they ended. */
@@ -140,4 +162,14 @@ export class Cache {
       .all() as { id: string }[];
     return rows.map((r) => r.id);
   }
+}
+
+function toMeeting(r: unknown): CachedMeeting {
+  const row = r as Record<string, unknown>;
+  return {
+    id: String(row.id), title: String(row.title), type: String(row.type), mode: String(row.mode),
+    started_at: Number(row.started_at), ended_at: row.ended_at === null ? null : Number(row.ended_at),
+    segment_count: Number(row.segment_count ?? 0), is_mine: Number(row.is_mine ?? 1) === 1, is_live: Number(row.is_live ?? 0) === 1,
+    visibility: String(row.visibility ?? "private"), project_id: (row.project_id as string | null) ?? null,
+  };
 }

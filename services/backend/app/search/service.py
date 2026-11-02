@@ -37,6 +37,7 @@ class Citation:
     title: str
     start_ms: int | None
     quote: str
+    document_id: str | None = None
 
 
 @dataclass
@@ -85,7 +86,13 @@ class SearchService:
         ids = {f"c{i + 1}": h for i, h in enumerate(hits)}
         context = "\n".join(
             f"[{cid}] {h.title}, {_when(h.started_at)}"
-            + (f" at {clock(h.start_ms)}" if h.start_ms is not None else " (summary)")
+            + (
+                f" at {clock(h.start_ms)}"
+                if h.start_ms is not None
+                else " (document)"
+                if h.document_id
+                else " (summary)"
+            )
             + f": {' '.join(h.text.split())}"
             for cid, h in ids.items()
         )
@@ -101,7 +108,14 @@ class SearchService:
             parsed.answer.strip(),
             True,
             [
-                Citation(c, ids[c].meeting_id, ids[c].title, ids[c].start_ms, ids[c].text[:300])
+                Citation(
+                    c,
+                    ids[c].meeting_id,
+                    ids[c].title,
+                    ids[c].start_ms,
+                    ids[c].text[:300],
+                    ids[c].document_id,
+                )
                 for c in cited
             ],
             out.provider,

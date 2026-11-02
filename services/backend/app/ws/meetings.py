@@ -107,3 +107,68 @@ async def meeting_socket(
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await send_task
         s.sessions.released(meeting_id)
+
+
+#: What project members watching a shared meeting may see. Cards, detected questions and quota
+#: notices are private to the person recording.
+WATCH_TYPES = frozenset(
+    {
+        "meeting.started",
+        "transcript.partial",
+        "transcript.final",
+        "speaker.identified",
+        "summary.ready",
+        "provider.switched",
+    }
+)
+
+
+@router.websocket("/ws/meetings/{meeting_id}/watch")
+async def watch_socket(
+    websocket: WebSocket, meeting_id: str, token: str = "", last_seq: int = 0
+) -> None:
+    """Read-only live view for project members: captions and the summary notice, nothing private."""
+    from app.api.meetings import can_read
+
+    await websocket.accept()
+    try:
+        principal = verify_token(token, scope="watch", meeting_id=meeting_id)
+    except InvalidToken as e:
+        await websocket.close(UNAUTHORIZED, f"invalid token: {e}"[:120])
+        return
+    s = services()
+    meeting = await s.meetings.get(meeting_id)
+    if meeting is None or not await can_read(meeting, principal.user_id):
+        await websocket.close(NOT_FOUND, "meeting not found")
+        return
+    session = s.sessions.get_any(meeting_id)
+    if session is None:
+        await websocket.close(ENDED, "meeting isn't live")
+        return
+    queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    def peer(event: dict[str, Any]) -> None:
+        if event.get("type") not in WATCH_TYPES:
+            return
+        queue.put_nowait(None if queue.qsize() >= MAX_QUEUE else event)
+
+    async def writer() -> None:
+        while (event := await queue.get()) is not None:
+            await websocket.send_json(event)
+        await websocket.close(1013, "client too slow; reconnect with last_seq")
+
+    await session.attach(peer, last_seq)
+    send_task = asyncio.create_task(writer())
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg["type"] == "websocket.disconnect":
+                break
+            # Watchers can't send audio or controls; pings are fine and need no reply.
+    except WebSocketDisconnect:
+        pass
+    finally:
+        session.detach(peer)
+        send_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await send_task

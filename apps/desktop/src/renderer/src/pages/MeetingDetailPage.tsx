@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { speakerLabel, type CachedMeetingDetail } from "../../../shared/ipc";
-import { EmptyState, inputClass, PageHeader } from "../components/EmptyState";
+import { buttonClass, EmptyState, inputClass, PageHeader } from "../components/EmptyState";
+import { ShareControl } from "../projects/ShareControl";
 import { SummaryPanel } from "../summary/SummaryPanel";
 import { formatWhen } from "./MeetingsHome";
 
@@ -14,7 +15,7 @@ function SpeakerName({ meeting, id }: { meeting: CachedMeetingDetail; id: string
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState("");
   const label = speakerLabel(id, meeting.speaker_names);
-  if (!id.startsWith("spk_")) return <span className="mr-1.5 font-semibold">{label}:</span>;
+  if (!id.startsWith("spk_") || !meeting.is_mine) return <span className="mr-1.5 font-semibold">{label}:</span>;
   if (editing) {
     return (
       <form
@@ -66,7 +67,15 @@ export function MeetingDetailPage() {
   const highlight = at === null ? null : [...meeting.transcript].reverse().find((s) => s.start_ms <= at)?.segment_id ?? meeting.transcript[0]?.segment_id;
   return (
     <section className="max-w-3xl">
-      <PageHeader title={meeting.title} />
+      <PageHeader title={meeting.title}>
+        <div className="flex items-center gap-2">
+          {!meeting.is_mine && <span className="rounded bg-indigo-100 px-2 py-0.5 text-xs text-indigo-800 dark:bg-indigo-950 dark:text-indigo-200">Shared · read-only</span>}
+          {!meeting.is_mine && meeting.ended_at === null && (
+            <Link to={`/meetings/${meeting.id}/live`} className={buttonClass}>Watch live</Link>
+          )}
+          {meeting.is_mine && <ShareControl meeting={meeting} />}
+        </div>
+      </PageHeader>
       <p className="-mt-4 mb-6 text-sm text-gray-500 dark:text-gray-400">
         {formatWhen(meeting.started_at)}
         {meeting.ended_at ? ` – ${new Date(meeting.ended_at * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}` : " · in progress"}

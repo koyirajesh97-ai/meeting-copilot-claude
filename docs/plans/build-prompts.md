@@ -218,7 +218,7 @@ Acceptance: a fixture standup shows the script card on the user's turn only; the
 items from the previous fixture meeting.
 ```
 
-## Prompt 13: Projects and team sync (Phase 3)
+## Prompt 13: Projects and team sync (Phase 3) — DONE (live watching uses the backend watch socket, not Supabase Realtime; see PRD)
 
 ```
 Read AGENTS.md and docs/PRD.md ("Data model and project sync", FR-22 to FR-26).

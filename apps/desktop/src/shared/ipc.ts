@@ -45,6 +45,11 @@ export const IPC = {
   standupToday: "standup:today",
   standupSave: "standup:save",
   brief: "meeting:brief",
+  projects: "projects:call",
+  meetingEdit: "meetings:edit",
+  watchStart: "watch:start",
+  watchStop: "watch:stop",
+  watchEvent: "watch:event",
   search: "search:query",
   ask: "search:ask",
 } as const;
@@ -95,6 +100,65 @@ export interface Brief {
   last_open_questions: string[];
   agenda: string;
 }
+
+export type ProjectRole = "owner" | "member" | "viewer";
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  vocabulary: string[];
+  role: ProjectRole;
+}
+
+export interface ProjectMember {
+  user_id: string | null;
+  email: string | null;
+  name: string | null;
+  role: ProjectRole;
+  pending: boolean;
+}
+
+export interface ProjectDocument {
+  id: string;
+  title: string;
+  source_url: string | null;
+  uploaded_by: string;
+  created_at: number;
+  chunks?: number | null;
+}
+
+export interface BoardItem {
+  id: string;
+  text: string;
+  owner: string | null;
+  due: string | null;
+  status: "open" | "done" | "dropped" | string;
+  source: string;
+  meeting_id: string;
+  meeting_title: string;
+  overdue: boolean;
+}
+
+/** Everything the Projects screens need, as one bridge call per action. */
+export type ProjectCall =
+  | { op: "list" }
+  | { op: "create"; name: string; description?: string }
+  | { op: "get"; id: string }
+  | { op: "edit"; id: string; name?: string; description?: string }
+  | { op: "delete"; id: string }
+  | { op: "members"; id: string }
+  | { op: "invite"; id: string; email: string; role: ProjectRole }
+  | { op: "setRole"; id: string; userId: string; role: ProjectRole }
+  | { op: "removeMember"; id: string; userId: string }
+  | { op: "vocabulary"; id: string }
+  | { op: "setVocabulary"; id: string; terms: string[] }
+  | { op: "documents"; id: string }
+  | { op: "uploadDocument"; id: string }
+  | { op: "addLink"; id: string; url: string; title?: string }
+  | { op: "deleteDocument"; id: string; docId: string }
+  | { op: "board"; id: string; filter: "all" | "mine" | "overdue" }
+  | { op: "editItem"; itemId: string; status?: string; owner?: string; due?: string };
 
 export interface EnrolledVoice {
   id: string;
@@ -177,6 +241,8 @@ export interface StartOptions {
   mode: "cloud" | "local" | "live-only";
   visibility: "private" | "project";
   agenda?: string;
+  /** The project the meeting belongs to (its vocabulary is used); null for personal meetings. */
+  project_id?: string | null;
 }
 
 export interface CachedSegment {
@@ -196,6 +262,11 @@ export interface CachedMeeting {
   started_at: number;
   ended_at: number | null;
   segment_count: number;
+  /** False for project-shared meetings someone else recorded (read-only). */
+  is_mine: boolean;
+  is_live: boolean;
+  visibility: "private" | "project" | string;
+  project_id: string | null;
 }
 
 export interface CachedMeetingDetail extends CachedMeeting {
@@ -332,6 +403,16 @@ export interface CopilotApi {
   };
   /** Pre-meeting brief for a meeting about to start. */
   brief(title: string, type: string, agenda: string): Promise<Brief>;
+  /** Projects, members, vocabulary, documents and the action-item board. */
+  projects<T = unknown>(call: ProjectCall): Promise<T>;
+  /** Rename a meeting, move it to a project, or share it with the project (owner only). */
+  editMeeting(id: string, patch: { title?: string; type?: string; visibility?: string; project_id?: string }): Promise<void>;
+  /** Watch a project-shared meeting live (captions and the summary notice only). */
+  watch: {
+    start(meetingId: string): Promise<void>;
+    stop(): Promise<void>;
+    onEvent(listener: (event: MeetingEvent) => void): () => void;
+  };
   /** Search all your meetings (backend; needs a connection). */
   search(query: string): Promise<SearchHit[]>;
   /** "Ask my meetings": a cited answer, or found: false when nothing relevant exists. */
@@ -377,6 +458,8 @@ export const ROUTES = {
   ask: "/ask",
   standup: "/standup",
   projects: "/projects",
+  project: "/projects/:id",
+  meetingLive: "/meetings/:id/live",
   settings: "/settings",
   systemAudioHelp: "/help/system-audio",
   voice: "/voice",
@@ -386,5 +469,5 @@ export const ROUTES = {
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */
 export function isAllowedRoute(route: string): boolean {
   if (Object.values(ROUTES).includes(route as never) && !route.includes(":")) return true;
-  return /^\/meetings\/[\w-]{1,64}(\?t=\d{1,9})?$/.test(route);
+  return /^\/meetings\/[\w-]{1,64}(\?t=\d{1,9}|\/live)?$/.test(route);
 }

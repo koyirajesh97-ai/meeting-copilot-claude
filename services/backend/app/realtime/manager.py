@@ -31,6 +31,8 @@ class SessionManager:
         #: Live features added to every meeting (speaker naming, live help).
         self.plugin_factories: list[PluginFactory] = plugin_factories or []
         self._sessions: dict[str, MeetingSession] = {}
+        #: Ended meetings kept briefly so watchers still get summary.ready.
+        self._finished: dict[str, MeetingSession] = {}
         self._reapers: dict[str, asyncio.Task] = {}
         self._lock = asyncio.Lock()
 
@@ -72,14 +74,25 @@ class SessionManager:
         s = self._sessions.pop(meeting_id, None)
         if s:
             await s.end()
+            if mark_ended and s.meeting.mode != "live-only":
+                self._finished[meeting_id] = s
+                while len(self._finished) > 100:
+                    self._finished.pop(next(iter(self._finished)))
         if mark_ended:
             await self.store.end(meeting_id)
+
+    def get_any(self, meeting_id: str) -> MeetingSession | None:
+        """A live session, or one that just ended and is waiting for its summary."""
+        return self._sessions.get(meeting_id) or self._finished.get(meeting_id)
+
+    def watchable(self, meeting_id: str) -> bool:
+        return self.get_any(meeting_id) is not None
 
     async def notify_summary(self, meeting_id: str, summary_id: str) -> None:
         """Tell anyone still connected that the summary is saved."""
         from app.events import SummaryReady
 
-        s = self._sessions.get(meeting_id)
+        s = self._sessions.get(meeting_id) or self._finished.pop(meeting_id, None)
         if s:
             await s.emit(SummaryReady, summary_id=summary_id)
 

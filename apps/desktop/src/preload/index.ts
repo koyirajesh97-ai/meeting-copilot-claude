@@ -47,6 +47,17 @@ const api: CopilotApi = {
     save: (edit) => ipcRenderer.invoke(IPC.standupSave, edit),
   },
   brief: (title, type, agenda) => ipcRenderer.invoke(IPC.brief, title, type, agenda),
+  projects: (call) => ipcRenderer.invoke(IPC.projects, call),
+  editMeeting: (id, patch) => ipcRenderer.invoke(IPC.meetingEdit, id, patch),
+  watch: {
+    start: (meetingId) => ipcRenderer.invoke(IPC.watchStart, meetingId),
+    stop: () => ipcRenderer.invoke(IPC.watchStop),
+    onEvent: (listener) => {
+      const wrapped = (_e: IpcRendererEvent, event: MeetingEvent) => listener(event);
+      ipcRenderer.on(IPC.watchEvent, wrapped);
+      return () => ipcRenderer.removeListener(IPC.watchEvent, wrapped);
+    },
+  },
   search: (query) => ipcRenderer.invoke(IPC.search, query),
   ask: (question) => ipcRenderer.invoke(IPC.ask, question),
   meetings: {
