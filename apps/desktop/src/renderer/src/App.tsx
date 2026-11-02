@@ -9,6 +9,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { StandupPage } from "./pages/StandupPage";
 import { StartMeetingPage } from "./pages/StartMeetingPage";
 import { SystemAudioHelpPage } from "./pages/SystemAudioHelpPage";
+import { VoicePage } from "./pages/VoicePage";
 import { useAppState, useSettings } from "./useAppState";
 
 const NAV = [
@@ -17,6 +18,7 @@ const NAV = [
   { to: ROUTES.ask, label: "Ask my meetings" },
   { to: ROUTES.standup, label: "Standup prep" },
   { to: ROUTES.projects, label: "Projects" },
+  { to: ROUTES.voice, label: "Your voice" },
   { to: ROUTES.settings, label: "Settings" },
 ];
 
@@ -59,6 +61,7 @@ export function App() {
             <Route path={ROUTES.projects} element={<ProjectsPage />} />
             <Route path={ROUTES.settings} element={<SettingsPage />} />
             <Route path={ROUTES.systemAudioHelp} element={<SystemAudioHelpPage />} />
+            <Route path={ROUTES.voice} element={<VoicePage />} />
           </Routes>
         </main>
       </div>

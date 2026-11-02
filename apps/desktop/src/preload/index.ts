@@ -25,6 +25,16 @@ const api: CopilotApi = {
     devSignIn: () => ipcRenderer.invoke(IPC.authDevSignIn),
     signOut: () => ipcRenderer.invoke(IPC.authSignOut),
   },
+  voice: {
+    enroll: (name, consent) => ipcRenderer.invoke(IPC.voiceEnroll, name, consent),
+    list: () => ipcRenderer.invoke(IPC.voiceList),
+    delete: (id) => ipcRenderer.invoke(IPC.voiceDelete, id),
+    onProgress: (listener) => {
+      const wrapped = (_e: IpcRendererEvent, p: { elapsed: number; level: number; total: number }) => listener(p);
+      ipcRenderer.on(IPC.voiceProgress, wrapped);
+      return () => ipcRenderer.removeListener(IPC.voiceProgress, wrapped);
+    },
+  },
   search: (query) => ipcRenderer.invoke(IPC.search, query),
   ask: (question) => ipcRenderer.invoke(IPC.ask, question),
   meetings: {

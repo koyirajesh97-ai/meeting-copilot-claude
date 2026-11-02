@@ -65,9 +65,17 @@ class Deployment(BaseModel):
         return cls(provider=provider, model=model)
 
 
+class SpeakerIdConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    threshold: float = Field(default=0.75, ge=0, le=1)
+    min_audio_s: float = Field(default=6.0, gt=0)
+    max_audio_s: float = Field(default=20.0, gt=0)
+
+
 class RouterConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     tasks: dict[str, list[Deployment]]
+    speaker_id: SpeakerIdConfig = Field(default_factory=SpeakerIdConfig)
     timeouts_s: dict[str, float] = Field(default_factory=dict)
     providers: dict[str, ProviderConfig]
     # Cooldown: after this many consecutive failures a deployment rests for cooldown_s.

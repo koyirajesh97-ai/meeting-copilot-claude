@@ -9,7 +9,7 @@ import logging
 from app.meetings.store import Meeting, MeetingStore
 from app.router.stt import SttRegistry
 
-from .session import MeetingSession
+from .session import MeetingSession, PluginFactory
 
 log = logging.getLogger("app.realtime")
 
@@ -19,11 +19,17 @@ IDLE_CLOSE_S = 10 * 60
 
 class SessionManager:
     def __init__(
-        self, registry: SttRegistry, store: MeetingStore, idle_close_s: float = IDLE_CLOSE_S
+        self,
+        registry: SttRegistry,
+        store: MeetingStore,
+        idle_close_s: float = IDLE_CLOSE_S,
+        plugin_factories: list[PluginFactory] | None = None,
     ) -> None:
         self.registry = registry
         self.store = store
         self.idle_close_s = idle_close_s
+        #: Live features added to every meeting (speaker naming, live help).
+        self.plugin_factories: list[PluginFactory] = plugin_factories or []
         self._sessions: dict[str, MeetingSession] = {}
         self._reapers: dict[str, asyncio.Task] = {}
         self._lock = asyncio.Lock()
@@ -35,7 +41,7 @@ class SessionManager:
         async with self._lock:
             s = self._sessions.get(meeting.id)
             if s is None:
-                s = MeetingSession(meeting, self.registry, self.store)
+                s = MeetingSession(meeting, self.registry, self.store, self.plugin_factories)
                 self._sessions[meeting.id] = s
         self._cancel_reaper(meeting.id)
         await s.start()

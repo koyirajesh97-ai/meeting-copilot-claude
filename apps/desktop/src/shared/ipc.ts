@@ -33,6 +33,10 @@ export const IPC = {
   meetingsRenameSpeaker: "meetings:rename-speaker",
   meetingsMarkdown: "meetings:markdown",
   meetingsExport: "meetings:export",
+  voiceEnroll: "voice:enroll",
+  voiceList: "voice:list",
+  voiceDelete: "voice:delete",
+  voiceProgress: "voice:progress",
   search: "search:query",
   ask: "search:ask",
 } as const;
@@ -53,6 +57,22 @@ export interface AskAnswer {
   citations: { id: string; meeting_id: string; title: string; start_ms: number | null; quote: string }[];
   provider: string | null;
 }
+
+export interface EnrolledVoice {
+  id: string;
+  display_name: string;
+  project_id: string | null;
+  consent_at: number;
+}
+
+export const ENROLL_SECONDS = 30;
+
+/** The consent text shown before recording; the checkbox must be ticked to continue. */
+export const VOICE_CONSENT_TEXT =
+  "A voiceprint is biometric data: a numeric summary of how your voice sounds. Meeting Copilot " +
+  "uses it only to label you by name in meetings of your projects. It's made from the recording " +
+  "you make now, stored encrypted, never shared, and you can delete it at any time. The recording " +
+  "itself is not kept.";
 
 /** Route that opens a meeting, optionally at a moment (for citations). */
 export function meetingRoute(id: string, startMs?: number | null): string {
@@ -222,6 +242,8 @@ export interface AppState {
   /** Last overlay action pressed, for the stub UI. */
   lastAction: { action: OverlayAction; at: number } | null;
   audio: ChannelStatus;
+  /** True while recording a voice sample for enrollment (the indicator shows it). */
+  enrolling: boolean;
   auth: AuthState;
   live: LiveState;
 }
@@ -244,6 +266,13 @@ export interface CopilotApi {
     devAvailable(): Promise<boolean>;
     devSignIn(): Promise<AuthState>;
     signOut(): Promise<AuthState>;
+  };
+  voice: {
+    /** Record ENROLL_SECONDS of mic audio and enroll it. `consent` must be true. */
+    enroll(displayName: string, consent: boolean): Promise<EnrolledVoice>;
+    list(): Promise<EnrolledVoice[]>;
+    delete(id: string): Promise<void>;
+    onProgress(listener: (p: { elapsed: number; level: number; total: number }) => void): () => void;
   };
   /** Search all your meetings (backend; needs a connection). */
   search(query: string): Promise<SearchHit[]>;
@@ -291,6 +320,7 @@ export const ROUTES = {
   projects: "/projects",
   settings: "/settings",
   systemAudioHelp: "/help/system-audio",
+  voice: "/voice",
 } as const;
 
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */

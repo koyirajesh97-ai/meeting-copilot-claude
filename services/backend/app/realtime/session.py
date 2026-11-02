@@ -10,7 +10,7 @@ import asyncio
 import contextlib
 import itertools
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any, Literal
 
 from pydantic import BaseModel
@@ -134,6 +134,8 @@ class ChannelWorker:
             return
         pos = self.timeline.audio_ms
         self.timeline.on_audio(len(pcm))
+        for plugin in self.session.plugins:
+            plugin.on_audio(self.channel, pos, pcm)
         if self.stt is None or (self._switching and not self._switching.done()):
             if self._buffer_pos is None:
                 self._buffer_pos = pos
@@ -221,18 +223,18 @@ class ChannelWorker:
                 start_ms=start,
                 end_ms=max(start, end),
             )
-            await self.session.save_segment(
-                Segment(
-                    self.session.meeting.id,
-                    seg_id,
-                    self.channel,
-                    speaker,
-                    r.text,
-                    start,
-                    max(start, end),
-                    provider,
-                )
+            segment = Segment(
+                self.session.meeting.id,
+                seg_id,
+                self.channel,
+                speaker,
+                r.text,
+                start,
+                max(start, end),
+                provider,
             )
+            await self.session.save_segment(segment)
+            await self.session.after_final(segment, base + r.start_ms, base + r.end_ms)
         else:
             metrics.record("stt.partial_ms", latency, provider)
             await self.session.emit(
@@ -261,8 +263,35 @@ class ChannelWorker:
                 await asyncio.wait_for(self._reader, 5)
 
 
+class Plugin:
+    """A live feature attached to a meeting (speaker naming, live help...). Override what you need."""
+
+    async def start(self) -> None: ...
+
+    def on_audio(self, channel: str, pos_ms: float, pcm: bytes) -> None: ...
+
+    async def on_final(
+        self, segment: Segment, channel_start_ms: float, channel_end_ms: float
+    ) -> None: ...
+
+    async def on_control(self, msg: Control, peer: Peer) -> bool:
+        """Return True if handled."""
+        return False
+
+    async def close(self) -> None: ...
+
+
+PluginFactory = Callable[["MeetingSession"], Awaitable[Plugin | None]]
+
+
 class MeetingSession:
-    def __init__(self, meeting: Meeting, registry: SttRegistry, store: MeetingStore) -> None:
+    def __init__(
+        self,
+        meeting: Meeting,
+        registry: SttRegistry,
+        store: MeetingStore,
+        plugin_factories: list[PluginFactory] | None = None,
+    ) -> None:
         self.meeting = meeting
         self.registry = registry
         self.store = store
@@ -276,6 +305,10 @@ class MeetingSession:
         self._lock = asyncio.Lock()
         self.workers = {"mic": ChannelWorker(self, "mic"), "system": ChannelWorker(self, "system")}
         self._started = False
+        self._plugin_factories = plugin_factories or []
+        self.plugins: list[Plugin] = []
+        #: Recent final segments (both channels), for live help.
+        self.recent: list[Segment] = []
 
     def next_segment_id(self) -> str:
         return f"seg_{next(self._segments)}"
@@ -284,6 +317,15 @@ class MeetingSession:
         if self._started:
             return
         self._started = True
+        for make in self._plugin_factories:
+            try:
+                plugin = await make(self)
+            except Exception:
+                log.exception("plugin failed to start")
+                continue
+            if plugin is not None:
+                await plugin.start()
+                self.plugins.append(plugin)
         # Start both channels' STT without blocking on a slow or missing provider.
         await asyncio.gather(*(w.start() for w in self.workers.values()), return_exceptions=True)
         providers = {
@@ -348,7 +390,10 @@ class MeetingSession:
         elif msg.action == "resume":
             self.paused = False
         else:
-            # catch_up, clarify, follow_up and card_feedback arrive with live help (Phase 2).
+            for plugin in self.plugins:
+                if await plugin.on_control(msg, peer):
+                    return
+            # catch_up, clarify, follow_up and card_feedback need live help (Prompts 10-11).
             await self.emit(
                 Error,
                 code="not_implemented",
@@ -363,8 +408,21 @@ class MeetingSession:
             return  # Live-only: help during the call, nothing saved.
         await self.store.add_segment(segment)
 
+    async def after_final(
+        self, segment: Segment, channel_start_ms: float, channel_end_ms: float
+    ) -> None:
+        self.recent.append(segment)
+        if len(self.recent) > 500:
+            del self.recent[:100]
+        for plugin in self.plugins:
+            try:
+                await plugin.on_final(segment, channel_start_ms, channel_end_ms)
+            except Exception:
+                log.exception("plugin failed on a final segment")
+
     async def end(self) -> None:
         if self.ended:
             return
         self.ended = True
         await asyncio.gather(*(w.close() for w in self.workers.values()), return_exceptions=True)
+        await asyncio.gather(*(p.close() for p in self.plugins), return_exceptions=True)

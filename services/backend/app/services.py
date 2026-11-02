@@ -9,10 +9,13 @@ import os
 from dataclasses import dataclass
 
 from app.jobs.summary import SummaryJobs
+from app.meetings.speakers import InMemorySpeakers, PostgresSpeakers
 from app.meetings.store import InMemoryMeetingStore, MeetingStore
 from app.providers.embeddings import EmbeddingRouter, FakeEmbedder
+from app.providers.speaker_id import FakeSpeakerEmbedder, SpeakerIdRouter
 from app.providers.stt.base import FakeSttAdapter
 from app.realtime.manager import SessionManager
+from app.realtime.speakers import speaker_plugin_factory
 from app.router.client import CompletionClient, FakeClient, LiteLLMClient
 from app.router.config import Deployment, RouterConfig, load_config
 from app.router.quota import Cooldowns, InMemoryQuotaStore, QuotaStore, QuotaTracker
@@ -48,6 +51,8 @@ class Services:
     sessions: SessionManager
     summaries: SummaryJobs
     search: SearchService
+    speakers: InMemorySpeakers | PostgresSpeakers
+    speaker_id: SpeakerIdRouter
 
 
 def build_services(
@@ -57,6 +62,7 @@ def build_services(
     stt_factory=None,
     meetings: MeetingStore | None = None,
     embed_factory=None,
+    speaker_factory=None,
 ) -> Services:
     cfg = config or load_config()
     if fake_providers_enabled():
@@ -66,6 +72,7 @@ def build_services(
         client = client or FakeClient(responder=fake_responder)
         stt_factory = stt_factory or fake_stt_factory
         embed_factory = embed_factory or (lambda _d, _c: FakeEmbedder())
+        speaker_factory = speaker_factory or (lambda _d, _c: FakeSpeakerEmbedder())
     if store is None:
         dsn = os.environ.get("DATABASE_URL")
         if dsn:
@@ -95,7 +102,12 @@ def build_services(
     search = SearchService(index, embedder, router, meetings)
     # Index each meeting once its summary is saved (and again after a regenerate).
     summaries.after_ready.append(search.index_meeting)
-    return Services(cfg, quota, router, stt, meetings, sessions, summaries, search)
+    speakers = PostgresSpeakers(meetings) if hasattr(meetings, "connection") else InMemorySpeakers()
+    speaker_id = SpeakerIdRouter(cfg, **({"factory": speaker_factory} if speaker_factory else {}))
+    sessions.plugin_factories.append(speaker_plugin_factory(speakers, speaker_id, cfg.speaker_id))
+    return Services(
+        cfg, quota, router, stt, meetings, sessions, summaries, search, speakers, speaker_id
+    )
 
 
 _services: Services | None = None

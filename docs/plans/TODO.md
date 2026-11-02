@@ -26,5 +26,9 @@ Follow-ups that were out of scope for the prompt that found them.
 - Meetings are indexed for search when their summary is saved; a meeting whose summary failed
   isn't searchable until Regenerate succeeds. Index on meeting end as well.
 - Install the `embeddings` extra by default once the desktop bundles the backend, or document it.
+- Speaker recognition with real voices: install the `speakers` extra (pyannote + torch), check
+  the 0.75 threshold on consented recordings, and wire the `diarize` library as the CPU
+  alternative (its API wasn't verified here, so it isn't in the chain yet).
+- Re-check unmatched speakers later in long meetings (today: up to max_audio_s, then give up).
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).

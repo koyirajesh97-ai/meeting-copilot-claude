@@ -11,6 +11,12 @@ tasks:                     # tried in order; next one on 429, timeout or bad JSO
   stt_live: [deepgram/nova-3, gladia/live, groq/whisper-large-v3, local/faster-whisper]
   # 384-dimension embeddings for search; every model in this list must produce 384 dims.
   embed:   [local/bge-small-en-v1.5, cloudflare/bge-small-en-v1.5]
+  # Voice embeddings for recognizing enrolled speakers; runs on this machine only.
+  speaker_id: [local/pyannote-wespeaker]
+speaker_id:
+  threshold: 0.75        # cosine similarity needed to name an enrolled speaker
+  min_audio_s: 6         # audio collected per speaker before the first match attempt
+  max_audio_s: 20        # give up (leave "Speaker N") after this much unmatched audio
 timeouts_s: {detect: 1.0, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
 providers:
   groq:

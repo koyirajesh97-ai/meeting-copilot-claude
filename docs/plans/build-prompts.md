@@ -156,7 +156,7 @@ Acceptance: "what did we decide about X" on fixtures returns the right meeting w
 citation.
 ```
 
-## Prompt 9: Voice enrollment and speaker recognition (Phase 2 starts)
+## Prompt 9: Voice enrollment and speaker recognition (Phase 2 starts) — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("Privacy, consent and compliance").

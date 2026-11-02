@@ -11,10 +11,12 @@ import {
   type WebFrameMain,
 } from "electron";
 import { join } from "node:path";
-import { IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions } from "../shared/ipc";
+import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions } from "../shared/ipc";
 import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
 import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
+import { recordMic } from "./audio/enroll";
 import { SileroDetector } from "./audio/silero";
+import { wavBytes } from "./audio/wav";
 import { AuthManager, SIGNED_OUT } from "./backend/auth";
 import { Cache } from "./backend/cache";
 import { BackendClient } from "./backend/client";
@@ -41,6 +43,7 @@ const state: AppState = {
   overlayExpanded: false,
   lastAction: null,
   audio: { mic: OFF, system: OFF },
+  enrolling: false,
   auth: SIGNED_OUT,
   live: { status: "off", meetingId: null },
 };
@@ -281,8 +284,9 @@ function ensureOverlay(): BrowserWindow {
 
 function refreshTray(): void {
   if (!tray) return;
-  tray.setImage(state.capturing ? trayIcons.recording() : trayIcons.idle());
-  tray.setToolTip(state.capturing ? "Meeting Copilot — recording" : "Meeting Copilot");
+  const recording = state.capturing || state.enrolling;
+  tray.setImage(recording ? trayIcons.recording() : trayIcons.idle());
+  tray.setToolTip(recording ? "Meeting Copilot — recording" : "Meeting Copilot");
   tray.setContextMenu(
     Menu.buildFromTemplate([
       {
@@ -361,6 +365,26 @@ function registerIpc(): void {
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.voiceList, () => backend!.listVoices());
+  handle(IPC.voiceDelete, (id) => backend!.deleteVoice(String(id)));
+  handle(IPC.voiceEnroll, async (name, consent) => {
+    if (consent !== true) throw new Error("Tick the consent box first.");
+    if (state.capturing || state.enrolling) throw new Error("Stop the current recording first.");
+    const display = String(name ?? "").trim().slice(0, 100) || state.auth.email || "Me";
+    state.enrolling = true;
+    broadcast();
+    try {
+      // COPILOT_ENROLL_SECONDS shortens the sample for tests (the backend needs at least 10 s).
+      const seconds = Math.max(10, Number(process.env.COPILOT_ENROLL_SECONDS) || ENROLL_SECONDS);
+      const pcm = await recordMic(new RendererSource(captureHost!, "mic", getSettings().micDeviceId), seconds, (elapsed, level) =>
+        sendToWindows(IPC.voiceProgress, { elapsed, level, total: seconds }),
+      );
+      return await backend!.enrollVoice(wavBytes(pcm), display, true);
+    } finally {
+      state.enrolling = false;
+      broadcast();
+    }
+  });
   handle(IPC.ask, (q) => backend!.ask(String(q).slice(0, 1000)));
   const meetingId = (id: unknown) => {
     if (typeof id !== "string" || !/^[\w-]{1,64}$/.test(id)) throw new Error("Bad meeting id");

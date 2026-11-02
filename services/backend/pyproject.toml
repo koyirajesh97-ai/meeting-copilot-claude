@@ -19,6 +19,8 @@ dependencies = [
 local = ["faster-whisper>=1.1"]
 # Local embeddings for search (about 100 MB model, CPU).
 embeddings = ["fastembed>=0.4"]
+# Speaker recognition with pyannote (large: pulls in torch). Needs HF_TOKEN and the model terms.
+speakers = ["pyannote.audio>=3.3"]
 
 [dependency-groups]
 dev = [

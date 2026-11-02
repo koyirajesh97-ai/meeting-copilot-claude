@@ -1,6 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
-import type { ActionItem, AskAnswer, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
+import type { ActionItem, AskAnswer, EnrolledVoice, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
   constructor(
@@ -112,6 +112,37 @@ export class BackendClient {
 
   getMeeting(meetingId: string): Promise<MeetingDetailOut> {
     return this.request("GET", `/meetings/${encodeURIComponent(meetingId)}`);
+  }
+
+  async enrollVoice(wav: Buffer, displayName: string, consent: boolean): Promise<EnrolledVoice> {
+    const t = await this.token();
+    if (!t) throw new BackendError("Not signed in", 401);
+    const form = new FormData();
+    form.set("consent", consent ? "true" : "false");
+    form.set("display_name", displayName);
+    form.set("audio", new Blob([new Uint8Array(wav)], { type: "audio/wav" }), "voice.wav");
+    const res = await this.fetchImpl(`${this.baseUrl()}/speakers/enroll`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${t}` },
+      body: form,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) {
+      const detail = await res.json().then(
+        (j) => (j as { detail?: string }).detail ?? res.statusText,
+        () => res.statusText,
+      );
+      throw new BackendError(`Enrollment failed: ${res.status} ${detail}`, res.status);
+    }
+    return (await res.json()) as EnrolledVoice;
+  }
+
+  listVoices(): Promise<EnrolledVoice[]> {
+    return this.request("GET", "/speakers");
+  }
+
+  deleteVoice(id: string): Promise<void> {
+    return this.request("DELETE", `/speakers/${encodeURIComponent(id)}`);
   }
 
   search(q: string): Promise<SearchHit[]> {

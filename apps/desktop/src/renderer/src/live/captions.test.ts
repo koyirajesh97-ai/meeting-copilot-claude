@@ -44,4 +44,11 @@ describe("captions", () => {
     expect(s.finals).toEqual([]);
     expect(s.meetingId).toBe("m2");
   });
+
+  it("names speakers once their voice is recognized, past and future lines alike", () => {
+    let s = run([ev({ type: "transcript.final", segment_id: "seg_1", channel: "system", speaker_id: "spk_1", text: "hi", start_ms: 0, end_ms: 1 })]);
+    s = reduceCaptions(s, ev({ type: "speaker.identified", speaker_id: "spk_1", display_name: "Priya", confidence: 0.9 }));
+    s = reduceCaptions(s, ev({ type: "transcript.partial", channel: "system", speaker_id: "spk_1", text: "again", start_ms: 5 }));
+    expect(visibleLines(s).map((l) => l.speaker)).toEqual(["Priya", "Priya"]);
+  });
 });

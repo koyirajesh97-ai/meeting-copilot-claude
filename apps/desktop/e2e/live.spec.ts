@@ -60,7 +60,11 @@ async function launch(): Promise<ElectronApplication> {
     `--use-file-for-fake-audio-capture=${SPEECH}`,
   ];
   if (process.getuid?.() === 0) args.push("--no-sandbox");
-  return electron.launch({ args, cwd: join(import.meta.dirname, "..") });
+  return electron.launch({
+    args,
+    cwd: join(import.meta.dirname, ".."),
+    env: { ...process.env, COPILOT_ENROLL_SECONDS: "10" },
+  });
 }
 
 async function windowByTitle(app: ElectronApplication, title: string): Promise<Page> {
@@ -82,7 +86,7 @@ test.afterAll(() => {
 });
 
 test("record a meeting with live captions, then find its transcript after a restart", async () => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   let app = await launch();
   let main = await windowByTitle(app, "Meeting Copilot");
   const overlay = await windowByTitle(app, "Meeting Copilot overlay");
@@ -92,6 +96,19 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
   await main.getByRole("button", { name: "Use the local dev login" }).click();
   await expect(main.getByTestId("signed-in-as")).toContainText("dev@localhost");
+
+  // Enroll a voice: consent is required, the indicator shows while recording, and it can be deleted.
+  await main.getByRole("navigation").getByRole("link", { name: "Your voice" }).click();
+  const record = main.getByRole("button", { name: /Record \d+ seconds/ });
+  await expect(record).toBeDisabled();
+  await main.getByLabel("I agree to a voiceprint").check();
+  await main.getByLabel("Name to show").fill("Dev User");
+  await record.click();
+  await expect(main.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "true");
+  await expect(main.getByTestId("enrolled-voice")).toContainText("Dev User", { timeout: 30_000 });
+  await expect(main.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "false");
+  await main.getByRole("button", { name: "Delete my voiceprint" }).click();
+  await expect(main.getByTestId("enrolled-voice")).toHaveCount(0);
 
   // Start a meeting from the Start meeting screen.
   await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();

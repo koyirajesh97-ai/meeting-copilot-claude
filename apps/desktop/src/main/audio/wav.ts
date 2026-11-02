@@ -92,3 +92,9 @@ export function repairWav(path: string): boolean {
   }
 }
 
+
+/** A complete 16 kHz mono PCM16 WAV in memory (for uploads). */
+export function wavBytes(pcm: Int16Array, sampleRate = SAMPLE_RATE): Buffer {
+  const data = Buffer.from(pcm.buffer, pcm.byteOffset, pcm.byteLength);
+  return Buffer.concat([header(data.byteLength, sampleRate), data]);
+}
