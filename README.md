@@ -5,7 +5,8 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompt 0 (repo bootstrap) is done. Nothing records or transcribes yet.
+Status: Prompts 0 (repo bootstrap) and 1 (shared event schema) are done. Nothing records or
+transcribes yet.
 
 ## 1. Create the free accounts and keys
 
@@ -69,7 +70,7 @@ backend. GitHub Actions runs the same command on every push.
 ```
 apps/desktop        Electron app (Prompt 2)
 apps/mobile         Expo phone companion (Prompt 15)
-packages/shared     Event schema and generated types (Prompt 1)
+packages/shared     Event schema (schema/events.json) and generated types; `pnpm -w gen:events`
 services/backend    FastAPI + LiteLLM backend
 config/providers.yaml   Free AI providers, limits, fallback order, data policy
 supabase/migrations SQL + row-level security (Prompt 6)

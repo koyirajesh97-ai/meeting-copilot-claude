@@ -16,6 +16,7 @@ Phases: 1 capture + transcript + summary + history, 2 live help, 3 projects + sy
 ## Commands
 - Desktop: pnpm -C apps/desktop dev | test | lint
 - Backend: cd services/backend && uv run fastapi dev | uv run pytest | uv run ruff check
+- Event types: edit packages/shared/schema/events.json, then pnpm -w gen:events (check fails if stale)
 - Everything: pnpm -w check
 
 ## AI rules

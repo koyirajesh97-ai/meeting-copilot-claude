@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Fail if the generated event types don't match packages/shared/schema/events.json.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+FILES=(packages/shared/src/events.ts services/backend/app/events.py)
+pnpm run -s gen:events >/dev/null
+
+if ! git diff --quiet -- "${FILES[@]}" || [ -n "$(git ls-files --others --exclude-standard -- "${FILES[@]}")" ]; then
+  echo "Generated event types are stale. Run 'pnpm -w gen:events' and commit the result:" >&2
+  git status --short -- "${FILES[@]}" >&2
+  git --no-pager diff --stat -- "${FILES[@]}" >&2
+  exit 1
+fi
+echo "Generated event types are up to date."

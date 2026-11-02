@@ -245,6 +245,15 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `summary.ready` | summary_id | The summary is saved |
 | `error` | code, message, retryable | Anything fails |
 
+Value sets and shapes, as defined in `packages/shared/schema/events.json`:
+
+- `channel`: `mic` (always the user, speaker `me`) or `system` (the meeting's audio).
+- `mode`: `cloud`, `local` or `live-only`. `providers` maps each task to the active provider.
+- Card `kind`: `answer`, `topic`, `clarify`, `catch_up`, `standup` or `follow_up`.
+- A source is `{type: meeting | document | standup | transcript, id, at_ms?}`.
+- `card.delta` carries `card_id` and `text` to append, plus optional updated `sources` and `confidence`.
+- `confidence` is 0 to 1; `seq`, `ts_ms` and all `*_ms` offsets are non-negative integers.
+
 Example event:
 
 ```json

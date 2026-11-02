@@ -1,0 +1,26 @@
+[
+  { "type": "meeting.started", "seq": 0, "meeting_id": "m_123", "ts_ms": 1830455000000, "mode": "cloud", "providers": { "stt_live": "deepgram/nova-3", "card": "groq/openai/gpt-oss-20b" } },
+  { "type": "transcript.partial", "seq": 1, "meeting_id": "m_123", "ts_ms": 1830455001000, "channel": "system", "speaker_id": "spk_2", "text": "So when is the prod", "start_ms": 1200 },
+  { "type": "transcript.final", "seq": 2, "meeting_id": "m_123", "ts_ms": 1830455002000, "segment_id": "seg_1", "channel": "system", "speaker_id": "spk_2", "text": "So when is the prod deploy, Sai?", "start_ms": 1200, "end_ms": 3100 },
+  { "type": "transcript.final", "seq": 3, "meeting_id": "m_123", "ts_ms": 1830455005000, "segment_id": "seg_2", "channel": "mic", "speaker_id": "me", "text": "Thursday, after the cert renewal.", "start_ms": 4000, "end_ms": 5600 },
+  { "type": "speaker.identified", "seq": 4, "meeting_id": "m_123", "ts_ms": 1830455006000, "speaker_id": "spk_2", "display_name": "Priya", "confidence": 0.91 },
+  { "type": "question.detected", "seq": 5, "meeting_id": "m_123", "ts_ms": 1830455002300, "segment_id": "seg_1", "addressed_to_me": true, "topic": "prod deploy date" },
+  {
+    "type": "card.created",
+    "seq": 412,
+    "meeting_id": "m_123",
+    "ts_ms": 1830455123000,
+    "card_id": "c_88",
+    "kind": "answer",
+    "text": "- Prod deploy moved to Thursday after the cert renewal\n- Rollback plan is in the runbook",
+    "sources": [{ "type": "meeting", "id": "m_101", "at_ms": 734000 }, { "type": "document", "id": "doc_7" }],
+    "confidence": 0.82,
+    "provider": "groq/gpt-oss-20b"
+  },
+  { "type": "card.delta", "seq": 413, "meeting_id": "m_123", "ts_ms": 1830455123400, "card_id": "c_88", "text": "\n- Owner for rollback is me" },
+  { "type": "card.delta", "seq": 414, "meeting_id": "m_123", "ts_ms": 1830455123600, "card_id": "c_88", "text": "", "sources": [{ "type": "standup", "id": "su_2026-11-02" }], "confidence": 0.85 },
+  { "type": "provider.switched", "seq": 415, "meeting_id": "m_123", "ts_ms": 1830455124000, "task": "card", "from": "groq/openai/gpt-oss-20b", "to": "mistral/mistral-small-latest", "reason": "429" },
+  { "type": "quota.warning", "seq": 416, "meeting_id": "m_123", "ts_ms": 1830455125000, "provider": "groq", "task": "card", "percent_used": 81.5 },
+  { "type": "summary.ready", "seq": 900, "meeting_id": "m_123", "ts_ms": 1830458600000, "summary_id": "sum_5" },
+  { "type": "error", "seq": 901, "meeting_id": "m_123", "ts_ms": 1830458600100, "code": "stt_unavailable", "message": "All live transcription providers failed", "retryable": true }
+]

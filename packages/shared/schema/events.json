@@ -1,1 +1,231 @@
-{ "type": "object", "$comment": "Event schemas are defined in Prompt 1." }
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://meeting-copilot.local/schema/events.json",
+  "title": "MeetingEvent",
+  "description": "Events the backend sends down the meeting WebSocket. The only source of event types: run `pnpm -w gen:events` after editing.",
+  "oneOf": [
+    { "$ref": "#/$defs/MeetingStarted" },
+    { "$ref": "#/$defs/TranscriptPartial" },
+    { "$ref": "#/$defs/TranscriptFinal" },
+    { "$ref": "#/$defs/SpeakerIdentified" },
+    { "$ref": "#/$defs/QuestionDetected" },
+    { "$ref": "#/$defs/CardCreated" },
+    { "$ref": "#/$defs/CardDelta" },
+    { "$ref": "#/$defs/ProviderSwitched" },
+    { "$ref": "#/$defs/QuotaWarning" },
+    { "$ref": "#/$defs/SummaryReady" },
+    { "$ref": "#/$defs/Error" }
+  ],
+  "$defs": {
+    "Envelope": {
+      "description": "Fields every event carries.",
+      "type": "object",
+      "properties": {
+        "seq": { "type": "integer", "minimum": 0, "description": "Increases by one per event in a meeting; used to replay after a reconnect." },
+        "meeting_id": { "type": "string" },
+        "ts_ms": { "type": "integer", "minimum": 0, "description": "Server time in Unix milliseconds." }
+      },
+      "required": ["seq", "meeting_id", "ts_ms"]
+    },
+    "MeetingMode": { "type": "string", "enum": ["cloud", "local", "live-only"] },
+    "Channel": { "type": "string", "enum": ["mic", "system"], "description": "mic is always the user; system is the meeting's audio." },
+    "CardKind": { "type": "string", "enum": ["answer", "topic", "clarify", "catch_up", "standup", "follow_up"] },
+    "SourceType": { "type": "string", "enum": ["meeting", "document", "standup", "transcript"] },
+    "Source": {
+      "description": "Where a card's fact came from.",
+      "type": "object",
+      "properties": {
+        "type": { "$ref": "#/$defs/SourceType" },
+        "id": { "type": "string" },
+        "at_ms": { "type": "integer", "minimum": 0, "description": "Offset into a meeting, for meeting and transcript sources." }
+      },
+      "required": ["type", "id"]
+    },
+    "MeetingStarted": {
+      "description": "The socket opened and the meeting is live.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "meeting.started" },
+            "mode": { "$ref": "#/$defs/MeetingMode" },
+            "providers": {
+              "type": "object",
+              "additionalProperties": { "type": "string" },
+              "description": "Active provider per task, e.g. {\"stt_live\": \"deepgram/nova-3\"}."
+            }
+          },
+          "required": ["type", "mode", "providers"]
+        }
+      ]
+    },
+    "TranscriptPartial": {
+      "description": "Interim words. Not stored.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "transcript.partial" },
+            "channel": { "$ref": "#/$defs/Channel" },
+            "speaker_id": { "type": "string" },
+            "text": { "type": "string" },
+            "start_ms": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "channel", "speaker_id", "text", "start_ms"]
+        }
+      ]
+    },
+    "TranscriptFinal": {
+      "description": "A finished utterance. Stored.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "transcript.final" },
+            "segment_id": { "type": "string" },
+            "channel": { "$ref": "#/$defs/Channel" },
+            "speaker_id": { "type": "string" },
+            "text": { "type": "string" },
+            "start_ms": { "type": "integer", "minimum": 0 },
+            "end_ms": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "segment_id", "channel", "speaker_id", "text", "start_ms", "end_ms"]
+        }
+      ]
+    },
+    "SpeakerIdentified": {
+      "description": "A voice matched an enrolled person.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "speaker.identified" },
+            "speaker_id": { "type": "string" },
+            "display_name": { "type": "string" },
+            "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["type", "speaker_id", "display_name", "confidence"]
+        }
+      ]
+    },
+    "QuestionDetected": {
+      "description": "The question detector fired on a segment.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "question.detected" },
+            "segment_id": { "type": "string" },
+            "addressed_to_me": { "type": "boolean" },
+            "topic": { "type": "string" }
+          },
+          "required": ["type", "segment_id", "addressed_to_me", "topic"]
+        }
+      ]
+    },
+    "CardCreated": {
+      "description": "A card starts. Later bullets arrive as card.delta.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "card.created" },
+            "card_id": { "type": "string" },
+            "kind": { "$ref": "#/$defs/CardKind" },
+            "text": { "type": "string" },
+            "sources": { "type": "array", "items": { "$ref": "#/$defs/Source" } },
+            "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+            "provider": { "type": "string" }
+          },
+          "required": ["type", "card_id", "kind", "text", "sources", "confidence", "provider"]
+        }
+      ]
+    },
+    "CardDelta": {
+      "description": "More text for an existing card, appended to its text.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "card.delta" },
+            "card_id": { "type": "string" },
+            "text": { "type": "string" },
+            "sources": { "type": "array", "items": { "$ref": "#/$defs/Source" } },
+            "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["type", "card_id", "text"]
+        }
+      ]
+    },
+    "ProviderSwitched": {
+      "description": "The router fell back to another provider.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "provider.switched" },
+            "task": { "type": "string" },
+            "from": { "type": "string" },
+            "to": { "type": "string" },
+            "reason": { "type": "string" }
+          },
+          "required": ["type", "task", "from", "to", "reason"]
+        }
+      ]
+    },
+    "QuotaWarning": {
+      "description": "A daily free quota passed 80%.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "quota.warning" },
+            "provider": { "type": "string" },
+            "task": { "type": "string" },
+            "percent_used": { "type": "number", "minimum": 0 }
+          },
+          "required": ["type", "provider", "task", "percent_used"]
+        }
+      ]
+    },
+    "SummaryReady": {
+      "description": "The summary is saved.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "summary.ready" },
+            "summary_id": { "type": "string" }
+          },
+          "required": ["type", "summary_id"]
+        }
+      ]
+    },
+    "Error": {
+      "description": "Something failed.",
+      "allOf": [
+        { "$ref": "#/$defs/Envelope" },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "error" },
+            "code": { "type": "string" },
+            "message": { "type": "string" },
+            "retryable": { "type": "boolean" }
+          },
+          "required": ["type", "code", "message", "retryable"]
+        }
+      ]
+    }
+  }
+}

@@ -1,4 +1,4 @@
-// Event types are generated here from schema/events.json (Prompt 1).
+export * from "./events";
 
 /** Audio channel byte on the wire: 0 = mic, 1 = system. */
 export const AudioChannel = { Mic: 0, System: 1 } as const;

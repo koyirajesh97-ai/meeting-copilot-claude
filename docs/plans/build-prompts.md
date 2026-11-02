@@ -21,7 +21,7 @@ Acceptance: pnpm -w check passes; CI is green; README lists the free accounts to
 and every setup step.
 ```
 
-## Prompt 1: Shared event schema
+## Prompt 1: Shared event schema — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("API and event contracts").
