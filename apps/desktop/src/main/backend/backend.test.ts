@@ -80,7 +80,7 @@ describe("start options", () => {
   it("validates what the renderer sends", () => {
     const now = new Date("2026-11-02T09:00:00Z");
     expect(sanitizeStartOptions({ title: "  Standup ", type: "standup", mode: "local", visibility: "project" }, now)).toEqual({
-      title: "Standup", type: "standup", mode: "local", visibility: "private",
+      title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "",
     });
     expect(sanitizeStartOptions({ type: "party", mode: "evil" }, now)).toEqual(defaultStartOptions(now));
     expect(sanitizeStartOptions("junk", now).title).toContain("Meeting");

@@ -41,6 +41,10 @@ export const IPC = {
   profilePut: "profile:put",
   profilePresets: "profile:presets",
   cardFeedback: "card:feedback",
+  standupGenerate: "standup:generate",
+  standupToday: "standup:today",
+  standupSave: "standup:save",
+  brief: "meeting:brief",
   search: "search:query",
   ask: "search:ask",
 } as const;
@@ -70,6 +74,26 @@ export interface RoleProfile {
   systems_owned: string[];
   current_tickets: string[];
   speaking_style: string;
+}
+
+export interface StandupEntry {
+  id: string;
+  date: string;
+  project_id: string | null;
+  notes: string;
+  done: string[];
+  doing: string[];
+  blockers: string[];
+  script: string;
+}
+
+export interface Brief {
+  open_action_items: { id: string; text: string; owner: string | null; due: string | null; meeting_id: string; meeting_title: string }[];
+  last_meeting: { id: string; title: string; started_at: number } | null;
+  last_decisions: string[];
+  last_blockers: string[];
+  last_open_questions: string[];
+  agenda: string;
 }
 
 export interface EnrolledVoice {
@@ -152,6 +176,7 @@ export interface StartOptions {
   type: string;
   mode: "cloud" | "local" | "live-only";
   visibility: "private" | "project";
+  agenda?: string;
 }
 
 export interface CachedSegment {
@@ -299,6 +324,14 @@ export interface CopilotApi {
   };
   /** Used / Not useful on a live card. */
   cardFeedback(cardId: string, useful: boolean): Promise<void>;
+  standup: {
+    /** Rough notes in; done / doing / blockers and a 30-second script out (saved for today). */
+    generate(notes: string): Promise<StandupEntry>;
+    today(): Promise<StandupEntry | null>;
+    save(edit: Pick<StandupEntry, "done" | "doing" | "blockers" | "script">): Promise<StandupEntry>;
+  };
+  /** Pre-meeting brief for a meeting about to start. */
+  brief(title: string, type: string, agenda: string): Promise<Brief>;
   /** Search all your meetings (backend; needs a connection). */
   search(query: string): Promise<SearchHit[]>;
   /** "Ask my meetings": a cited answer, or found: false when nothing relevant exists. */

@@ -41,6 +41,12 @@ const api: CopilotApi = {
     presets: () => ipcRenderer.invoke(IPC.profilePresets),
   },
   cardFeedback: (cardId, useful) => ipcRenderer.invoke(IPC.cardFeedback, cardId, useful),
+  standup: {
+    generate: (notes) => ipcRenderer.invoke(IPC.standupGenerate, notes),
+    today: () => ipcRenderer.invoke(IPC.standupToday),
+    save: (edit) => ipcRenderer.invoke(IPC.standupSave, edit),
+  },
+  brief: (title, type, agenda) => ipcRenderer.invoke(IPC.brief, title, type, agenda),
   search: (query) => ipcRenderer.invoke(IPC.search, query),
   ask: (question) => ipcRenderer.invoke(IPC.ask, question),
   meetings: {

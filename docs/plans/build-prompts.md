@@ -203,7 +203,7 @@ Read AGENTS.md and docs/PRD.md (prompts 3, 4 and 7).
 Acceptance: each action works in Fake mode and returns in under 3 s with real free providers.
 ```
 
-## Prompt 12: Standup mode and pre-meeting brief
+## Prompt 12: Standup mode and pre-meeting brief — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (FR-19 to FR-21, prompt 5).

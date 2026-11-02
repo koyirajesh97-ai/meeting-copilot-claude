@@ -1,6 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
-import type { ActionItem, AskAnswer, EnrolledVoice, RoleProfile, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
+import type { ActionItem, AskAnswer, Brief, EnrolledVoice, RoleProfile, StandupEntry, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
   constructor(
@@ -135,6 +135,23 @@ export class BackendClient {
       throw new BackendError(`Enrollment failed: ${res.status} ${detail}`, res.status);
     }
     return (await res.json()) as EnrolledVoice;
+  }
+
+  standup(notes: string): Promise<StandupEntry> {
+    return this.request("POST", "/standup", { notes }, { timeoutMs: 30_000 });
+  }
+
+  standupToday(): Promise<StandupEntry | null> {
+    return this.request("GET", "/standup/today");
+  }
+
+  saveStandup(edit: object): Promise<StandupEntry> {
+    return this.request("PUT", "/standup/today", edit);
+  }
+
+  brief(title: string, type: string, agenda: string): Promise<Brief> {
+    const q = new URLSearchParams({ title, type, agenda });
+    return this.request("GET", `/brief?${q}`);
   }
 
   getProfile(): Promise<RoleProfile> {

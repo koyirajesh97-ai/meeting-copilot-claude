@@ -21,6 +21,7 @@ class CreateMeeting(BaseModel):
     project_id: str | None = None
     #: Names and terms for this meeting; project vocabulary is merged in once projects exist.
     vocabulary: list[str] = Field(default_factory=list, max_length=500)
+    agenda: str = Field(default="", max_length=4000)
 
 
 class MeetingSocket(BaseModel):
@@ -133,6 +134,7 @@ async def create_meeting(body: CreateMeeting, request: Request, user: CurrentUse
         visibility=body.visibility,
         project_id=body.project_id,
         vocabulary=vocab,
+        agenda=body.agenda,
     )
     await services().meetings.create(m)
     return MeetingSocket(

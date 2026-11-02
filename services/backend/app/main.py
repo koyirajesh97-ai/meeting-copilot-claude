@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.api import auth, meetings, profiles, search, speakers, summaries, usage
+from app.api import auth, meetings, profiles, search, speakers, standup, summaries, usage
 from app.api.auth import dev_login_enabled
 from app.services import services
 from app.ws import meetings as ws_meetings
@@ -30,6 +30,7 @@ app.include_router(summaries.router)
 app.include_router(search.router)
 app.include_router(speakers.router)
 app.include_router(profiles.router)
+app.include_router(standup.router)
 app.include_router(ws_meetings.router)
 
 

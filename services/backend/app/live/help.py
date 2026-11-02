@@ -73,6 +73,22 @@ def looks_like_question(text: str) -> bool:
     return t.endswith("?") or bool(QUESTION_START.match(t)) or bool(QUESTION_ANYWHERE.search(t))
 
 
+TURN_PATTERNS = [
+    r"(?:over to|next(?: up)?(?: is)?|your turn,?|what about you,?|how about you,?|and you,?|go ahead,?)\s+{name}\b",
+    r"^\s*{name}\s*(?:,|\?|$|you're up|go ahead|your turn|you next|what about you)",
+    r"\b{name}\s*,?\s*(?:go ahead|you're up|your turn|you're next|want to go)",
+]
+
+
+def is_my_turn(text: str, names: list[str]) -> bool:
+    """Someone handed the standup to you: "over to Sai", "Sai, go ahead", "Sai?"..."""
+    for n in names:
+        name = re.escape(n)
+        if any(re.search(p.format(name=name), text, re.I) for p in TURN_PATTERNS):
+            return True
+    return False
+
+
 def mentions(text: str, terms: list[str]) -> bool:
     low = text.lower()
     return any(t and re.search(rf"(?<!\w){re.escape(t.lower())}(?!\w)", low) for t in terms)
@@ -144,6 +160,7 @@ class LiveHelp(Plugin):
         profile: RoleProfile,
         cfg: LiveHelpConfig,
         standup_notes: str = "",
+        standup_entry=None,
     ) -> None:
         self.session = session
         self.router = router
@@ -152,6 +169,9 @@ class LiveHelp(Plugin):
         self.profile = profile
         self.cfg = cfg
         self.standup_notes = standup_notes
+        #: Today's standup entry (standup meetings only); its script card shows on your turn.
+        self.standup_entry = standup_entry
+        self._script_shown = False
         self.questions: list[DetectedQuestion] = []
         self._last_topic = -1e9
         self._topics_shown: set[str] = set()
@@ -200,6 +220,16 @@ class LiveHelp(Plugin):
     async def on_final(
         self, segment: Segment, channel_start_ms: float, channel_end_ms: float
     ) -> None:
+        # Standup: when your name is called, bring your script to the front (once).
+        if (
+            self.standup_entry
+            and not self._script_shown
+            and segment.channel == "system"
+            and is_my_turn(segment.text, self.profile.names())
+        ):
+            self._script_shown = True
+            self._spawn(self.standup_card(segment))
+            return
         # Questions aimed at you come from other people: the meeting's audio.
         if segment.channel == "system" and looks_like_question(segment.text):
             self._spawn(self.handle_question(segment, time.perf_counter()))
@@ -392,6 +422,25 @@ class LiveHelp(Plugin):
         names = await self.session.store.speaker_names(self.session.meeting.id)
         line = transcript_lines([segment], names)[0]
         return line.split("] ", 1)[1].split(":", 1)[0]
+
+    async def standup_card(self, segment: Segment) -> None:
+        e = self.standup_entry
+        lines = (
+            [e.script]
+            + [f"- Done: {x}" for x in e.done]
+            + [f"- Doing: {x}" for x in e.doing]
+            + [f"- Blocker: {x}" for x in e.blockers]
+        )
+        src = {"type": "standup", "id": e.day.isoformat()}
+        await self._send_card(
+            new_card_id(),
+            "standup",
+            lines,
+            [[src]] + [[] for _ in lines[1:]],
+            1.0,
+            "standup-prep",
+            segment.segment_id,
+        )
 
     # ---------- topic cards ----------
 
@@ -646,14 +695,16 @@ def _dedupe(sources: list[dict]) -> list[dict]:
 
 
 def live_help_factory(
-    router: Router, search: SearchService, cards, profiles, cfg: LiveHelpConfig, standups=None
+    router: Router, search: SearchService, cards, profiles, cfg: LiveHelpConfig, standup=None
 ):
     async def make(session: MeetingSession):
         m = session.meeting
         profile = await profiles.get(m.owner_id) or RoleProfile()
-        notes = ""
-        if standups is not None:
-            notes = await standups(m.owner_id, m.project_id)
-        return LiveHelp(session, router, search, cards, profile, cfg, notes)
+        notes, script = "", None
+        if standup is not None:
+            notes = await standup.notes_for(m.owner_id, m.project_id)
+            if m.type == "standup":
+                script = await standup.script_for(m.owner_id, m.project_id)
+        return LiveHelp(session, router, search, cards, profile, cfg, notes, script)
 
     return make

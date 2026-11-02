@@ -13,7 +13,15 @@ from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 from psycopg_pool import AsyncConnectionPool
 
-from .store import ActionItemRecord, DecisionRecord, Meeting, Segment, StoredSummary, SummaryStatus
+from .store import (
+    ActionItemRecord,
+    DecisionRecord,
+    Meeting,
+    Segment,
+    StoredSummary,
+    SummaryStatus,
+    series_key,
+)
 
 
 def _ts(t: float | None) -> datetime | None:
@@ -32,6 +40,7 @@ def _meeting(row: dict) -> Meeting:
         started_at=row["started_at"].timestamp(),
         ended_at=row["ended_at"].timestamp() if row["ended_at"] else None,
         vocabulary=list(row["vocabulary"] or []),
+        agenda=row.get("agenda") or "",
     )
 
 
@@ -75,8 +84,8 @@ class PostgresStore:
     async def create(self, m: Meeting) -> Meeting:
         async with await self.connection() as conn:
             await conn.execute(
-                """insert into public.meetings (id, project_id, owner_id, type, title, started_at, visibility, mode, vocabulary)
-                   values (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                """insert into public.meetings (id, project_id, owner_id, type, title, started_at, visibility, mode, vocabulary, agenda)
+                   values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     m.id,
                     m.project_id,
@@ -87,6 +96,7 @@ class PostgresStore:
                     m.visibility,
                     m.mode,
                     m.vocabulary,
+                    m.agenda,
                 ),
             )
         return m
@@ -316,3 +326,52 @@ class PostgresStore:
                 (meeting_id,),
             )
             return {r[0]: r[1] for r in await cur.fetchall()}
+
+    async def open_action_items(
+        self, user_id: str, limit: int = 20
+    ) -> list[tuple[ActionItemRecord, Meeting]]:
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(
+                """select a.id as a_id, a.text as a_text, a.owner as a_owner, a.due_text as a_due, a.status as a_status,
+                          a.source as a_source, a.created_at as a_created, a.question as a_q, a.asker as a_asker,
+                          a.draft as a_draft, m.*
+                   from public.action_items a join public.meetings m on m.id = a.meeting_id
+                   where m.owner_id = %s and a.status = 'open' order by a.created_at desc limit %s""",
+                (user_id, limit),
+            )
+            rows = await cur.fetchall()
+        return [
+            (
+                ActionItemRecord(
+                    str(r["a_id"]),
+                    str(r["id"]),
+                    r["a_text"],
+                    r["a_owner"],
+                    r["a_due"],
+                    r["a_status"],
+                    r["a_source"],
+                    r["a_created"].timestamp(),
+                    r["a_q"],
+                    r["a_asker"],
+                    r["a_draft"],
+                ),
+                _meeting(r),
+            )
+            for r in rows
+        ]
+
+    async def previous_in_series(
+        self, owner_id: str, meeting_type: str, series: str, before: float, exclude_id: str | None
+    ) -> Meeting | None:
+        async with await self.connection() as conn:
+            cur = conn.cursor(row_factory=dict_row)
+            await cur.execute(
+                "select * from public.meetings where owner_id = %s and type = %s and started_at < %s "
+                "and id is distinct from %s::uuid order by started_at desc limit 50",
+                (owner_id, meeting_type, _ts(before), exclude_id),
+            )
+            for r in await cur.fetchall():
+                if series_key(r["title"]) == series:
+                    return _meeting(r)
+        return None

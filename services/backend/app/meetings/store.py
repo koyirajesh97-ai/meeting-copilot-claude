@@ -29,6 +29,7 @@ class Meeting:
     ended_at: float | None = None
     #: Project vocabulary for this meeting (key terms for transcription).
     vocabulary: list[str] = field(default_factory=list)
+    agenda: str = ""
 
 
 @dataclass
@@ -108,10 +109,25 @@ class MeetingStore(Protocol):
     ) -> ActionItemRecord: ...
     async def action_items(self, meeting_id: str) -> list[ActionItemRecord]: ...
     async def set_draft(self, item_id: str, draft: str) -> None: ...
+    async def open_action_items(
+        self, user_id: str, limit: int = 20
+    ) -> list[tuple[ActionItemRecord, Meeting]]: ...
+    async def previous_in_series(
+        self, owner_id: str, meeting_type: str, series: str, before: float, exclude_id: str | None
+    ) -> Meeting | None: ...
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]: ...
     # speaker names given in a meeting (text only; never a voiceprint)
     async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None: ...
     async def speaker_names(self, meeting_id: str) -> dict[str, str]: ...
+
+
+def series_key(title: str) -> str:
+    """Meetings with the same title apart from dates and numbers are one series ("Standup 3/4")."""
+    import re
+
+    t = re.sub(r"\b\d{1,4}([/.-]\d{1,4}){0,2}\b", " ", title.lower())
+    t = re.sub(r"\b(mon|tues|wednes|thurs|fri|satur|sun)day\b", " ", t)
+    return " ".join(re.findall(r"[a-z]+", t))
 
 
 def new_id() -> str:
@@ -213,3 +229,27 @@ class InMemoryMeetingStore:
             for i in items:
                 if i.id == item_id:
                     i.draft = draft
+
+    async def open_action_items(
+        self, user_id: str, limit: int = 20
+    ) -> list[tuple[ActionItemRecord, Meeting]]:
+        out = []
+        for mid, items in self._items.items():
+            m = self._meetings.get(mid)
+            if m and m.owner_id == user_id:
+                out += [(i, m) for i in items if i.status == "open"]
+        return sorted(out, key=lambda x: -x[0].created_at)[:limit]
+
+    async def previous_in_series(
+        self, owner_id: str, meeting_type: str, series: str, before: float, exclude_id: str | None
+    ) -> Meeting | None:
+        cands = [
+            m
+            for m in self._meetings.values()
+            if m.owner_id == owner_id
+            and m.type == meeting_type
+            and m.id != exclude_id
+            and m.started_at < before
+            and series_key(m.title) == series
+        ]
+        return max(cands, key=lambda m: m.started_at, default=None)

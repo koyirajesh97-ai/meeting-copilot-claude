@@ -368,6 +368,10 @@ function registerIpc(): void {
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
   handle(IPC.profileGet, () => backend!.getProfile());
+  handle(IPC.standupGenerate, (notes) => backend!.standup(String(notes).slice(0, 4000)));
+  handle(IPC.standupToday, () => backend!.standupToday());
+  handle(IPC.standupSave, (edit) => backend!.saveStandup(edit as object));
+  handle(IPC.brief, (title, type, agenda) => backend!.brief(String(title), String(type), String(agenda ?? "")));
   handle(IPC.profilePut, (p) => backend!.putProfile(p as never));
   handle(IPC.profilePresets, () => backend!.profilePresets());
   handle(IPC.cardFeedback, (cardId, useful) => {

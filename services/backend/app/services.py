@@ -27,6 +27,8 @@ from app.router.router import Router
 from app.router.stt import SttRegistry
 from app.search.index import InMemoryIndex, PostgresIndex
 from app.search.service import SearchService
+from app.standup.service import StandupService
+from app.standup.store import InMemoryStandups, PostgresStandups
 
 
 def fake_providers_enabled() -> bool:
@@ -59,6 +61,8 @@ class Services:
     speaker_id: SpeakerIdRouter
     profiles: InMemoryProfiles | PostgresProfiles
     cards: InMemoryCards | PostgresCards
+    standups: InMemoryStandups | PostgresStandups
+    standup: StandupService
 
 
 def build_services(
@@ -114,8 +118,10 @@ def build_services(
     pg = hasattr(meetings, "connection")
     profiles = PostgresProfiles(meetings) if pg else InMemoryProfiles()
     cards = PostgresCards(meetings) if pg else InMemoryCards()
+    standups = PostgresStandups(meetings) if pg else InMemoryStandups()
+    standup = StandupService(standups, meetings, router, profiles)
     sessions.plugin_factories.append(
-        live_help_factory(router, search, cards, profiles, cfg.live_help)
+        live_help_factory(router, search, cards, profiles, cfg.live_help, standup)
     )
     # After the summary (and search index): draft replies for "I'll follow up" items.
     summaries.after_ready.append(follow_up_drafter(meetings, router, search, profiles))
@@ -132,6 +138,8 @@ def build_services(
         speaker_id,
         profiles,
         cards,
+        standups,
+        standup,
     )
 
 

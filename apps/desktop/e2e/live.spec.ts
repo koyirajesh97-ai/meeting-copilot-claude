@@ -109,6 +109,13 @@ test("record a meeting with live captions, then find its transcript after a rest
   const saved = await main.evaluate(() => window.copilot.profile.get());
   expect(saved).toMatchObject({ name: "Dev User", title: "DevOps/SRE", systems_owned: ["payments cluster", "ArgoCD"] });
 
+  // Standup prep: rough notes in, done / doing / blockers and a script out.
+  await main.getByRole("navigation").getByRole("link", { name: "Standup prep" }).click();
+  await main.getByLabel("Standup notes").fill("finished OPS-142 cert renewal\ntoday moving the prod deploy\nblocked on VPN access");
+  await main.getByRole("button", { name: "Make my update" }).click();
+  await expect(main.getByTestId("standup-script")).toHaveValue(/OPS-142/, { timeout: 15_000 });
+  await expect(main.getByTestId("standup-blockers")).toHaveValue(/VPN/);
+
   // Enroll a voice: consent is required, the indicator shows while recording, and it can be deleted.
   await main.getByRole("navigation").getByRole("link", { name: "Your voice" }).click();
   const record = main.getByRole("button", { name: /Record \d+ seconds/ });
@@ -182,6 +189,11 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
   const highlighted = main.locator('[data-testid="transcript-line"][data-highlight="true"]');
   await expect(highlighted).toHaveCount(1);
+
+  // The next meeting of the series gets a brief about the last one.
+  await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
+  await main.getByLabel("Title").fill("E2E standup");
+  await expect(main.getByTestId("brief")).toContainText("Last time (E2E standup)", { timeout: 10_000 });
   expect(count).toBeGreaterThanOrEqual(2);
 
 

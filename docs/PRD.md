@@ -224,8 +224,8 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `POST /speakers/enroll`, `GET /speakers`, `DELETE /speakers/{id}` | Voice enrollment (10–90 s of 16 kHz mono WAV + `consent=true`; the recording isn't kept), your enrollments (never the voiceprint), deletion |
 | `POST /meetings/{id}/speakers/{label}/rename` | Name "Speaker 2" for this meeting (no voiceprint) |
 | `GET /search?q=`, `POST /ask` | Hybrid search (Postgres full-text + pgvector, merged by reciprocal rank fusion, filtered to meetings you may see); cited answers across meetings, with `found: false` when nothing relevant exists |
-| `POST /standup` | Rough notes in; done / doing / blockers and a 30-second script out |
-| `GET /brief?meeting_id=` | Pre-meeting brief |
+| `POST /standup`, `GET /standup/today`, `PUT /standup/today` | Rough notes in; done / doing / blockers and a 30-second script out (one entry per day, editable) |
+| `GET /brief?meeting_id=` or `?title=&type=&agenda=` | Pre-meeting brief: your open action items, the last decisions, blockers and open questions of this series (same title apart from dates and numbers, same type), the agenda |
 | `GET /action-items`, `PATCH /action-items/{id}` | Action-item board |
 | `GET /usage` | Free quota left per provider and task today |
 | `GET /health`, `GET /metrics` | Liveness and per-stage latency |
