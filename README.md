@@ -5,11 +5,12 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–10 are done (repo, shared event schema, desktop shell and overlay, two-channel
+Status: Prompts 0–11 are done (repo, shared event schema, desktop shell and overlay, two-channel
 audio capture to local WAV files, provider router, realtime gateway with live transcription,
 database with row-level security, sign-in, live captions and the offline meeting cache, summaries
-by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 has started: voice
-enrollment, speaker recognition, the role profile and answer cards.
+by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 is mostly done: voice
+enrollment, speaker recognition, the role profile, answer cards, Catch me up, Clarify, I'll follow
+up and topic cards. Next is Prompt 12: standup mode and the pre-meeting brief.
 
 ### Evals
 

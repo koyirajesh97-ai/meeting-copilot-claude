@@ -134,8 +134,21 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(overlay.getByTestId("caption-final").first()).toContainText("Morning everyone, let's start the standup.");
   await expect(overlay.getByTestId("captions")).toHaveAttribute("data-pinned", "true");
 
-  // Let a second line arrive, then stop.
+  // Let a second line arrive.
   await expect(overlay.getByTestId("caption-final").nth(1)).toBeVisible({ timeout: 30_000 });
+
+  // Overlay actions during the meeting come back as cards.
+  await overlay.getByRole("button", { name: "Catch me up" }).click();
+  const catchUp = overlay.locator('[data-testid="card"][data-kind="catch_up"]');
+  await expect(catchUp).toContainText("Last 2 min:", { timeout: 15_000 });
+  await expect(catchUp).toContainText("Morning everyone");
+  await overlay.getByRole("button", { name: "Clarify" }).click();
+  // Only the mic has audio on this test machine, so nobody else has spoken.
+  await expect(overlay.locator('[data-testid="card"][data-kind="clarify"]')).toContainText("No one else has spoken yet.", { timeout: 15_000 });
+  await overlay.locator('[data-testid="card"][data-kind="catch_up"]').getByRole("button", { name: "Used" }).click();
+  await expect(overlay.locator('[data-testid="card"][data-kind="catch_up"]').getByRole("button", { name: "Used" })).toHaveAttribute("aria-pressed", "true");
+
+  // Stop.
   await main.getByRole("button", { name: "Stop recording" }).click();
   await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "false", { timeout: 15_000 });
 

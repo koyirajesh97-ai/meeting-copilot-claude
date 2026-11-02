@@ -67,6 +67,10 @@ class ActionItemRecord:
     status: Literal["open", "done", "dropped"] = "open"
     source: Literal["summary", "manual", "follow_up"] = "manual"
     created_at: float = field(default_factory=time.time)
+    #: Follow-ups: the question that couldn't be answered live, who asked, and the drafted reply.
+    question: str | None = None
+    asker: str | None = None
+    draft: str | None = None
 
 
 @dataclass
@@ -103,6 +107,7 @@ class MeetingStore(Protocol):
         self, meeting: Meeting, item: ActionItemRecord
     ) -> ActionItemRecord: ...
     async def action_items(self, meeting_id: str) -> list[ActionItemRecord]: ...
+    async def set_draft(self, item_id: str, draft: str) -> None: ...
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]: ...
     # speaker names given in a meeting (text only; never a voiceprint)
     async def set_speaker_name(self, meeting_id: str, label: str, name: str) -> None: ...
@@ -202,3 +207,9 @@ class InMemoryMeetingStore:
 
     async def speaker_names(self, meeting_id: str) -> dict[str, str]:
         return dict(self._names.get(meeting_id, {}))
+
+    async def set_draft(self, item_id: str, draft: str) -> None:
+        for items in self._items.values():
+            for i in items:
+                if i.id == item_id:
+                    i.draft = draft

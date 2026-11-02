@@ -217,10 +217,12 @@ function setExpanded(expanded: boolean): AppState {
   return state;
 }
 
-function overlayAction(action: OverlayAction): AppState {
-  // Stub: the live-help prompts replace this with real requests to the backend.
-  state.lastAction = { action, at: Date.now() };
+/** Catch me up / Clarify / I'll follow up: sent to the live meeting; the answer comes back as a card. */
+function overlayAction(action: OverlayAction, minutes?: number): AppState {
   showOverlay();
+  const sent = live?.send({ type: "control", action, ...(action === "catch_up" ? { minutes: minutes === 5 ? 5 : 2 } : {}) });
+  // Without a live (signed-in) meeting there's nothing to act on; say so in the overlay.
+  state.lastAction = sent ? null : { action, at: Date.now() };
   broadcast();
   return state;
 }
@@ -443,11 +445,11 @@ function registerIpc(): void {
     return next;
   });
   handle(IPC.overlaySetExpanded, (expanded) => setExpanded(expanded === true));
-  handle(IPC.overlayAction, (action) => {
+  handle(IPC.overlayAction, (action, minutes) => {
     if (action !== "catch_up" && action !== "clarify" && action !== "follow_up") {
       throw new Error(`Unknown overlay action: ${String(action)}`);
     }
-    return overlayAction(action);
+    return overlayAction(action, typeof minutes === "number" ? minutes : undefined);
   });
   handle(IPC.openMain, (route) => openMain(typeof route === "string" ? route : undefined));
   handle(IPC.secretSet, (name, value) => setSecret(name, value));

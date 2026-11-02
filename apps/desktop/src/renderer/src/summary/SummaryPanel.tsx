@@ -155,6 +155,7 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
             <p className="text-sm text-gray-400">None</p>
           )}
         </div>
+        <FollowUps meeting={meeting} />
         {d.takeaways.length > 0 && <List title="Takeaways" items={d.takeaways} />}
         <List title="Blockers" items={d.blockers} />
         <List title="Open questions" items={d.open_questions} />
@@ -171,5 +172,40 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
       {note && <p className="text-xs text-gray-500 dark:text-gray-400" role="status">{note}</p>}
       {body}
     </section>
+  );
+}
+
+/** "I'll follow up" items with the reply drafted after the meeting, ready to review and send. */
+function FollowUps({ meeting }: { meeting: CachedMeetingDetail }) {
+  const items = meeting.action_items.filter((a) => a.source === "follow_up");
+  const [copied, setCopied] = useState<string | null>(null);
+  if (items.length === 0) return null;
+  return (
+    <div data-testid="follow-ups">
+      <h3 className="mb-1 text-sm font-medium">Follow-ups</h3>
+      <ul className="space-y-3 text-sm">
+        {items.map((a) => (
+          <li key={a.id} className="rounded-md border border-gray-200 p-3 dark:border-gray-800">
+            <p>
+              <span className="font-medium">{a.asker ?? "Someone"} asked:</span> {a.question ?? a.text}
+            </p>
+            {a.draft ? (
+              <>
+                <p className="mt-2 whitespace-pre-line rounded bg-gray-50 p-2 dark:bg-gray-900" data-testid="follow-up-draft">{a.draft}</p>
+                <button
+                  type="button"
+                  className="mt-2 text-xs underline"
+                  onClick={() => void navigator.clipboard.writeText(a.draft!).then(() => setCopied(a.id))}
+                >
+                  {copied === a.id ? "Copied" : "Copy draft"}
+                </button>
+              </>
+            ) : (
+              <p className="mt-1 text-xs text-gray-500">Drafting a reply…</p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

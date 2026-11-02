@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { LiveState, OverlayAction } from "../../../shared/ipc";
 import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
@@ -95,23 +96,50 @@ export function Overlay() {
           </p>
         )}
         {state.lastAction && (
-          <p className="truncate text-xs text-gray-400">{ACTION_LABEL[state.lastAction.action]} is not connected yet.</p>
+          <p className="truncate text-xs text-gray-400" data-testid="action-note">
+            {ACTION_LABEL[state.lastAction.action]} works during a signed-in meeting.
+          </p>
         )}
       </div>
 
       <footer className="no-drag flex gap-1 border-t border-white/10 px-2 py-1.5">
         {ACTIONS.map((a) => (
-          <button
-            key={a.action}
-            type="button"
-            title={`Ctrl/Cmd+Shift+${a.key}`}
-            className="flex-1 rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
-            onClick={() => void window.copilot.overlay.action(a.action)}
-          >
-            {a.label}
-          </button>
+          <ActionButton key={a.action} action={a.action} label={a.label} hotkey={a.key} />
         ))}
       </footer>
     </div>
+  );
+}
+
+/** Catch me up: click for the last 2 minutes, press and hold for 5. */
+function ActionButton({ action, label, hotkey }: { action: OverlayAction; label: string; hotkey: string }) {
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const long = useRef(false);
+  const start = () => {
+    long.current = false;
+    if (action !== "catch_up") return;
+    hold.current = setTimeout(() => {
+      long.current = true;
+      void window.copilot.overlay.action("catch_up", 5);
+    }, 600);
+  };
+  const end = () => {
+    if (hold.current) clearTimeout(hold.current);
+    hold.current = null;
+  };
+  return (
+    <button
+      type="button"
+      title={action === "catch_up" ? `Last 2 minutes (hold for 5) · Ctrl/Cmd+Shift+${hotkey}` : `Ctrl/Cmd+Shift+${hotkey}`}
+      className="flex-1 rounded bg-white/10 px-2 py-1 text-xs hover:bg-white/20"
+      onPointerDown={start}
+      onPointerUp={end}
+      onPointerLeave={end}
+      onClick={() => {
+        if (!long.current) void window.copilot.overlay.action(action);
+      }}
+    >
+      {label}
+    </button>
   );
 }

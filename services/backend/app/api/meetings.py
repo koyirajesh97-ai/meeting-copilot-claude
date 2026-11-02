@@ -67,6 +67,10 @@ class ActionItemOut(BaseModel):
     due: str | None
     status: str
     source: str
+    #: "I'll follow up" items: the question, who asked, and the reply drafted after the meeting.
+    question: str | None = None
+    asker: str | None = None
+    draft: str | None = None
 
 
 class DecisionOut(BaseModel):
@@ -178,6 +182,9 @@ async def get_meeting(meeting_id: str, user: CurrentUser) -> MeetingDetail:
                 due=a.due_text,
                 status=a.status,
                 source=a.source,
+                question=a.question,
+                asker=a.asker,
+                draft=a.draft,
             )
             for a in await store.action_items(m.id)
         ],

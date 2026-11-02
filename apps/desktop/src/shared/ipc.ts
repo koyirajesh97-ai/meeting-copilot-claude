@@ -127,6 +127,10 @@ export interface ActionItem {
   due: string | null;
   status: string;
   source: string;
+  /** "I'll follow up" items: the question, who asked, and the reply drafted after the meeting. */
+  question?: string | null;
+  asker?: string | null;
+  draft?: string | null;
 }
 
 export interface AuthState {
@@ -315,7 +319,8 @@ export interface CopilotApi {
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   overlay: {
     setExpanded(expanded: boolean): Promise<AppState>;
-    action(action: OverlayAction): Promise<AppState>;
+    /** minutes: Catch me up only, 2 (default) or 5 (long press). */
+    action(action: OverlayAction, minutes?: number): Promise<AppState>;
   };
   onLevels(listener: (levels: AudioLevels) => void): () => void;
   openMain(route?: string): Promise<void>;

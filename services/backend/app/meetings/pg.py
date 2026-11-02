@@ -237,7 +237,7 @@ class PostgresStore:
                 due = None
         await conn.execute(
             "insert into public.action_items (id, project_id, meeting_id, owner, text, due_date, due_text, status, "
-            "created_by, source) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            "created_by, source, question, asker, draft) values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
             (
                 i.id,
                 meeting.project_id,
@@ -249,6 +249,9 @@ class PostgresStore:
                 i.status,
                 meeting.owner_id,
                 i.source,
+                i.question,
+                i.asker,
+                i.draft,
             ),
         )
 
@@ -260,16 +263,32 @@ class PostgresStore:
     async def action_items(self, meeting_id: str) -> list[ActionItemRecord]:
         async with await self.connection() as conn:
             cur = await conn.execute(
-                "select id, text, owner, due_text, status, source, created_at from public.action_items "
-                "where meeting_id = %s order by created_at, id",
+                "select id, text, owner, due_text, status, source, created_at, question, asker, draft "
+                "from public.action_items where meeting_id = %s order by created_at, id",
                 (meeting_id,),
             )
             return [
                 ActionItemRecord(
-                    str(r[0]), meeting_id, r[1], r[2], r[3], r[4], r[5], r[6].timestamp()
+                    str(r[0]),
+                    meeting_id,
+                    r[1],
+                    r[2],
+                    r[3],
+                    r[4],
+                    r[5],
+                    r[6].timestamp(),
+                    r[7],
+                    r[8],
+                    r[9],
                 )
                 for r in await cur.fetchall()
             ]
+
+    async def set_draft(self, item_id: str, draft: str) -> None:
+        async with await self.connection() as conn:
+            await conn.execute(
+                "update public.action_items set draft = %s where id = %s", (draft, item_id)
+            )
 
     async def decisions(self, meeting_id: str) -> list[DecisionRecord]:
         async with await self.connection() as conn:

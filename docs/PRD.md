@@ -233,7 +233,8 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 ### WebSocket `/ws/meetings/{id}?token=…`
 
 - **Audio up:** binary frames; byte 0 is the channel (0 = mic, 1 = system), then 20 ms of 16 kHz mono PCM16 (640 bytes).
-- **Controls up:** JSON `{"type": "control", "action": "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback", ...}`, plus a ping every 15 s.
+- **Controls up:** JSON `{"type": "control", "action": "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback", ...}`, plus a ping every 15 s. `catch_up` takes `minutes` (2, or 5 on a long press); `card_feedback` takes `card_id` and `useful`. Catch me up, Clarify and I'll follow up answer with a card (`kind` catch_up, clarify, follow_up); I'll follow up also saves an action item (source `follow_up`, with the question and who asked), and after the meeting a reply is drafted for it (prompt 7) and shown on Meeting detail.
+- **Topic cards** (`kind: topic`) appear when someone mentions one of your systems or tickets and a past meeting has something relevant: at most one per minute, never the same system twice in a meeting.
 - **Events down:** JSON events with an increasing `seq`. After a reconnect the client connects with `?token=…&last_seq=N` and the server replays every stored event after N (finals, cards and the rest; partials are not replayed).
 - **Several frames per message** are allowed (a replayed backlog): each 641-byte block is one frame.
 - **Close codes:** 4401 bad or expired token (get a new one from `POST /meetings/{id}/ws-token`), 4404 meeting not found, 4409 meeting has ended, 1013 client too slow (reconnect with `last_seq`).
@@ -422,7 +423,7 @@ Postgres is the single source of truth, and project membership decides who sees 
 | suggestions | meeting_id, kind (answer, topic, clarify, catch-up), trigger_segment_id, text, sources[], used (bool) | Lets you see which suggestions helped |
 | summaries | meeting_id, template, sections (JSON), model, created_at | Regenerable with another template; meetings.summary_status tracks the job |
 | meeting_speakers | meeting_id, label, display_name | "Speaker 2" renamed for one meeting; text only, never a voiceprint |
-| action_items | project_id, meeting_id, owner, text, due_date, due_text, status, source (summary, manual, follow_up) | Feeds the project board and the next brief; summary items are replaced on regenerate |
+| action_items | project_id, meeting_id, owner, text, due_date, due_text, status, source (summary, manual, follow_up), question, asker, draft | Feeds the project board and the next brief; summary items are replaced on regenerate |
 | decisions | project_id, meeting_id, text, rationale | Searchable across meetings |
 | standup_entries | user_id, project_id, date, done, doing, blockers, script | Typed notes and the generated script |
 | documents | project_id, title, source_url or file, uploaded_by | Project knowledge for grounding |

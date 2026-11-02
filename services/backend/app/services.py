@@ -9,6 +9,7 @@ import os
 from dataclasses import dataclass
 
 from app.jobs.summary import SummaryJobs
+from app.live.follow_ups import follow_up_drafter
 from app.live.help import live_help_factory
 from app.live.store import InMemoryCards, PostgresCards
 from app.meetings.speakers import InMemorySpeakers, PostgresSpeakers
@@ -116,6 +117,8 @@ def build_services(
     sessions.plugin_factories.append(
         live_help_factory(router, search, cards, profiles, cfg.live_help)
     )
+    # After the summary (and search index): draft replies for "I'll follow up" items.
+    summaries.after_ready.append(follow_up_drafter(meetings, router, search, profiles))
     return Services(
         cfg,
         quota,

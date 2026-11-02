@@ -148,10 +148,10 @@ test("overlay expands to 360x520 and back", async () => {
   expect(await size()).toEqual([360, 120]);
 });
 
-test("overlay action buttons respond (stubs for now)", async () => {
+test("overlay actions explain they need a signed-in meeting", async () => {
   const overlay = await windowByTitle("Meeting Copilot overlay");
   await overlay.getByRole("button", { name: "Catch me up" }).click();
-  await expect(overlay.getByText("Catch me up is not connected yet.")).toBeVisible();
+  await expect(overlay.getByTestId("action-note")).toHaveText("Catch me up works during a signed-in meeting.");
 });
 
 test("settings persist through the main process and are validated", async () => {

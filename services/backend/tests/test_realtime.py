@@ -236,8 +236,12 @@ def test_bad_input_gets_an_error_event_not_a_disconnect(env: Env) -> None:
         ws.send_text("not json")
         assert ws.receive_json()["code"] == "bad_message"
         ws.send_text(json.dumps({"type": "control", "action": "catch_up", "minutes": 2}))
-        e = ws.receive_json()
-        assert (e["type"], e["code"], e["retryable"]) == ("error", "not_implemented", False)
+        e = ws.receive_json()  # live help answers it (nothing said yet in this meeting)
+        assert (e["type"], e["kind"], e["text"]) == (
+            "card.created",
+            "catch_up",
+            "Nothing has been said yet.",
+        )
 
 
 def test_pause_drops_audio_until_resume(env: Env) -> None:

@@ -32,7 +32,7 @@ from app.events import (
     QuestionDetected,
     QuotaWarning,
 )
-from app.meetings.store import Segment
+from app.meetings.store import ActionItemRecord, Segment, new_id
 from app.metrics import metrics
 from app.profiles.store import RoleProfile
 from app.prompts import load
@@ -63,6 +63,8 @@ QUESTION_START = re.compile(
 QUESTION_ANYWHERE = re.compile(
     r"\b(can you|could you|would you|do you know|any update|what about|how about)\b", re.I
 )
+#: Don't re-check the same system or ticket more often than this when nothing was found.
+TOPIC_RETRY_S = 15
 NO_ANSWER = "No grounded answer in your project notes. Tap I'll follow up."
 
 
@@ -92,6 +94,20 @@ class CardOut(BaseModel):
     confidence: float = Field(default=0, ge=0, le=1)
 
 
+class CatchUpOut(BaseModel):
+    bullets: list[str] = []
+
+
+class Term(BaseModel):
+    term: str
+    meaning: str = ""
+
+
+class ClarifyOut(BaseModel):
+    plain: str = ""
+    terms: list[Term] = []
+
+
 @dataclass
 class DetectedQuestion:
     segment: Segment
@@ -99,6 +115,7 @@ class DetectedQuestion:
     addressed_to_me: bool
     answered: bool = False
     card_id: str | None = None
+    followed_up: bool = False
 
 
 @dataclass
@@ -136,6 +153,9 @@ class LiveHelp(Plugin):
         self.cfg = cfg
         self.standup_notes = standup_notes
         self.questions: list[DetectedQuestion] = []
+        self._last_topic = -1e9
+        self._topics_shown: set[str] = set()
+        self._topic_tried: dict[str, float] = {}
         self._tasks: set[asyncio.Task] = set()
 
     # ---------- plumbing ----------
@@ -181,9 +201,13 @@ class LiveHelp(Plugin):
         self, segment: Segment, channel_start_ms: float, channel_end_ms: float
     ) -> None:
         # Questions aimed at you come from other people: the meeting's audio.
-        if segment.channel != "system" or not looks_like_question(segment.text):
+        if segment.channel == "system" and looks_like_question(segment.text):
+            self._spawn(self.handle_question(segment, time.perf_counter()))
             return
-        self._spawn(self.handle_question(segment, time.perf_counter()))
+        # Not a question: maybe the discussion touched one of your systems or tickets.
+        term = self._topic_term(segment.text)
+        if term:
+            self._spawn(self.topic_card(term, segment))
 
     async def handle_question(self, segment: Segment, t0: float) -> None:
         p = self.profile
@@ -363,7 +387,232 @@ class LiveHelp(Plugin):
 
     # ---------- controls ----------
 
+    async def _speaker_name(self, segment: Segment) -> str:
+        """ "Priya" if named (renamed or recognized), else "Speaker 2"; "Me" for the mic."""
+        names = await self.session.store.speaker_names(self.session.meeting.id)
+        line = transcript_lines([segment], names)[0]
+        return line.split("] ", 1)[1].split(":", 1)[0]
+
+    # ---------- topic cards ----------
+
+    def _topic_term(self, text: str) -> str | None:
+        now = time.monotonic()
+        if now - self._last_topic < self.cfg.topic_cooldown_s:
+            return None
+        for term in sorted(
+            self.profile.systems_owned + self.profile.current_tickets, key=len, reverse=True
+        ):
+            recently_tried = now - self._topic_tried.get(term, -1e9) < TOPIC_RETRY_S
+            if term not in self._topics_shown and not recently_tried and mentions(text, [term]):
+                self._topic_tried[term] = now
+                return term
+        return None
+
+    async def topic_card(self, term: str, segment: Segment) -> None:
+        """At most one per cooldown; only if past meetings have something to say about it."""
+        hits = await self._retrieve(f"{term} {segment.text}")
+        if not hits:
+            return
+        ctx = self.build_context(hits)
+        p = self.profile
+        try:
+            out = await self.complete(
+                "card",
+                load("answer_card").render(
+                    name=p.name or "the user",
+                    role_title=p.title or "team member",
+                    speaking_style=p.speaking_style or "brief",
+                    question=f'What should I remember about {term}? It just came up: "{segment.text}"',
+                    context=ctx.render(),
+                ),
+                CardOut,
+            )
+        except NoProviderAvailable:
+            return
+        bullets = [
+            b
+            for b in out.json.bullets
+            if b.source in ctx.sources and ctx.sources[b.source]["type"] == "meeting"
+        ]
+        if not bullets or out.json.confidence < self.cfg.card_min_confidence:
+            return
+        if time.monotonic() - self._last_topic < self.cfg.topic_cooldown_s:
+            return  # another topic card got there first
+        self._last_topic = time.monotonic()
+        self._topics_shown.add(term)
+        await self._send_card(
+            new_card_id(),
+            "topic",
+            [f"{term}: {bullets[0].text}"] + [f"- {b.text}" for b in bullets[1:3]],
+            [[ctx.sources[b.source]] for b in bullets[:3]],
+            out.json.confidence,
+            out.provider,
+            segment.segment_id,
+        )
+
+    # ---------- overlay actions: Catch me up, Clarify, I'll follow up ----------
+
+    async def catch_up(self, minutes: int, peer: Peer) -> None:
+        t0 = time.perf_counter()
+        lines = self.recent_lines(minutes)
+        if not lines:
+            await self._send_card(
+                new_card_id(), "catch_up", ["Nothing has been said yet."], [[]], 1.0, "none", None
+            )
+            return
+        try:
+            out = await self.complete(
+                "catchup",
+                load("catch_up").render(
+                    minutes=str(minutes),
+                    name=self.profile.name or "you",
+                    transcript="\n".join(lines),
+                ),
+                CatchUpOut,
+            )
+        except NoProviderAvailable as e:
+            await self.session.emit(
+                Error,
+                code="catch_up_unavailable",
+                message=str(e)[:300],
+                retryable=True,
+                store=False,
+                only=peer,
+            )
+            return
+        bullets = [b for b in out.json.bullets if b.strip()][:4] or ["Nothing notable was said."]
+        start = self.session.recent[-1].end_ms - minutes * 60_000 if self.session.recent else 0
+        src = {"type": "transcript", "id": self.session.meeting.id, "at_ms": max(0, start)}
+        await self._send_card(
+            new_card_id(),
+            "catch_up",
+            [f"Last {minutes} min: {bullets[0]}"] + [f"- {b}" for b in bullets[1:]],
+            [[src]] + [[] for _ in bullets[1:]],
+            1.0,
+            out.provider,
+            None,
+        )
+        metrics.record("action.catch_up_ms", (time.perf_counter() - t0) * 1000, out.provider)
+
+    async def clarify(self, peer: Peer) -> None:
+        t0 = time.perf_counter()
+        last = next((s for s in reversed(self.session.recent) if s.channel == "system"), None)
+        if last is None:
+            await self._send_card(
+                new_card_id(), "clarify", ["No one else has spoken yet."], [[]], 1.0, "none", None
+            )
+            return
+        speaker = await self._speaker_name(last)
+        vocab = ", ".join(self.session.meeting.vocabulary) or "none"
+        try:
+            out = await self.complete(
+                "clarify",
+                load("clarify").render(speaker=speaker, text=last.text, vocabulary=vocab),
+                ClarifyOut,
+            )
+        except NoProviderAvailable as e:
+            await self.session.emit(
+                Error,
+                code="clarify_unavailable",
+                message=str(e)[:300],
+                retryable=True,
+                store=False,
+                only=peer,
+            )
+            return
+        c: ClarifyOut = out.json
+        src = [{"type": "transcript", "id": self.session.meeting.id, "at_ms": last.start_ms}]
+        lines = [f"{speaker}: {c.plain or last.text}"] + [
+            f"- {t.term}: {t.meaning}" for t in c.terms[:3]
+        ]
+        await self._send_card(
+            new_card_id(),
+            "clarify",
+            lines,
+            [src] + [[] for _ in c.terms[:3]],
+            1.0,
+            out.provider,
+            last.segment_id,
+        )
+        metrics.record("action.clarify_ms", (time.perf_counter() - t0) * 1000, out.provider)
+
+    async def follow_up(self, peer: Peer) -> None:
+        """Turn the last question (preferably one aimed at you) into an action item; the reply is
+        drafted after the meeting."""
+        q = next((x for x in reversed(self.questions) if x.addressed_to_me), None) or (
+            self.questions[-1] if self.questions else None
+        )
+        if q is None:
+            last = next(
+                (
+                    s
+                    for s in reversed(self.session.recent)
+                    if s.channel == "system" and s.text.strip().endswith("?")
+                ),
+                None,
+            )
+            if last is None:
+                await self._send_card(
+                    new_card_id(),
+                    "follow_up",
+                    ["No recent question to follow up on."],
+                    [[]],
+                    1.0,
+                    "none",
+                    None,
+                )
+                return
+            q = DetectedQuestion(last, "", True)
+        if q.followed_up:
+            await self._send_card(
+                new_card_id(),
+                "follow_up",
+                [f"Already on your follow-ups: {q.segment.text}"],
+                [[]],
+                1.0,
+                "none",
+                q.segment.segment_id,
+            )
+            return
+        q.followed_up = True
+        asker = await self._speaker_name(q.segment)
+        m = self.session.meeting
+        if m.mode != "live-only":  # Live-only keeps nothing
+            await self.session.store.add_action_item(
+                m,
+                ActionItemRecord(
+                    new_id(),
+                    m.id,
+                    f"Follow up with {asker}: {q.segment.text}",
+                    self.profile.name or "me",
+                    source="follow_up",
+                    question=q.segment.text,
+                    asker=asker,
+                ),
+            )
+        await self._send_card(
+            new_card_id(),
+            "follow_up",
+            [
+                f"Added to your follow-ups: {q.segment.text}",
+                "- I'll draft a reply after the meeting for you to review.",
+            ],
+            [[{"type": "transcript", "id": m.id, "at_ms": q.segment.start_ms}], []],
+            1.0,
+            "none",
+            q.segment.segment_id,
+        )
+
     async def on_control(self, msg: Control, peer: Peer) -> bool:
+        if msg.action == "catch_up":
+            self._spawn(self.catch_up(5 if (msg.minutes or 2) >= 5 else 2, peer))
+            return True
+        if msg.action == "clarify":
+            self._spawn(self.clarify(peer))
+            return True
+        if msg.action == "follow_up":
+            self._spawn(self.follow_up(peer))
+            return True
         if msg.action == "card_feedback":
             if not msg.card_id or msg.useful is None:
                 await self.session.emit(

@@ -36,5 +36,7 @@ Follow-ups that were out of scope for the prompt that found them.
   finals.
 - Answer cards can't be exercised in the desktop e2e on Linux (no system audio there); backend
   tests and evals/live cover them. Check on Windows with a real call.
+- Clarify uses the meeting's vocabulary; add the project vocabulary once projects exist (Prompt 13).
+- Follow-up drafts run after the summary; if the summary fails, drafts wait for a regenerate.
 - Replace the code-drawn tray icons with real icon files before packaging (Prompt 17).
 - Install the Supabase CLI locally (`scripts/dev-up` falls back to `npx supabase`).

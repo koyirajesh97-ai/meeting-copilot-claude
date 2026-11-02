@@ -290,24 +290,12 @@ def clarify(messages: list[dict[str, str]]) -> str:
         r"\b(um+|uh+|like|you know|basically|kind of|sort of)\b,?\s*", "", stmt, flags=re.I
     )
     plain = re.sub(r"\s+", " ", plain).strip()
-    gloss = section(user, "PROJECT GLOSSARY")
-    terms = [
-        t.strip()
-        for t in re.split(r"[,;\n]", gloss)
-        if t.strip() and t.strip().lower() in stmt.lower()
-    ]
-    return json.dumps(
-        {
-            "plain": plain,
-            "terms": [
-                {
-                    "term": t.split("=")[0].strip(),
-                    "meaning": (t.split("=", 1)[1].strip() if "=" in t else "A project term."),
-                }
-                for t in terms[:3]
-            ],
-        }
-    )
+    terms = []
+    for entry in re.split(r"[,;\n]", section(user, "PROJECT GLOSSARY")):
+        term, _, meaning = entry.partition("=")
+        if term.strip() and term.strip().lower() in stmt.lower():
+            terms.append({"term": term.strip(), "meaning": meaning.strip() or "A project term."})
+    return json.dumps({"plain": plain, "terms": terms[:3]})
 
 
 def standup(messages: list[dict[str, str]]) -> str:

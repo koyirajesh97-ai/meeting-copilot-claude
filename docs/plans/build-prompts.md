@@ -189,7 +189,7 @@ Acceptance: a fixture where the user is asked 3 questions yields 3 cited cards; 
 someone else yields none; a simulated Groq 429 still produces a card from the fallback.
 ```
 
-## Prompt 11: Catch me up, Clarify, I'll follow up, topic cards
+## Prompt 11: Catch me up, Clarify, I'll follow up, topic cards — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (prompts 3, 4 and 7).
