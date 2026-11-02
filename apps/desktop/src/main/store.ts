@@ -56,3 +56,40 @@ export function deleteSecret(name: unknown): void {
   assertSecretName(name);
   secretStore.delete(name);
 }
+
+/**
+ * Secrets for the main process (backend token, Supabase session). Uses the OS keychain; if
+ * none is available (e.g. Linux without a keyring, CI), keeps them in memory only, so sign-in
+ * works for this run but isn't remembered.
+ */
+const memorySecrets = new Map<string, string>();
+let warnedNoKeychain = false;
+
+export const secretBox = {
+  get(name: string): string | null {
+    if (memorySecrets.has(name)) return memorySecrets.get(name)!;
+    try {
+      return getSecret(name as SecretName);
+    } catch {
+      return null;
+    }
+  },
+  set(name: string, value: string): void {
+    try {
+      setSecret(name, value);
+      memorySecrets.delete(name);
+    } catch (err) {
+      if (!warnedNoKeychain) console.warn(`[secrets] ${(err as Error).message} Keeping sign-in in memory only.`);
+      warnedNoKeychain = true;
+      memorySecrets.set(name, value);
+    }
+  },
+  delete(name: string): void {
+    memorySecrets.delete(name);
+    try {
+      deleteSecret(name);
+    } catch {
+      /* unknown name: nothing stored */
+    }
+  },
+};

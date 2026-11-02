@@ -1,6 +1,9 @@
-import type { OverlayAction } from "../../../shared/ipc";
+import type { LiveState, OverlayAction } from "../../../shared/ipc";
 import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
+import { visibleLines } from "../live/captions";
+import { Captions } from "../live/Captions";
+import { useCaptions } from "../live/useCaptions";
 import { useAppState, useSettings } from "../useAppState";
 
 const ACTIONS: { action: OverlayAction; label: string; key: string }[] = [
@@ -15,15 +18,30 @@ const ACTION_LABEL: Record<OverlayAction, string> = {
   follow_up: "I'll follow up",
 };
 
+function LiveChip({ live, provider }: { live: LiveState; provider: string | null }) {
+  const text =
+    live.status === "live" ? (provider ?? "live") : live.status === "off" ? "offline" : live.status.replace("-", " ");
+  const color = live.status === "live" ? "bg-green-900/60 text-green-200" : live.status === "off" ? "bg-white/10 text-gray-300" : "bg-amber-900/60 text-amber-200";
+  return (
+    <span data-testid="live-status" data-status={live.status} className={`max-w-28 truncate rounded px-1.5 py-0.5 text-[10px] ${color}`} title={live.message ?? text}>
+      {text}
+    </span>
+  );
+}
+
 /**
- * Always-on-top, never-focused panel. Compact: status, last caption, newest card, actions.
- * Expanded: scrolling captions and the card stack.
+ * Always-on-top, never-focused panel. Compact: status, last caption, actions.
+ * Expanded: scrolling captions (and, with live help, the card stack).
  */
 export function Overlay() {
   const state = useAppState();
   const [settings] = useSettings();
+  const captions = useCaptions();
   if (!state) return null;
   const expanded = state.overlayExpanded;
+  const lines = visibleLines(captions);
+  const last = lines.at(-1);
+  const fontSize = settings?.captionFontSize ?? 15;
 
   return (
     <div data-testid="overlay" data-expanded={expanded} className="flex h-full flex-col text-sm">
@@ -31,9 +49,7 @@ export function Overlay() {
         <RecordingIndicator state={state} compact />
         <div className="flex items-center gap-2">
           {state.capturing && <LevelMeters mic={state.audio.mic} system={state.audio.system} />}
-          <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-gray-300" title="Provider serving cards">
-            no provider
-          </span>
+          {state.capturing && <LiveChip live={state.live} provider={captions.provider} />}
           <button
             type="button"
             className="no-drag rounded px-1.5 text-gray-300 hover:bg-white/10"
@@ -46,7 +62,7 @@ export function Overlay() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-3 py-1.5" style={{ fontSize: settings ? `${settings.captionFontSize}px` : undefined }}>
+      <div className="flex min-h-0 flex-1 flex-col px-3 py-1.5">
         {state.capturing && ["silent", "unavailable", "error"].includes(state.audio.system.state) && (
           <p data-testid="system-audio-warning" className="mb-1 flex items-center gap-2 text-xs text-amber-300">
             <span className="truncate">{state.audio.system.message ?? "No meeting audio"}</span>
@@ -58,20 +74,17 @@ export function Overlay() {
         {state.capturing && state.audio.mic.state === "error" && (
           <p className="mb-1 truncate text-xs text-amber-300" title={state.audio.mic.message}>Microphone isn't recording: {state.audio.mic.message}</p>
         )}
-        <p data-testid="caption-line" className="truncate text-gray-300">
-          {state.capturing ? "Listening…" : "Captions appear here while recording."}
-        </p>
-        {expanded && (
-          <div className="mt-3 space-y-2 text-xs">
-            <p className="text-gray-400">Answer cards, your standup script and topic cards stack here.</p>
-            {state.lastAction && (
-              <div className="rounded border border-white/10 bg-white/5 p-2">
-                {ACTION_LABEL[state.lastAction.action]} is not connected yet.
-              </div>
-            )}
-          </div>
+        {state.capturing && state.live.status !== "live" && state.live.message && (
+          <p data-testid="live-message" className="mb-1 truncate text-xs text-amber-300" title={state.live.message}>{state.live.message}</p>
         )}
-        {!expanded && state.lastAction && (
+        {expanded ? (
+          <Captions lines={lines} fontSize={fontSize} />
+        ) : (
+          <p data-testid="caption-line" className={`truncate ${last && !last.final ? "text-gray-400 italic" : "text-gray-100"}`} style={{ fontSize: `${fontSize}px` }}>
+            {last ? `${last.speaker}: ${last.text}` : state.capturing ? "Listening…" : "Captions appear here while recording."}
+          </p>
+        )}
+        {state.lastAction && (
           <p className="truncate text-xs text-gray-400">{ACTION_LABEL[state.lastAction.action]} is not connected yet.</p>
         )}
       </div>

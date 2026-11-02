@@ -63,7 +63,10 @@ test("renderer is isolated: no Node, only the typed bridge", async () => {
   expect(probe.require).toBe("undefined");
   expect(probe.process).toBe("undefined");
   expect(probe.bridge).toEqual(
-    ["capture", "getSettings", "getState", "onLevels", "onState", "openMain", "overlay", "secrets", "setSettings", "toggleCapture"].sort(),
+    [
+      "auth", "capture", "getSettings", "getState", "meetings", "onLevels", "onLive", "onState", "openMain",
+      "overlay", "secrets", "setSettings", "startMeeting", "toggleCapture",
+    ].sort(),
   );
 });
 

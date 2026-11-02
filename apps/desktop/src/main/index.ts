@@ -10,14 +10,20 @@ import {
   type WebFrameMain,
 } from "electron";
 import { join } from "node:path";
-import { IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction } from "../shared/ipc";
+import { IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions } from "../shared/ipc";
 import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
 import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
 import { SileroDetector } from "./audio/silero";
+import { AuthManager, SIGNED_OUT } from "./backend/auth";
+import { Cache } from "./backend/cache";
+import { BackendClient } from "./backend/client";
+import { LiveConnection } from "./backend/live";
+import { syncAll, syncMeeting } from "./backend/sync";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
 import { trayIcons } from "./icons";
-import { deleteSecret, getSettings, hasSecret, setSecret, updateSettings } from "./store";
+import { sanitizeStartOptions } from "./startOptions";
+import { deleteSecret, getSettings, hasSecret, secretBox, setSecret, updateSettings } from "./store";
 import { createMainWindow, createOverlayWindow, navigateMain, resizeOverlay } from "./windows";
 
 const isDev = Boolean(process.env.ELECTRON_RENDERER_URL);
@@ -33,6 +39,8 @@ const state: AppState = {
   overlayExpanded: false,
   lastAction: null,
   audio: { mic: OFF, system: OFF },
+  auth: SIGNED_OUT,
+  live: { status: "off", meetingId: null },
 };
 
 // Hidden capture windows have no user gesture; let their AudioContext start anyway.
@@ -74,6 +82,68 @@ function setupCapture(): void {
   if (fixed.length) console.warn(`[audio] repaired ${fixed.length} recording(s) left by a crash`);
 }
 
+// ---------- backend: auth, live meeting, cache, sync ----------
+
+let cache: Cache | null = null;
+let backend: BackendClient | null = null;
+let auth: AuthManager | null = null;
+let live: LiveConnection | null = null;
+let liveMode: StartOptions["mode"] = "cloud";
+const SYNC_EVERY_MS = 5 * 60_000;
+
+function sendToWindows(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send(channel, payload);
+  }
+}
+
+function setupBackend(): void {
+  cache = new Cache(join(app.getPath("userData"), "cache.sqlite"));
+  const a = (auth = new AuthManager(
+    new BackendClient(() => getSettings().backendUrl, async () => null),
+    getSettings,
+    secretBox,
+  ));
+  backend = new BackendClient(() => getSettings().backendUrl, () => a.token());
+  state.auth = a.state;
+  a.on("change", (s) => {
+    state.auth = s;
+    broadcast();
+    if (s.signedIn) void runSync();
+  });
+
+  const l = (live = new LiveConnection({ backend, outbound: capture!.outbound }));
+  l.on("state", (s) => {
+    state.live = s;
+    broadcast();
+  });
+  l.on("meeting", (id, opts) => {
+    liveMode = opts.mode;
+    cache?.upsertMeeting({ id, title: opts.title, type: opts.type, mode: opts.mode, started_at: Date.now() / 1000, ended_at: null });
+  });
+  l.on("event", (event) => {
+    sendToWindows(IPC.liveEvent, event);
+    // Live-only: help during the call, nothing kept on disk.
+    if (event.type === "transcript.final" && liveMode !== "live-only" && l.currentMeetingId) {
+      cache?.upsertSegment(l.currentMeetingId, event);
+    }
+  });
+
+  if (a.state.signedIn) void runSync();
+  setInterval(() => auth?.state.signedIn && void runSync(), SYNC_EVERY_MS).unref();
+}
+
+async function runSync(): Promise<{ meetings: number; error?: string }> {
+  if (!backend || !cache) return { meetings: 0, error: "not ready" };
+  try {
+    const n = await syncAll(backend, cache);
+    sendToWindows(IPC.state, state);
+    return { meetings: n };
+  } catch (err) {
+    return { meetings: cache.listMeetings().length, error: (err as Error).message };
+  }
+}
+
 // ---------- state ----------
 
 function broadcast(): void {
@@ -89,7 +159,7 @@ function showOverlay(): void {
   if (!win.isVisible()) win.showInactive();
 }
 
-function setCapturing(on: boolean): Promise<AppState> {
+function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
   const op = captureOp.then(async () => {
     if (state.capturing === on) return state;
     // The indicator turns on before any audio is read and off only after capture stops.
@@ -100,12 +170,29 @@ function setCapturing(on: boolean): Promise<AppState> {
       broadcast();
       const settings = getSettings();
       await capture?.start({ micDeviceId: settings.micDeviceId, systemApp: settings.systemAudioApp });
+      if (auth?.state.signedIn) {
+        // Creating the meeting retries in the background; audio buffers locally meanwhile.
+        void live?.start(options ?? sanitizeStartOptions(undefined));
+      } else {
+        state.live = { status: "local-only", meetingId: null, message: "Sign in (Settings) to get live captions. Recording locally." };
+        broadcast();
+      }
     } else {
+      // Stop capture first so its last frames reach the outbound buffer, then end the meeting.
       const summary = await capture?.stop();
       if (summary) console.log(`[audio] saved recording to ${summary.dir}`);
+      const id = await live?.stop();
       state.capturing = false;
       state.captureStartedAt = null;
+      state.live = { status: "off", meetingId: null };
       broadcast();
+      if (id && cache && backend) {
+        cache.markEnded(id, Date.now() / 1000);
+        // Fill in anything the live socket missed.
+        void syncMeeting(backend, cache, id)
+          .then(() => sendToWindows(IPC.state, state))
+          .catch((err) => console.warn("[sync] meeting sync failed:", (err as Error).message));
+      }
     }
     return state;
   });
@@ -258,6 +345,15 @@ app.on("web-contents-created", (_e, contents) => {
 function registerIpc(): void {
   handle(IPC.getState, () => state);
   handle(IPC.toggleCapture, () => setCapturing(!state.capturing));
+  handle(IPC.startMeeting, (opts) => setCapturing(true, sanitizeStartOptions(opts)));
+  handle(IPC.authSendCode, (email) => auth!.sendCode(String(email)));
+  handle(IPC.authVerifyCode, (email, code) => auth!.verifyCode(String(email), String(code)));
+  handle(IPC.authDevAvailable, () => auth!.devAvailable());
+  handle(IPC.authDevSignIn, () => auth!.devSignIn());
+  handle(IPC.authSignOut, () => auth!.signOut());
+  handle(IPC.meetingsList, () => cache!.listMeetings());
+  handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
+  handle(IPC.meetingsSync, () => runSync());
   handle(IPC.getSettings, () => getSettings());
   handle(IPC.setSettings, (patch) => {
     const next = updateSettings(patch);
@@ -296,6 +392,7 @@ if (!app.requestSingleInstanceLock()) {
     hardenSessions();
     registerIpc();
     setupCapture();
+    setupBackend();
     registerHotkeys();
     createTray();
     ensureMain();
@@ -310,7 +407,10 @@ if (!app.requestSingleInstanceLock()) {
       void setCapturing(false).finally(() => app.quit());
     }
   });
-  app.on("will-quit", () => globalShortcut.unregisterAll());
+  app.on("will-quit", () => {
+    globalShortcut.unregisterAll();
+    cache?.close();
+  });
   // Tray app: stay running when windows close (except on explicit Quit).
   app.on("window-all-closed", () => {
     if (quitting) app.quit();

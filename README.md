@@ -5,9 +5,10 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–4 are done (repo, shared event schema, desktop shell and overlay, two-channel
-audio capture to local WAV files, provider router, realtime gateway with live transcription).
-The desktop app doesn't connect to the backend yet (Prompt 6).
+Status: Prompts 0–6 are done (repo, shared event schema, desktop shell and overlay, two-channel
+audio capture to local WAV files, provider router, realtime gateway with live transcription,
+database with row-level security, sign-in, live captions and the offline meeting cache). Next is
+Prompt 7: summaries.
 
 ## 1. Create the free accounts and keys
 
@@ -53,9 +54,21 @@ Fill in the keys in `.env`. Never commit it (it's in `.gitignore`).
 scripts/dev-up
 ```
 
-This starts Supabase locally in Docker, prints its URL and keys (copy `anon key` and
-`service_role key` into `.env`), then runs the backend at http://127.0.0.1:8000.
-Check it: http://127.0.0.1:8000/health returns `{"status": "ok"}`.
+This starts Supabase locally in Docker, applies the migrations in `supabase/migrations`, prints
+its URL and keys, then runs the backend at http://127.0.0.1:8000. Copy from the printed status
+into `.env`: `API URL` → `SUPABASE_URL`, `anon key` → `SUPABASE_ANON_KEY`, `DB URL` →
+`DATABASE_URL`. Check it: http://127.0.0.1:8000/health returns `{"status": "ok", ...}`.
+
+### Signing in
+
+The desktop app signs in with an emailed one-time code (Settings → Account). Put the Supabase URL
+and anon key in Settings → Account → Supabase project. With local Supabase, the email lands in its
+test inbox at http://127.0.0.1:54324. The default Magic Link email template must show the code:
+in Supabase Studio (http://127.0.0.1:54323) → Authentication → Email templates → Magic Link, add
+`{{ .Token }}` (hosted Supabase: same place in the dashboard).
+
+No Supabase yet? Start the backend with `ALLOW_DEV_LOGIN=1` and use "Use the local dev login".
+Add `COPILOT_FAKE_PROVIDERS=1` to try the whole app with no AI keys (scripted captions).
 
 ### The desktop app
 
@@ -83,8 +96,11 @@ in `.env`.
 pnpm -w check
 ```
 
-Runs ESLint, TypeScript builds and Vitest for the JS packages, the desktop Playwright smoke test
-(under `xvfb-run` on Linux without a display), then ruff and pytest for the backend. GitHub Actions runs the same command on every push.
+Runs ESLint, TypeScript builds and Vitest for the JS packages, the desktop Playwright tests
+(under `xvfb-run` on Linux without a display; one of them starts the real backend in
+fake-provider mode and records a meeting end to end), then ruff and pytest for the backend.
+Database and row-level-security tests use `DATABASE_URL` if set, otherwise a throwaway local
+Postgres if one is installed (with pgvector), and are skipped if neither is available. GitHub Actions runs the same command on every push.
 
 ## Layout
 

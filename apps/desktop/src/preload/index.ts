@@ -1,6 +1,7 @@
 // The only bridge between renderers and the main process. Exposes a small typed API;
 // renderers get no Node, no ipcRenderer and no secret values.
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { MeetingEvent } from "@meeting-copilot/shared";
 import { IPC, type AppState, type AudioLevels, type CaptureCommand, type CopilotApi } from "../shared/ipc";
 
 const api: CopilotApi = {
@@ -11,6 +12,24 @@ const api: CopilotApi = {
     return () => ipcRenderer.removeListener(IPC.state, wrapped);
   },
   toggleCapture: () => ipcRenderer.invoke(IPC.toggleCapture),
+  startMeeting: (opts) => ipcRenderer.invoke(IPC.startMeeting, opts),
+  onLive: (listener) => {
+    const wrapped = (_e: IpcRendererEvent, event: MeetingEvent) => listener(event);
+    ipcRenderer.on(IPC.liveEvent, wrapped);
+    return () => ipcRenderer.removeListener(IPC.liveEvent, wrapped);
+  },
+  auth: {
+    sendCode: (email) => ipcRenderer.invoke(IPC.authSendCode, email),
+    verifyCode: (email, code) => ipcRenderer.invoke(IPC.authVerifyCode, email, code),
+    devAvailable: () => ipcRenderer.invoke(IPC.authDevAvailable),
+    devSignIn: () => ipcRenderer.invoke(IPC.authDevSignIn),
+    signOut: () => ipcRenderer.invoke(IPC.authSignOut),
+  },
+  meetings: {
+    list: () => ipcRenderer.invoke(IPC.meetingsList),
+    get: (id) => ipcRenderer.invoke(IPC.meetingsGet, id),
+    sync: () => ipcRenderer.invoke(IPC.meetingsSync),
+  },
   getSettings: () => ipcRenderer.invoke(IPC.getSettings),
   setSettings: (patch) => ipcRenderer.invoke(IPC.setSettings, patch),
   overlay: {

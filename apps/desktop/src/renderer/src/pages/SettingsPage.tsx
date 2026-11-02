@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { CAPTION_FONT_RANGE, type Theme } from "../../../shared/ipc";
+import { AccountSettings } from "../components/AccountSettings";
 import { inputClass, PageHeader } from "../components/EmptyState";
 import { useSettings } from "../useAppState";
 
@@ -17,6 +18,7 @@ export function SettingsPage() {
   return (
     <section className="max-w-xl space-y-8">
       <PageHeader title="Settings" />
+      <AccountSettings settings={settings} update={update} />
       <div className="space-y-4">
         <h2 className="font-medium">Appearance</h2>
         <label className="block text-sm">

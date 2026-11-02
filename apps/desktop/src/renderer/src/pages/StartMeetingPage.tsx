@@ -65,13 +65,24 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
           Share with the project
         </label>
         <div className="flex gap-2 pt-2">
-          <button type="button" className={buttonClass} onClick={() => void window.copilot.toggleCapture()}>
+          <button
+            type="button"
+            className={buttonClass}
+            onClick={() =>
+              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility }))
+            }
+          >
             {state?.capturing ? "Stop recording" : "Start recording"}
           </button>
           <button type="button" className={secondaryButtonClass} onClick={() => void announce()}>
             {copied ? "Copied consent message" : "Announce"}
           </button>
         </div>
+        {state && !state.auth.signedIn && (
+          <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            You're not signed in, so this records to your computer only (no live captions). Sign in under Settings.
+          </p>
+        )}
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Announce copies a short message to paste in the meeting chat so everyone knows you're recording.
         </p>

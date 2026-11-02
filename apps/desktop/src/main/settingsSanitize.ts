@@ -21,6 +21,10 @@ export function applySettingsPatch(current: Settings, patch: unknown): Settings 
     next.overlayPosition = { x: Math.round(p.overlayPosition.x), y: Math.round(p.overlayPosition.y) };
   }
   if (typeof p.backendUrl === "string" && isHttpUrl(p.backendUrl)) next.backendUrl = p.backendUrl;
+  if (typeof p.supabaseUrl === "string" && isHttpUrl(p.supabaseUrl)) next.supabaseUrl = p.supabaseUrl.replace(/\/+$/, "");
+  if (typeof p.supabaseAnonKey === "string" && p.supabaseAnonKey.length <= 4096 && /^[\w.-]*$/.test(p.supabaseAnonKey)) {
+    next.supabaseAnonKey = p.supabaseAnonKey;
+  }
   if (p.micDeviceId === null || (typeof p.micDeviceId === "string" && p.micDeviceId.length <= 256)) {
     next.micDeviceId = p.micDeviceId || null;
   }

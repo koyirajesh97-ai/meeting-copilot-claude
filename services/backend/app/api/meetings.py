@@ -40,6 +40,23 @@ class MeetingOut(BaseModel):
     ended_at: float | None
 
 
+class SegmentOut(BaseModel):
+    segment_id: str
+    channel: str
+    speaker_id: str
+    text: str
+    start_ms: int
+    end_ms: int
+
+
+class MeetingDetail(MeetingOut):
+    transcript: list[SegmentOut]
+
+
+def _out(m: Meeting) -> MeetingOut:
+    return MeetingOut(**{k: getattr(m, k) for k in MeetingOut.model_fields})
+
+
 def _ws_url(request: Request, meeting_id: str) -> str:
     scheme = "wss" if request.url.scheme == "https" else "ws"
     return f"{scheme}://{request.url.netloc}/ws/meetings/{meeting_id}"
@@ -86,10 +103,24 @@ async def refresh_ws_token(meeting_id: str, request: Request, user: CurrentUser)
     )
 
 
-@router.get("/meetings/{meeting_id}", response_model=MeetingOut)
-async def get_meeting(meeting_id: str, user: CurrentUser) -> MeetingOut:
+@router.get("/meetings", response_model=list[MeetingOut])
+async def list_meetings(user: CurrentUser, limit: int = 100) -> list[MeetingOut]:
+    """Your meetings, newest first. (Project-shared meetings join this list in Phase 3.)"""
+    return [
+        _out(m) for m in await services().meetings.list_for(user.user_id, min(max(limit, 1), 500))
+    ]
+
+
+@router.get("/meetings/{meeting_id}", response_model=MeetingDetail)
+async def get_meeting(meeting_id: str, user: CurrentUser) -> MeetingDetail:
     m = await _owned(meeting_id, user.user_id)
-    return MeetingOut(**{k: getattr(m, k) for k in MeetingOut.model_fields})
+    segs = await services().meetings.segments(m.id)
+    return MeetingDetail(
+        **_out(m).model_dump(),
+        transcript=[
+            SegmentOut(**{k: getattr(s, k) for k in SegmentOut.model_fields}) for s in segs
+        ],
+    )
 
 
 @router.post("/meetings/{meeting_id}/end", status_code=status.HTTP_204_NO_CONTENT)

@@ -19,5 +19,7 @@ fi
 "${SUPABASE[@]}" status
 
 set -a; . ./.env; set +a
+# Applies supabase/migrations to the local database (first start applies them automatically).
+"${SUPABASE[@]}" migration up --local || true
 cd services/backend
 exec uv run fastapi dev --host 127.0.0.1 --port 8000

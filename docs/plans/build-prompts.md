@@ -107,7 +107,7 @@ Acceptance: pytest with the Fake adapter and a WAV fixture; a manual run with De
 captions in under 1 s; forcing a Deepgram failure falls back to the next adapter.
 ```
 
-## Prompt 6: Database, persistence and live captions
+## Prompt 6: Database, persistence and live captions — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("Data model and project sync").

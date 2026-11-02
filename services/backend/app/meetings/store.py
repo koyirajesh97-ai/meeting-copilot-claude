@@ -44,8 +44,12 @@ class Segment:
 
 
 class MeetingStore(Protocol):
+    async def upsert_user(
+        self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
+    ) -> None: ...
     async def create(self, meeting: Meeting) -> Meeting: ...
     async def get(self, meeting_id: str) -> Meeting | None: ...
+    async def list_for(self, owner_id: str, limit: int = 100) -> list[Meeting]: ...
     async def end(self, meeting_id: str) -> Meeting | None: ...
     async def add_segment(self, segment: Segment) -> None: ...
     async def segments(self, meeting_id: str) -> list[Segment]: ...
@@ -59,6 +63,15 @@ class InMemoryMeetingStore:
     def __init__(self) -> None:
         self._meetings: dict[str, Meeting] = {}
         self._segments: dict[str, list[Segment]] = {}
+
+    async def upsert_user(
+        self, user_id: str, email: str | None, *, ensure_auth_user: bool = False
+    ) -> None:
+        return None
+
+    async def list_for(self, owner_id: str, limit: int = 100) -> list[Meeting]:
+        mine = [m for m in self._meetings.values() if m.owner_id == owner_id]
+        return sorted(mine, key=lambda m: m.started_at, reverse=True)[:limit]
 
     async def create(self, meeting: Meeting) -> Meeting:
         self._meetings[meeting.id] = meeting

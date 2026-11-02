@@ -204,6 +204,7 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | Method and path | Purpose |
 |---|---|
 | `POST /auth/session` | Exchange the Supabase session for a short-lived backend token |
+| `POST /auth/dev-session` | Local development only (`ALLOW_DEV_LOGIN=1`, localhost): a fixed dev user |
 | `GET /me`, `PUT /me/profile` | Current user and role profile |
 | `GET /projects`, `POST /projects`, `PATCH /projects/{id}`, `DELETE /projects/{id}` | Project management |
 | `POST /projects/{id}/members` | Invite a member by email |
@@ -380,7 +381,7 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 
 | Screen | Purpose | Key elements |
 |---|---|---|
-| First-run setup | Get capture, AI keys and profile working in under 5 minutes | Mic and system-audio permission checks with live meters; sign in; free-key wizard that tests each key; role profile; optional voice enrollment; privacy mode |
+| First-run setup | Get capture, AI keys and profile working in under 5 minutes | Mic and system-audio permission checks with live meters; sign in (emailed one-time code; the same email carries the magic link); free-key wizard that tests each key; role profile; optional voice enrollment; privacy mode |
 | Meetings home | Find and start meetings | Search bar, filters (project, type, date), recent meetings, Start meeting button |
 | Start meeting | Set up a session in two clicks | Project, meeting type, title, mode (Cloud, Live-only, Local), visibility, Announce button that copies the consent message |
 | Overlay | Live help during the meeting | Recording dot and timer, level meters, captions, card stack, Catch me up / Clarify / I'll follow up, provider chip |
@@ -425,8 +426,8 @@ Postgres is the single source of truth, and project membership decides who sees 
 
 ### How sync works
 
-1. The desktop app writes to a local SQLite cache first, so recording and notes keep working offline.
-2. A sync worker pushes finished segments, summaries and action items to Postgres when online.
+1. The desktop app writes to a local SQLite cache (Node's built-in `node:sqlite`, so there's no native module to rebuild for Electron), so recordings and transcripts stay readable offline. Audio is always written to local WAV files first.
+2. Transcription runs on the backend, which stores finals in Postgres as they happen. Live finals are also written to the local cache, and a sync worker pulls meetings and transcripts from the backend (on start, after each meeting, every 5 minutes) to fill in anything missed. If the connection drops, the last 60 s of audio are buffered and replayed and the server replays missed events; audio from a longer outage stays in the local WAV only (see TODO).
 3. Project members subscribe to a realtime channel per live meeting and see captions and cards as they arrive.
 4. Private meetings never leave the owner's account; changing a meeting to "project" shares the transcript, summary and action items, never the raw audio unless the owner chooses to.
 5. In Local-only mode nothing syncs; the meeting stays on the laptop until the owner exports it.

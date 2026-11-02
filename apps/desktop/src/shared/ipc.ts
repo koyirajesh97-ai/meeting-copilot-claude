@@ -1,4 +1,5 @@
 // Contract between the main process and the renderers. Imported by main, preload and renderer.
+import type { MeetingEvent } from "@meeting-copilot/shared";
 
 export const IPC = {
   getState: "app:get-state",
@@ -16,7 +17,69 @@ export const IPC = {
   captureCommand: "capture:command",
   captureChunk: "capture:chunk",
   captureStatus: "capture:status",
+  startMeeting: "meeting:start",
+  liveEvent: "live:event",
+  authStatus: "auth:status",
+  authSendCode: "auth:send-code",
+  authVerifyCode: "auth:verify-code",
+  authDevSignIn: "auth:dev-sign-in",
+  authDevAvailable: "auth:dev-available",
+  authSignOut: "auth:sign-out",
+  meetingsList: "meetings:list",
+  meetingsGet: "meetings:get",
+  meetingsSync: "meetings:sync",
 } as const;
+
+export interface AuthState {
+  signedIn: boolean;
+  email: string | null;
+  /** "supabase" for a real account, "dev" for the local dev login. */
+  kind: "supabase" | "dev" | null;
+}
+
+export interface LiveState {
+  /** off: not recording. connecting/reconnecting: audio is buffered locally meanwhile. */
+  status: "off" | "connecting" | "live" | "reconnecting" | "local-only";
+  meetingId: string | null;
+  message?: string;
+}
+
+export interface StartOptions {
+  title: string;
+  type: string;
+  mode: "cloud" | "local" | "live-only";
+  visibility: "private" | "project";
+}
+
+export interface CachedSegment {
+  segment_id: string;
+  channel: "mic" | "system";
+  speaker_id: string;
+  text: string;
+  start_ms: number;
+  end_ms: number;
+}
+
+export interface CachedMeeting {
+  id: string;
+  title: string;
+  type: string;
+  mode: string;
+  started_at: number;
+  ended_at: number | null;
+  segment_count: number;
+}
+
+export interface CachedMeetingDetail extends CachedMeeting {
+  transcript: CachedSegment[];
+}
+
+/** Display name for a transcript speaker id: "me" is You; "spk_1" is Speaker 2. */
+export function speakerLabel(id: string): string {
+  if (id === "me") return "You";
+  const m = /^spk_(\d+)$/.exec(id);
+  return m ? `Speaker ${Number(m[1]) + 1}` : id;
+}
 
 export type ChannelName = "mic" | "system";
 
@@ -61,6 +124,9 @@ export interface Settings {
   micDeviceId: string | null;
   /** Windows: capture only this app's audio (image name, e.g. "ms-teams.exe"); null = all. */
   systemAudioApp: string | null;
+  /** Supabase project URL and its public anon key (safe to ship; RLS protects data). */
+  supabaseUrl: string;
+  supabaseAnonKey: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -72,6 +138,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backendUrl: "http://127.0.0.1:8000",
   micDeviceId: null,
   systemAudioApp: null,
+  supabaseUrl: "http://127.0.0.1:54321",
+  supabaseAnonKey: "",
 };
 
 export const CAPTION_FONT_RANGE = { min: 11, max: 28 } as const;
@@ -84,6 +152,8 @@ export interface AppState {
   /** Last overlay action pressed, for the stub UI. */
   lastAction: { action: OverlayAction; at: number } | null;
   audio: ChannelStatus;
+  auth: AuthState;
+  live: LiveState;
 }
 
 /** Secret names the renderer may store. Values never come back to the renderer. */
@@ -95,6 +165,21 @@ export interface CopilotApi {
   getState(): Promise<AppState>;
   onState(listener: (state: AppState) => void): () => void;
   toggleCapture(): Promise<AppState>;
+  startMeeting(opts: StartOptions): Promise<AppState>;
+  /** Live meeting events from the backend (captions, provider switches, errors). */
+  onLive(listener: (event: MeetingEvent) => void): () => void;
+  auth: {
+    sendCode(email: string): Promise<void>;
+    verifyCode(email: string, code: string): Promise<AuthState>;
+    devAvailable(): Promise<boolean>;
+    devSignIn(): Promise<AuthState>;
+    signOut(): Promise<AuthState>;
+  };
+  meetings: {
+    list(): Promise<CachedMeeting[]>;
+    get(id: string): Promise<CachedMeetingDetail | null>;
+    sync(): Promise<{ meetings: number; error?: string }>;
+  };
   getSettings(): Promise<Settings>;
   setSettings(patch: Partial<Settings>): Promise<Settings>;
   overlay: {
