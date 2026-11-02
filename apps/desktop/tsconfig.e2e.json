@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "node_modules/.tsc/e2e",
+    "types": ["node"],
+    "lib": ["ES2023", "DOM"]
+  },
+  "include": ["e2e", "src/renderer/src/env.d.ts", "src/shared"]
+}

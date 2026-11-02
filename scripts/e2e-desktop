@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+# Run the desktop Playwright smoke test, using a virtual display when there is no real one.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ "$(uname)" = "Linux" ] && [ -z "${DISPLAY:-}" ]; then
+  if command -v xvfb-run >/dev/null 2>&1; then
+    exec xvfb-run -a pnpm -C apps/desktop test:e2e
+  fi
+  echo "Skipping desktop e2e: no display and no xvfb-run (install xvfb to run it)." >&2
+  exit 0
+fi
+exec pnpm -C apps/desktop test:e2e

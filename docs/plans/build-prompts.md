@@ -31,7 +31,7 @@ and pydantic models into services/backend/app/events.py with pnpm -w gen:events.
 Add a CI check that fails when generated files are stale, and round-trip tests in both languages.
 ```
 
-## Prompt 2: Desktop app shell and overlay
+## Prompt 2: Desktop app shell and overlay — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md ("Screens and UX"). Build apps/desktop with Electron + React +

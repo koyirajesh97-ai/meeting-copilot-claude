@@ -16,3 +16,6 @@ __pycache__/
 # Supabase
 supabase/.temp/
 supabase/.branches/
+out/
+test-results/
+playwright-report/

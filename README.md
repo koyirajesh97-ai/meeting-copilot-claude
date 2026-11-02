@@ -5,8 +5,8 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0 (repo bootstrap) and 1 (shared event schema) are done. Nothing records or
-transcribes yet.
+Status: Prompts 0–2 are done (repo, shared event schema, desktop shell and overlay). The
+record button drives the indicator, but no audio is captured yet.
 
 ## 1. Create the free accounts and keys
 
@@ -56,14 +56,23 @@ This starts Supabase locally in Docker, prints its URL and keys (copy `anon key`
 `service_role key` into `.env`), then runs the backend at http://127.0.0.1:8000.
 Check it: http://127.0.0.1:8000/health returns `{"status": "ok"}`.
 
+### The desktop app
+
+```bash
+pnpm -C apps/desktop dev
+```
+
+Opens the main window and the overlay, and puts an icon in the tray. Hotkeys: Ctrl/Cmd+Shift plus
+R (record), C (catch up), L (clarify), F (follow up), E (expand the overlay).
+
 ## 5. Check everything
 
 ```bash
 pnpm -w check
 ```
 
-Runs ESLint, TypeScript builds and Vitest for the JS packages, then ruff and pytest for the
-backend. GitHub Actions runs the same command on every push.
+Runs ESLint, TypeScript builds and Vitest for the JS packages, the desktop Playwright smoke test
+(under `xvfb-run` on Linux without a display), then ruff and pytest for the backend. GitHub Actions runs the same command on every push.
 
 ## Layout
 

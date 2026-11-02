@@ -7,9 +7,10 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "pnpm run check:generated && pnpm run check:js && pnpm run check:py",
+    "check": "pnpm run check:generated && pnpm run check:js && pnpm run check:e2e && pnpm run check:py",
     "check:generated": "scripts/check-generated",
     "check:js": "pnpm -r --if-present run lint && pnpm -r --if-present run build && pnpm -r --if-present run test",
+    "check:e2e": "scripts/e2e-desktop",
     "check:py": "cd services/backend && uv run ruff check && uv run ruff format --check && uv run pytest -q",
     "gen:events": "node packages/shared/scripts/gen-events.mjs && cd services/backend && uv run -q ruff format -q app/events.py && uv run -q ruff check -q --fix app/events.py && uv run -q ruff format -q app/events.py"
   },
