@@ -1,0 +1,37 @@
+# Free providers, limits, fallback order and data policy.
+# Verify current limits in each provider's console; they change often.
+tasks:                     # tried in order; next one on 429, timeout or bad JSON
+  detect:  [groq/llama-3.1-8b-instant, groq/openai/gpt-oss-20b]
+  card:    [groq/openai/gpt-oss-20b, groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
+  catchup: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest]
+  clarify: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest]
+  standup: [groq/openai/gpt-oss-120b, mistral/mistral-small-latest]
+  summary: [mistral/mistral-small-latest, groq/openai/gpt-oss-120b, gemini/gemini-flash]
+  ask:     [mistral/mistral-small-latest, groq/openai/gpt-oss-120b]
+  stt_live: [deepgram/nova-3, gladia/live, groq/whisper-large-v3, local/faster-whisper]
+timeouts_s: {detect: 1.0, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
+providers:
+  groq:
+    base_url: https://api.groq.com/openai/v1
+    key_env: GROQ_API_KEY
+    trains_on_data: false
+    models:
+      llama-3.1-8b-instant: {rpm: 30, rpd: 14400, tpd: 500000}
+      openai/gpt-oss-20b:   {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000}
+      openai/gpt-oss-120b:  {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000}
+      whisper-large-v3:     {rpm: 20, rpd: 2000}
+  mistral:
+    base_url: https://api.mistral.ai/v1
+    key_env: MISTRAL_API_KEY
+    trains_on_data: false
+  gemini:
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+    key_env: GEMINI_API_KEY
+    trains_on_data: true      # free tier: test data only
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    key_env: OPENROUTER_API_KEY
+    trains_on_data: unknown   # treated as true until you verify the model's provider
+  deepgram: {key_env: DEEPGRAM_API_KEY, kind: stt_stream}
+  gladia:   {key_env: GLADIA_API_KEY, kind: stt_stream}
+  local:    {kind: stt_local, model: small.en}

@@ -1,0 +1,19 @@
+{
+  "name": "meeting-copilot",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "check": "pnpm run check:js && pnpm run check:py",
+    "check:js": "pnpm -r --if-present run lint && pnpm -r --if-present run build && pnpm -r --if-present run test",
+    "check:py": "cd services/backend && uv run ruff check && uv run ruff format --check && uv run pytest -q"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.46.0",
+    "vitest": "^3.2.0"
+  }
+}

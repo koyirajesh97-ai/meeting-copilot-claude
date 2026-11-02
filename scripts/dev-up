@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Start local Supabase (needs Docker) and the backend in dev mode.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -f .env ]; then
+  echo "No .env found. Copy .env.example to .env and fill in your keys." >&2
+  exit 1
+fi
+
+if command -v supabase >/dev/null 2>&1; then
+  SUPABASE=(supabase)
+else
+  SUPABASE=(npx --yes supabase)
+fi
+
+[ -f supabase/config.toml ] || "${SUPABASE[@]}" init --yes >/dev/null
+"${SUPABASE[@]}" start
+"${SUPABASE[@]}" status
+
+set -a; . ./.env; set +a
+cd services/backend
+exec uv run fastapi dev --host 127.0.0.1 --port 8000

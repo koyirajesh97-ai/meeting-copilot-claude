@@ -1,0 +1,18 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+out/
+coverage/
+*.log
+.DS_Store
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+# Supabase
+supabase/.temp/
+supabase/.branches/
