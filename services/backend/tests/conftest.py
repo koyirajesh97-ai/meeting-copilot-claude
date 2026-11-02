@@ -24,6 +24,9 @@ MIGRATIONS = ROOT / "supabase" / "migrations"
 STUBS = Path(__file__).parent / "sql" / "supabase_stubs.sql"
 
 os.environ.setdefault("BACKEND_SECRET", "test-secret-test-secret-test-secret-0123")
+# Only the Postgres fixtures use DATABASE_URL. Take it out of the environment so services built in
+# other tests don't silently connect to a database that has no migrations applied.
+DATABASE_URL = os.environ.pop("DATABASE_URL", None)
 backend_secret.cache_clear()
 
 
@@ -51,8 +54,8 @@ def apply_schema(dsn: str) -> None:
 @pytest.fixture(scope="session")
 def pg_server() -> Iterator[str]:
     """A server-level DSN (database 'postgres')."""
-    if os.environ.get("DATABASE_URL"):
-        yield os.environ["DATABASE_URL"]
+    if DATABASE_URL:
+        yield DATABASE_URL
         return
     bin_dir = _pg_bin()
     if bin_dir is None:
