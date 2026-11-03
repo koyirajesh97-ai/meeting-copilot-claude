@@ -35,7 +35,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Build the installer
-        run: pnpm -C apps/desktop ${{ matrix.dist }}
+        shell: bash
+        run: |
+          # Unset secrets that aren't configured: an empty CSC_LINK is read as a (missing) file.
+          for v in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID MAIN_VITE_SENTRY_DSN MAIN_VITE_OTEL_ENDPOINT; do
+            [ -n "${!v}" ] || unset "$v"
+          done
+          pnpm -C apps/desktop ${{ matrix.dist }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAIN_VITE_SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
@@ -45,6 +51,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Without a certificate, build unsigned instead of searching the keychain.
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.CSC_LINK != '' }}
       - name: Smoke-test the packaged app
         if: matrix.exe != ''
