@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MeetingEvent } from "@meeting-copilot/shared";
+import type { MeetingEvent } from "../events";
 import { COLLAPSE_AFTER_MS, EMPTY_CARDS, reduceCards, sourceLabel, visibleCards, type CardState } from "./cards";
 
 let seq = 0;

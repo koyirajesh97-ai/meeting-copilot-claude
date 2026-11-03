@@ -1,7 +1,7 @@
 import { useEffect, useReducer, useState } from "react";
 import type { MeetingEvent } from "@meeting-copilot/shared";
 import { meetingRoute } from "../../../shared/ipc";
-import { EMPTY_CARDS, reduceCards, sourceLabel, visibleCards, type CardAction, type CardState } from "./cards";
+import { EMPTY_CARDS, reduceCards, sourceLabel, visibleCards, type CardAction, type CardState } from "@meeting-copilot/shared";
 
 export function useCards(): [CardState, (a: CardAction) => void] {
   const [state, dispatch] = useReducer(reduceCards, EMPTY_CARDS);

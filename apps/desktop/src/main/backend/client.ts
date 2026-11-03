@@ -11,11 +11,8 @@ export class BackendError extends Error {
   }
 }
 
-export interface MeetingSocket {
-  meeting_id: string;
-  ws_url: string;
-  ws_token: string;
-}
+export type { MeetingSocket } from "@meeting-copilot/shared";
+import type { MeetingSocket } from "@meeting-copilot/shared";
 
 export interface MeetingOut {
   id: string;

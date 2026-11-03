@@ -5,7 +5,7 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–14 are done (repo, shared event schema, desktop shell and overlay, two-channel
+Status: Prompts 0–15 are done (repo, shared event schema, desktop shell and overlay, two-channel
 audio capture to local WAV files, provider router, realtime gateway with live transcription,
 database with row-level security, sign-in, live captions and the offline meeting cache, summaries
 by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 is done: voice
@@ -101,6 +101,21 @@ pnpm -C apps/desktop dev
 
 Opens the main window and the overlay, and puts an icon in the tray. Hotkeys: Ctrl/Cmd+Shift plus
 R (record), C (catch up), L (clarify), F (follow up), E (expand the overlay).
+
+### The phone app
+
+The phone companion (`apps/mobile`, Expo) records with the phone's microphone, so it works next
+to a laptop you can't install anything on. It needs a development build (the audio module is
+native, so Expo Go can't run it):
+
+```bash
+pnpm -C apps/mobile android
+```
+
+(`ios` on a Mac with Xcode.) On first launch open Settings and set the backend URL to an address
+the phone can reach (your computer's LAN IP, e.g. `http://192.168.1.20:8000`, with the backend
+started with `--host 0.0.0.0`) and the Supabase URL and anon key. Then sign in with the same
+account as the desktop.
 
 ### Check your AI keys
 

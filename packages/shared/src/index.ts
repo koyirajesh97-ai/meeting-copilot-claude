@@ -1,2 +1,10 @@
 export * from "./audio";
 export * from "./events";
+export * from "./outbound";
+export * from "./ringBuffer";
+export * from "./live/captions";
+export * from "./live/cards";
+export * from "./live/speakers";
+export * from "./live/connection";
+export * from "./live/emitter";
+export { DEFAULT_CONSENT_MESSAGE, MEETING_MODES, MEETING_TYPES, type MeetingType, type Visibility } from "./meetings";

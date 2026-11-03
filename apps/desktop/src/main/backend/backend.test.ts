@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WebSocketServer, type WebSocket as ServerSocket } from "ws";
 import { DEFAULT_SETTINGS, type LiveState } from "../../shared/ipc";
-import { OutboundAudio } from "../audio/outbound";
+import { OutboundAudio } from "@meeting-copilot/shared";
 import { defaultStartOptions, sanitizeStartOptions } from "../startOptions";
 import { AuthManager, type SecretBox } from "./auth";
 import { Cache } from "./cache";

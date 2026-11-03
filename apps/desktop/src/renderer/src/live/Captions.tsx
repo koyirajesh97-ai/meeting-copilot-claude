@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { CaptionLine } from "./captions";
+import type { CaptionLine } from "@meeting-copilot/shared";
 
 /** Scrolling captions: partials grey, finals normal. Auto-scroll pauses while you scroll up. */
 export function Captions({ lines, fontSize }: { lines: CaptionLine[]; fontSize: number }) {

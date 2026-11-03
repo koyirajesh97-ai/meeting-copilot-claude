@@ -19,3 +19,5 @@ supabase/.branches/
 out/
 test-results/
 playwright-report/
+# Expo
+.expo/

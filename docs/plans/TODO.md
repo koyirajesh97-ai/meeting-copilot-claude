@@ -54,3 +54,8 @@ Follow-ups that were out of scope for the prompt that found them.
 - Consent events for "objection" have an API but no button yet (Pause covers the common case).
 - The retention job runs in the backend process every hour; with several backends, run it once
   (a scheduled job) instead.
+- Phone companion acceptance on real devices: a phone next to a laptop on speaker, on iOS and
+  Android, screen locked for 10 minutes; check transcript quality and that cards arrive. CI
+  covers the phone's core against the real backend in Fake mode and bundles the Android JS.
+- Phone: App Store / Play Store builds (EAS), an app icon and splash, and a way to set the
+  backend URL by QR code from the desktop.

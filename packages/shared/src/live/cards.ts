@@ -2,7 +2,7 @@
 // Priority: answers to you, then your standup script, then everything else. At most two show;
 // the rest wait. Cards collapse after 45 s unless pinned.
 
-import type { MeetingEvent, Source } from "@meeting-copilot/shared";
+import type { MeetingEvent, Source } from "../events";
 
 export interface Card {
   id: string;

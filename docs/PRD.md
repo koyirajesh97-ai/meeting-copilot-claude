@@ -407,6 +407,15 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 | Settings | Control | Providers and fallback order per task, usage and quota today, audio devices, hotkeys, retention, export and delete |
 | Phone companion | Capture where the laptop can't | Start and stop, captions, cards, summaries |
 
+### Phone companion
+
+- Expo (React Native) app in `apps/mobile`, a development build (the microphone module, `@siteed/audio-studio`, is native). Sign in with the emailed code (or the local dev login); the backend token and Supabase session live in the iOS Keychain / Android Keystore. No provider keys on the phone.
+- Start: title, project (and "Shared with the project"), meeting type, and "Live-only" if nothing should be saved. A red "REC m:ss" bar is pinned to the top of every tab while the microphone is on.
+- The phone mic streams 16 kHz mono PCM16 in 20 ms frames to the same meeting WebSocket as the desktop. Its one channel is sent as `system` (channel 1): a phone hears the whole room, so the backend diarizes it and recognizes your voice from your enrollment instead of treating every word as yours. Up to 60 s of audio is buffered and replayed after a dropped connection, as on the desktop (the reconnect, replay, caption and card logic is shared code in `packages/shared`).
+- Live: captions, cards (Used / Not useful / Dismiss), Catch me up (hold for 5 minutes), Clarify, I'll follow up, Stop.
+- Recording continues with the screen locked where the OS allows: iOS background audio mode, an Android foreground service with a persistent "Meeting Copilot is recording" notification.
+- Meetings (summary, decisions, action items, transcript) and Search are read-only; editing stays on the desktop.
+
 ### Overlay behavior
 
 - **Compact** (default, about 360 × 120 px): recording dot and timer, the last caption line, the newest card's first bullet, and the three action buttons.
@@ -617,7 +626,7 @@ meeting-copilot/
 │   └── plans/                     # plans and TODO.md
 ├── apps/
 │   ├── desktop/                   # Electron + React + TypeScript
-│   └── mobile/                    # Expo (Phase 4)
+│   └── mobile/                    # Expo phone companion
 ├── services/
 │   └── backend/app/
 │       ├── api/  ws/  jobs/       # REST, WebSocket, background jobs

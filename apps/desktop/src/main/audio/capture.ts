@@ -7,7 +7,7 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { AudioLevels, ChannelState, ChannelStatus } from "../../shared/ipc";
-import { OutboundAudio } from "./outbound";
+import { OutboundAudio } from "@meeting-copilot/shared";
 import { ChannelPipeline } from "./pipeline";
 import type { AudioSource } from "./sources";
 import { EnergyDetector, VadGate, type VoiceDetector } from "./vad";

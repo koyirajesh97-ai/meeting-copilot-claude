@@ -1,8 +1,8 @@
 // Caption state from live meeting events. Pure, so it's unit-tested.
 // Partials are replaced per speaker; a final replaces its speaker's partial and is kept.
 
-import type { MeetingEvent } from "@meeting-copilot/shared";
-import { speakerLabel } from "../../../shared/ipc";
+import type { MeetingEvent } from "../events";
+import { speakerLabel } from "./speakers";
 
 export interface CaptionLine {
   key: string;

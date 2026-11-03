@@ -4,7 +4,7 @@
 import { AudioChannel, encodeFrame } from "@meeting-copilot/shared";
 import { Framer } from "./framer";
 import { LevelMeter } from "./levels";
-import type { OutboundAudio } from "./outbound";
+import type { OutboundAudio } from "@meeting-copilot/shared";
 import { floatToPcm16, Resampler } from "./resample";
 import { SilenceWatch } from "./silence";
 import type { VadGate } from "./vad";

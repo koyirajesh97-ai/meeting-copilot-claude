@@ -250,7 +250,7 @@ Acceptance: the localhost-only test passes; deleting a meeting removes audio, se
 and summaries.
 ```
 
-## Prompt 15: Phone companion (Phase 4)
+## Prompt 15: Phone companion (Phase 4) — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (FR-28). Create apps/mobile with Expo + TypeScript using the

@@ -256,12 +256,8 @@ export interface AuthState {
   kind: "supabase" | "dev" | null;
 }
 
-export interface LiveState {
-  /** off: not recording. connecting/reconnecting: audio is buffered locally meanwhile. */
-  status: "off" | "connecting" | "live" | "reconnecting" | "local-only";
-  meetingId: string | null;
-  message?: string;
-}
+export type { LiveState } from "@meeting-copilot/shared";
+import type { LiveState } from "@meeting-copilot/shared";
 
 export interface StartOptions {
   title: string;
@@ -306,12 +302,7 @@ export interface CachedMeetingDetail extends CachedMeeting {
 }
 
 /** Display name for a transcript speaker id: "me" is You; "spk_1" is Speaker 2 unless renamed. */
-export function speakerLabel(id: string, names: Record<string, string> = {}): string {
-  if (names[id]) return names[id];
-  if (id === "me") return "You";
-  const m = /^spk_(\d+)$/.exec(id);
-  return m ? `Speaker ${Number(m[1]) + 1}` : id;
-}
+export { speakerLabel } from "@meeting-copilot/shared";
 
 export type ChannelName = "mic" | "system";
 

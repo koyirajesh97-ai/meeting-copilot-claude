@@ -2,10 +2,10 @@ import { useRef, useState } from "react";
 import type { LiveState, OverlayAction } from "../../../shared/ipc";
 import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
-import { visibleLines } from "../live/captions";
+import { visibleLines } from "@meeting-copilot/shared";
 import { Captions } from "../live/Captions";
 import { CardStack, useCards } from "../live/CardStack";
-import { visibleCards } from "../live/cards";
+import { visibleCards } from "@meeting-copilot/shared";
 import { useCaptions } from "../live/useCaptions";
 import { useAppState, useSettings } from "../useAppState";
 

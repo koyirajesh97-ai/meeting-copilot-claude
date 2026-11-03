@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { MeetingEvent } from "@meeting-copilot/shared";
+import type { MeetingEvent } from "../events";
 import { EMPTY_CAPTIONS, reduceCaptions, visibleLines, type CaptionState } from "./captions";
 
 const base = { meeting_id: "m1", ts_ms: 0 };

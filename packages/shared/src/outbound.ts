@@ -1,4 +1,4 @@
-import { FRAME_MS } from "@meeting-copilot/shared";
+import { FRAME_MS } from "./audio";
 import { RingBuffer } from "./ringBuffer";
 
 /** 60 s across both channels (50 frames/s each). */
