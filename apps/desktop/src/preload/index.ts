@@ -47,6 +47,7 @@ const api: CopilotApi = {
     save: (edit) => ipcRenderer.invoke(IPC.standupSave, edit),
   },
   brief: (title, type, agenda) => ipcRenderer.invoke(IPC.brief, title, type, agenda),
+  integrations: (call) => ipcRenderer.invoke(IPC.integrations, call),
   privacy: {
     get: () => ipcRenderer.invoke(IPC.privacyGet),
     save: (settings) => ipcRenderer.invoke(IPC.privacySave, settings),

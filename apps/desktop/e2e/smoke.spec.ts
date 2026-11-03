@@ -66,7 +66,7 @@ test("renderer is isolated: no Node, only the typed bridge", async () => {
     [
       "auth", "capture", "getSettings", "getState", "meetings", "onLevels", "onLive", "onState", "openMain",
       "overlay", "secrets", "setSettings", "startMeeting", "toggleCapture", "search", "ask", "voice", "profile", "cardFeedback", "standup", "brief",
-      "projects", "editMeeting", "watch", "privacy",
+      "projects", "editMeeting", "watch", "privacy", "integrations",
     ].sort(),
   );
 });

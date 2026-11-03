@@ -30,6 +30,8 @@ class Meeting:
     #: Project vocabulary for this meeting (key terms for transcription).
     vocabulary: list[str] = field(default_factory=list)
     agenda: str = ""
+    #: The calendar event this meeting was started from ("google:..." / "microsoft:...").
+    calendar_event_id: str | None = None
 
 
 @dataclass

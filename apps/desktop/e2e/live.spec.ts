@@ -97,6 +97,24 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByRole("button", { name: "Use the local dev login" }).click();
   await expect(main.getByTestId("signed-in-as")).toContainText("dev@localhost");
 
+  // Integrations (Fake adapters): a calendar, Jira and a Slack webhook.
+  const google = main.getByTestId("integration-google");
+  await google.getByLabel("Use Google Calendar").check();
+  await expect(google).toContainText("Connected");
+  const jira = main.getByTestId("integration-jira");
+  await jira.getByLabel("Jira site").fill("https://team.atlassian.net");
+  await jira.getByLabel("Jira email").fill("dev@example.com");
+  await jira.getByLabel("Jira API token").fill("token");
+  await jira.getByRole("button", { name: "Save" }).click();
+  await expect(jira).toContainText("Connected");
+  const slack = main.getByTestId("integration-slack");
+  await slack.getByLabel("Slack webhook URL").fill("https://example.com/not-slack");
+  await slack.getByRole("button", { name: "Save" }).click();
+  await expect(main.getByTestId("integrations-note")).toContainText("isn't a Slack webhook URL");
+  await slack.getByLabel("Slack webhook URL").fill("https://hooks.slack.com/services/T0/B0/X");
+  await slack.getByRole("button", { name: "Save" }).click();
+  await expect(slack).toContainText("Connected");
+
   // Your role: pick a preset, fill in names and systems, save, and see it come back.
   await main.getByRole("navigation").getByRole("link", { name: "Your role" }).click();
   await main.getByLabel("Start from a preset").selectOption("devops_sre");
@@ -111,6 +129,7 @@ test("record a meeting with live captions, then find its transcript after a rest
 
   // Standup prep: rough notes in, done / doing / blockers and a script out.
   await main.getByRole("navigation").getByRole("link", { name: "Standup prep" }).click();
+  await expect(main.getByTestId("jira-tickets")).toContainText("OPS-150");
   await main.getByLabel("Standup notes").fill("finished OPS-142 cert renewal\ntoday moving the prod deploy\nblocked on VPN access");
   await main.getByRole("button", { name: "Make my update" }).click();
   await expect(main.getByTestId("standup-script")).toHaveValue(/OPS-142/, { timeout: 15_000 });
@@ -143,8 +162,16 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(main.getByRole("button", { name: "Save terms" })).toBeHidden();
   await expect(main.getByTestId("board")).toContainText("Nothing here");
 
-  // Start a meeting from the Start meeting screen, in the project and shared with it.
-  await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
+  // Meetings home shows the calendar; starting from an event fills in its title and type.
+  await main.getByRole("navigation").getByRole("link", { name: "Meetings", exact: true }).click();
+  const upcoming = main.getByTestId("upcoming").filter({ hasText: "Payments daily standup" });
+  await expect(upcoming).toContainText("Standup");
+  await upcoming.getByRole("link", { name: "Start" }).click();
+  await expect(main.getByTestId("from-calendar")).toContainText("Payments daily standup");
+  await expect(main.getByLabel("Title")).toHaveValue("Payments daily standup");
+  await expect(main.getByLabel("Meeting type")).toHaveValue("standup");
+
+  // Start it, in the project and shared with it.
   await main.getByLabel("Title").fill("E2E standup");
   await main.getByRole("combobox", { name: "Project", exact: true }).selectOption({ label: "Payments" });
   await main.getByLabel("Share with the project").check();
@@ -214,6 +241,12 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByLabel("Template").selectOption("incident");
   await main.getByRole("button", { name: "Regenerate" }).click();
   await expect(summary.getByRole("heading", { name: "Timeline" })).toBeVisible({ timeout: 30_000 });
+
+  // Post the summary to Slack: preview (editable) first, then confirm.
+  await main.getByRole("button", { name: "Post to Slack…" }).click();
+  await expect(main.getByLabel("Post preview")).toHaveValue(/^# E2E standup/);
+  await main.getByRole("button", { name: "Post to Slack", exact: true }).click();
+  await expect(main.getByTestId("post-summary")).toContainText("Posted to Slack.");
 
   // Ask my meetings: a cited answer whose citation opens the meeting at that moment.
   await main.getByRole("navigation").getByRole("link", { name: "Ask my meetings" }).click();

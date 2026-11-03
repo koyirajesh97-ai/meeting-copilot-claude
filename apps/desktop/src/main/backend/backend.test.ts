@@ -124,6 +124,51 @@ describe("projects", () => {
   });
 });
 
+describe("integrations", () => {
+  it("nudges once, a minute before an event that wasn't recorded yet", async () => {
+    const { dueNudges } = await import("./integrations");
+    const ev = (id: string, start: number, meeting_id: string | null = null) => ({
+      id, source: "google", title: id, start, end: start + 900, attendees: 3, guessed_type: "standup", agenda: "", join_url: null, meeting_id,
+    });
+    const nudged = new Set<string>();
+    const now = 1000;
+    const events = [ev("soon", now + 55), ev("later", now + 600), ev("recorded", now + 30, "m1"), ev("started", now - 20), ev("long-ago", now - 120)];
+    expect(dueNudges(events, nudged, now).map((e) => e.id)).toEqual(["soon", "started"]);
+    expect(dueNudges(events, nudged, now + 10)).toEqual([]); // once only
+    expect(dueNudges(events, nudged, now + 545).map((e) => e.id)).toEqual(["later"]);
+  });
+
+  it("maps calls to routes, opens only the providers' sign-in pages", async () => {
+    const { integrationCall } = await import("./integrations");
+    const seen: string[] = [];
+    let authorize = "https://accounts.google.com/o/oauth2/v2/auth?x=1";
+    const backend = {
+      call: async (m: string, p: string, b?: unknown) => (seen.push(`${m} ${p} ${JSON.stringify(b ?? null)}`), p.endsWith("/connect") ? { authorize_url: authorize } : null),
+    } as never;
+    const opened: string[] = [];
+    const open = async (u: string) => void opened.push(u);
+    await integrationCall(backend, { op: "save", kind: "jira", enabled: true, site: "https://t.atlassian.net", email: "a@b.co", api_token: "" }, open);
+    await integrationCall(backend, { op: "connect", kind: "google" }, open);
+    await integrationCall(backend, { op: "post", meetingId: "m1", target: "teams", text: "hi", previewToken: "tok" }, open);
+    expect(seen).toEqual([
+      'PUT /integrations/jira {"enabled":true,"site":"https://t.atlassian.net","email":"a@b.co"}',
+      "POST /integrations/google/connect null",
+      'POST /meetings/m1/share {"target":"teams","text":"hi","preview_token":"tok"}',
+    ]);
+    expect(opened).toEqual([authorize]);
+    authorize = "https://evil.example.com/login";
+    await expect(integrationCall(backend, { op: "connect", kind: "google" }, open)).rejects.toThrow("Unexpected sign-in page");
+    await expect(integrationCall(backend, { op: "remove", kind: "github" as never }, open)).rejects.toThrow("Unknown integration");
+    await expect(integrationCall(backend, { op: "preview", meetingId: "m1", target: "email" as never }, open)).rejects.toThrow();
+  });
+
+  it("allows the start route from a calendar event", async () => {
+    const { isAllowedRoute } = await import("../../shared/ipc");
+    expect(isAllowedRoute(`/start?event=${encodeURIComponent("google:abc_123@x")}`)).toBe(true);
+    expect(isAllowedRoute("/start?event=a&b=c")).toBe(false);
+  });
+});
+
 describe("sync worker", () => {
   it("pulls new and newly ended meetings with their transcripts", async () => {
     const c = new Cache(join(dir, "c.sqlite"));
@@ -166,7 +211,7 @@ describe("start options", () => {
   it("validates what the renderer sends", () => {
     const now = new Date("2026-11-02T09:00:00Z");
     expect(sanitizeStartOptions({ title: "  Standup ", type: "standup", mode: "local", visibility: "project" }, now)).toEqual({
-      title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "", project_id: null,
+      title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "", project_id: null, calendar_event_id: null,
     });
     expect(sanitizeStartOptions({ type: "party", mode: "evil" }, now)).toEqual(defaultStartOptions(now));
     expect(sanitizeStartOptions("junk", now).title).toContain("Meeting");

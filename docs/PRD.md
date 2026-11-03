@@ -233,6 +233,11 @@ The desktop app, phone app and backend share one contract: a REST API for setup 
 | `POST /standup`, `GET /standup/today`, `PUT /standup/today` | Rough notes in; done / doing / blockers and a 30-second script out (one entry per day, editable) |
 | `GET /brief?meeting_id=` or `?title=&type=&agenda=` | Pre-meeting brief: your open action items, the last decisions, blockers and open questions of this series (same title apart from dates and numbers, same type), the agenda |
 | `GET /action-items?project_id=&filter=all\|mine\|overdue`, `PATCH /action-items/{id}` | Project action-item board from shared meetings (owner, status, due); "mine" matches your name or aliases; members and the meeting owner edit, viewers read |
+| `GET /integrations`, `PUT /integrations/{kind}`, `DELETE /integrations/{kind}` | Your integrations (`google`, `microsoft`, `jira`, `slack`, `teams`), each with its own on/off toggle. Jira: site, email and API token (tested when saved). Slack/Teams: an incoming webhook URL on hooks.slack.com, or *.webhook.office.com / *.logic.azure.com (Teams Workflows). Secrets are encrypted with INTEGRATIONS_KEY and never returned |
+| `POST /integrations/{google\|microsoft}/connect`, `GET /integrations/oauth/callback` | Calendar sign-in (OAuth authorization code, read-only calendar scope); the desktop opens the URL in your browser |
+| `GET /calendar/upcoming?hours=12` | Events from your connected calendars (all-day and cancelled ones left out), each with a guessed meeting type and the meeting already started from it, if any. `POST /meetings` with `calendar_event_id` creates the meeting record from the event: its title, guessed type and agenda (the event description) unless you set them |
+| `GET /standup/tickets` | Your Jira tickets updated since the day of your last standup (at most a week); standup prep includes them (Done counts as done, others as doing) |
+| `POST /meetings/{id}/share/preview`, `POST /meetings/{id}/share` | Post a summary to Slack or Teams: the preview returns the exact Markdown and a 15-minute preview token; posting needs that token, so nothing is sent without a preview. You can edit the text before confirming |
 | `GET /usage` | Free quota left per provider and task today |
 | `GET /health`, `GET /metrics` | Liveness and per-stage latency |
 
@@ -406,6 +411,13 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 | Projects | Shared memory | Members and roles, vocabulary, documents, action-item board |
 | Settings | Control | Providers and fallback order per task, usage and quota today, audio devices, hotkeys, retention, export and delete |
 | Phone companion | Capture where the laptop can't | Start and stop, captions, cards, summaries |
+
+### Integrations
+
+- Settings → Integrations has a toggle per integration. Each one sits behind an interface (`Calendar`, `Tickets`, `Poster` in `services/backend/app/integrations`) with a Fake used in tests, CI and `COPILOT_FAKE_PROVIDERS=1`.
+- Calendars (Google Calendar, Outlook via Microsoft Graph): Meetings home lists upcoming meetings with the guessed type; "Start" opens Start meeting with the title, type and agenda filled in. A desktop notification comes up one minute before an event that hasn't been recorded yet ("starts in a minute"); clicking it opens Start meeting for that event, so you still see the brief and Announce before recording. A meeting record is created when you start recording from the event, never for meetings you don't record.
+- Jira: your tickets updated since your last standup appear on Standup prep and go into the generated update.
+- Slack and Teams: "Post to Slack/Teams…" on a meeting with a summary shows the exact text first (editable); it posts only when you confirm.
 
 ### Phone companion
 

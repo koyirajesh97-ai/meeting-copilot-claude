@@ -60,7 +60,52 @@ export const IPC = {
   meetingDelete: "meetings:delete",
   accountExport: "account:export",
   accountDelete: "account:delete",
+  integrations: "integrations:call",
 } as const;
+
+export type IntegrationKind = "google" | "microsoft" | "jira" | "slack" | "teams";
+
+export interface IntegrationInfo {
+  kind: IntegrationKind;
+  label: string;
+  enabled: boolean;
+  connected: boolean;
+  config: { site?: string; email?: string };
+  last_error: string | null;
+  available: boolean;
+}
+
+export interface UpcomingMeeting {
+  id: string;
+  source: string;
+  title: string;
+  start: number;
+  end: number;
+  attendees: number;
+  guessed_type: string;
+  agenda: string;
+  join_url: string | null;
+  meeting_id: string | null;
+}
+
+export interface JiraTicket {
+  key: string;
+  summary: string;
+  status: string;
+  updated: number;
+  url: string | null;
+}
+
+export type IntegrationCall =
+  | { op: "list" }
+  | { op: "save"; kind: IntegrationKind; enabled: boolean; site?: string; email?: string; api_token?: string; webhook_url?: string }
+  | { op: "remove"; kind: IntegrationKind }
+  /** Calendars: opens the provider's sign-in page in your browser. */
+  | { op: "connect"; kind: "google" | "microsoft" }
+  | { op: "upcoming" }
+  | { op: "tickets" }
+  | { op: "preview"; meetingId: string; target: "slack" | "teams" }
+  | { op: "post"; meetingId: string; target: "slack" | "teams"; text: string; previewToken: string };
 
 export interface PrivacySettings {
   /** Off by default: lets meeting data reach providers marked trains_on_data true or unknown. */
@@ -267,6 +312,8 @@ export interface StartOptions {
   agenda?: string;
   /** The project the meeting belongs to (its vocabulary is used); null for personal meetings. */
   project_id?: string | null;
+  /** Started from this calendar event (Upcoming, or the 1-minute nudge). */
+  calendar_event_id?: string | null;
 }
 
 export interface CachedSegment {
@@ -383,6 +430,8 @@ export interface AppState {
   paused: boolean;
   /** Mode of the meeting being recorded (null when not recording). */
   meetingMode: "cloud" | "local" | "live-only" | null;
+  /** The last calendar nudge ("starts in a minute"), shown in the overlay too. */
+  nudge: { eventId: string; title: string; at: number } | null;
 }
 
 /** Secret names the renderer may store. Values never come back to the renderer. */
@@ -426,6 +475,8 @@ export interface CopilotApi {
   };
   /** Pre-meeting brief for a meeting about to start. */
   brief(title: string, type: string, agenda: string): Promise<Brief>;
+  /** Calendars, Jira and Slack/Teams posting. */
+  integrations<T = unknown>(call: IntegrationCall): Promise<T>;
   privacy: {
     /** Your privacy settings and each provider's data policy (defaults when signed out). */
     get(): Promise<{ settings: PrivacySettings; providers: ProviderInfo[]; signedIn: boolean }>;
@@ -507,5 +558,5 @@ export const ROUTES = {
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */
 export function isAllowedRoute(route: string): boolean {
   if (Object.values(ROUTES).includes(route as never) && !route.includes(":")) return true;
-  return /^\/meetings\/[\w-]{1,64}(\?t=\d{1,9}|\/live)?$/.test(route);
+  return /^\/meetings\/[\w-]{1,64}(\?t=\d{1,9}|\/live)?$/.test(route) || /^\/start\?event=[\w%.~-]{1,600}$/.test(route);
 }

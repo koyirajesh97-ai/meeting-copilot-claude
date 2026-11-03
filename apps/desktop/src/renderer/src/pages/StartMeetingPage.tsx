@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import type { AppState, Brief, PrivacySettings } from "../../../shared/ipc";
+import { useSearchParams } from "react-router-dom";
+import type { AppState, Brief, PrivacySettings, UpcomingMeeting } from "../../../shared/ipc";
 import {
   DEFAULT_CONSENT_MESSAGE,
   MEETING_MODES,
@@ -21,6 +22,21 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [brief, setBrief] = useState<Brief | null>(null);
   const { projects } = useProjects();
   const [projectId, setProjectId] = useState("");
+  // Started from a calendar event (Upcoming, or the 1-minute nudge): fill in what it tells us.
+  const [params] = useSearchParams();
+  const eventId = params.get("event");
+  const [event, setEvent] = useState<UpcomingMeeting | null>(null);
+  useEffect(() => {
+    if (!eventId) return;
+    void window.copilot.integrations<UpcomingMeeting[]>({ op: "upcoming" }).then((list) => {
+      const e = list.find((x) => x.id === eventId);
+      if (!e) return;
+      setEvent(e);
+      setTitle(e.title);
+      if (MEETING_TYPES.some((t) => t.id === e.guessed_type)) setType(e.guessed_type as MeetingType);
+      setAgenda(e.agenda);
+    }, () => undefined);
+  }, [eventId]);
 
   // Pre-meeting brief: your open action items and what happened last time in this series.
   useEffect(() => {
@@ -53,6 +69,11 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   return (
     <section className="max-w-xl">
       <PageHeader title="Start meeting" />
+      {event && (
+        <p className="-mt-4 mb-4 text-sm text-gray-500 dark:text-gray-400" data-testid="from-calendar">
+          From your calendar: {event.title}, {new Date(event.start * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}. Type guessed from the title; change it if it's wrong.
+        </p>
+      )}
       <div className="space-y-4">
         <label className="block text-sm">
           Title
@@ -105,7 +126,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             type="button"
             className={buttonClass}
             onClick={() =>
-              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null }))
+              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null, calendar_event_id: event?.id ?? null }))
             }
           >
             {state?.capturing ? "Stop recording" : "Start recording"}

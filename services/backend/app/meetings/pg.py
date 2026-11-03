@@ -43,6 +43,7 @@ def _meeting(row: dict) -> Meeting:
         ended_at=row["ended_at"].timestamp() if row["ended_at"] else None,
         vocabulary=list(row["vocabulary"] or []),
         agenda=row.get("agenda") or "",
+        calendar_event_id=row.get("calendar_event_id"),
     )
 
 
@@ -86,8 +87,9 @@ class PostgresStore:
     async def create(self, m: Meeting) -> Meeting:
         async with await self.connection() as conn:
             await conn.execute(
-                """insert into public.meetings (id, project_id, owner_id, type, title, started_at, visibility, mode, vocabulary, agenda)
-                   values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                """insert into public.meetings (id, project_id, owner_id, type, title, started_at, visibility, mode, vocabulary, agenda,
+                     calendar_event_id)
+                   values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                 (
                     m.id,
                     m.project_id,
@@ -99,6 +101,7 @@ class PostgresStore:
                     m.mode,
                     m.vocabulary,
                     m.agenda,
+                    m.calendar_event_id,
                 ),
             )
         return m

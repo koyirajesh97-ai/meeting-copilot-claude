@@ -1,3 +1,4 @@
+import { IntegrationsSection } from "../components/IntegrationsSection";
 import { PrivacySection } from "../components/PrivacySection";
 import { useEffect, useState } from "react";
 import { CAPTION_FONT_RANGE, type Theme } from "../../../shared/ipc";
@@ -71,6 +72,7 @@ export function SettingsPage() {
           </tbody>
         </table>
       </div>
+      <IntegrationsSection />
       <PrivacySection />
     </section>
   );

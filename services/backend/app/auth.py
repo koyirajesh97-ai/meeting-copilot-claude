@@ -24,7 +24,7 @@ ISSUER = "meeting-copilot-backend"
 SESSION_TTL_S = 60 * 60  # 1 hour
 WS_TTL_S = 5 * 60  # enough to connect; reconnects ask for a fresh one
 
-Scope = Literal["api", "ws", "watch"]
+Scope = Literal["api", "ws", "watch", "oauth", "share"]
 
 
 @lru_cache(maxsize=1)

@@ -262,7 +262,7 @@ shared event types:
 Acceptance: a phone next to a laptop on speaker produces a usable transcript and cards.
 ```
 
-## Prompt 16: Integrations
+## Prompt 16: Integrations — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (FR-29). Behind an Integrations interface, each with a Fake and

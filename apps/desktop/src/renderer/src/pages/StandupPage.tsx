@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { StandupEntry } from "../../../shared/ipc";
+import type { JiraTicket, StandupEntry } from "../../../shared/ipc";
 import { buttonClass, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
 
 const lines = (s: string) => s.split("\n").map((x) => x.trim()).filter(Boolean);
@@ -9,6 +9,10 @@ export function StandupPage() {
   const [entry, setEntry] = useState<StandupEntry | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [tickets, setTickets] = useState<JiraTicket[]>([]);
+  useEffect(() => {
+    window.copilot.integrations<JiraTicket[]>({ op: "tickets" }).then(setTickets, () => setTickets([]));
+  }, []);
 
   useEffect(() => {
     void window.copilot.standup.today().then((e) => {
@@ -61,6 +65,18 @@ export function StandupPage() {
           aria-label="Standup notes"
         />
       </label>
+      {tickets.length > 0 && (
+        <div className="text-sm" data-testid="jira-tickets">
+          <h2 className="text-xs font-medium uppercase text-gray-500">From Jira, since your last standup (included in the update)</h2>
+          <ul className="mt-1 list-disc pl-5">
+            {tickets.map((t) => (
+              <li key={t.key}>
+                <span className="font-mono">{t.key}</span> {t.summary} <span className="text-xs text-gray-500">({t.status})</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       <button type="button" className={buttonClass} disabled={busy || !notes.trim()} onClick={() => void run(() => window.copilot.standup.generate(notes), "Ready. In a standup meeting, this card comes up when your name is called.")}>
         {busy ? "Writing…" : entry ? "Regenerate" : "Make my update"}
       </button>

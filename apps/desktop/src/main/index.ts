@@ -6,13 +6,15 @@ import {
   globalShortcut,
   ipcMain,
   Menu,
+  Notification,
   session,
+  shell,
   Tray,
   type IpcMainInvokeEvent,
   type WebFrameMain,
 } from "electron";
 import { join } from "node:path";
-import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions } from "../shared/ipc";
+import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions, type UpcomingMeeting } from "../shared/ipc";
 import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
 import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
 import { recordMic } from "./audio/enroll";
@@ -22,6 +24,7 @@ import { AuthManager, SIGNED_OUT } from "./backend/auth";
 import { Cache } from "./backend/cache";
 import { BackendClient } from "./backend/client";
 import { LiveConnection } from "./backend/live";
+import { dueNudges, integrationCall } from "./backend/integrations";
 import { projectCall } from "./backend/projects";
 import { syncAll, syncMeeting, waitForSummary } from "./backend/sync";
 import { WatchConnection } from "./backend/watch";
@@ -55,6 +58,7 @@ const state: AppState = {
   live: { status: "off", meetingId: null },
   paused: false,
   meetingMode: null,
+  nudge: null,
 };
 
 // Hidden capture windows have no user gesture; let their AudioContext start anyway.
@@ -152,6 +156,34 @@ function setupBackend(): void {
 
   if (a.state.signedIn) void runSync();
   setInterval(() => auth?.state.signedIn && void runSync(), SYNC_EVERY_MS).unref();
+  setInterval(() => void checkNudges(), NUDGE_CHECK_MS).unref();
+}
+
+// ---------- calendar nudge: one minute before a meeting starts ----------
+
+const NUDGE_CHECK_MS = 20_000;
+const nudged = new Set<string>();
+
+async function checkNudges(): Promise<void> {
+  if (!auth?.state.signedIn || state.capturing || !backend) return;
+  let events: UpcomingMeeting[];
+  try {
+    events = await backend.call<UpcomingMeeting[]>("GET", "/calendar/upcoming");
+  } catch {
+    return; // offline, or no calendar connected
+  }
+  for (const e of dueNudges(events, nudged, Date.now() / 1000)) {
+    const route = `/start?event=${encodeURIComponent(e.id)}`;
+    if (!Notification.isSupported()) {
+      openMain(route);
+      continue;
+    }
+    const n = new Notification({ title: `${e.title} starts in a minute`, body: "Click to get ready to record (you'll see the brief and Announce first)." });
+    n.on("click", () => openMain(route));
+    n.show();
+    state.nudge = { eventId: e.id, title: e.title, at: Date.now() };
+    broadcast();
+  }
 }
 
 let pendingAnnounce: number | null = null;
@@ -418,6 +450,11 @@ function registerIpc(): void {
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());
   handle(IPC.search, (q) => backend!.search(String(q).slice(0, 500)));
+  handle(IPC.integrations, (call) =>
+    integrationCall(backend!, call as never, async (url) => {
+      await shell.openExternal(url);
+    }),
+  );
   handle(IPC.pause, () => setPaused(true));
   handle(IPC.resume, () => setPaused(false));
   handle(IPC.privacyGet, async () => {

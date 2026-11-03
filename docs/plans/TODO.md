@@ -59,3 +59,9 @@ Follow-ups that were out of scope for the prompt that found them.
   covers the phone's core against the real backend in Fake mode and bundles the Android JS.
 - Phone: App Store / Play Store builds (EAS), an app icon and splash, and a way to set the
   backend URL by QR code from the desktop.
+- Integrations with real accounts: register the Google and Microsoft OAuth apps, connect each,
+  and check event times across time zones and recurring events; post to a real Slack and Teams
+  channel (Teams Workflows webhooks need the Adaptive Card payload we send; check old O365
+  connectors if anyone still uses them).
+- Calendar nudge: only while the desktop app is running; add a phone push for the companion.
+- Jira Server / Data Center (PAT auth) isn't supported yet; only Jira Cloud.

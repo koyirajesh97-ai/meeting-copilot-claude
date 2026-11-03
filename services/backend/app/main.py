@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from app.api import (
     auth,
+    integrations,
     meetings,
     privacy,
     profiles,
@@ -58,6 +59,7 @@ app.include_router(profiles.router)
 app.include_router(standup.router)
 app.include_router(projects.router)
 app.include_router(privacy.router)
+app.include_router(integrations.router)
 app.include_router(ws_meetings.router)
 
 

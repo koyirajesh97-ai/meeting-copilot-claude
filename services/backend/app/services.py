@@ -8,6 +8,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
+from app.integrations.service import IntegrationService, fake_factory, real_factory
+from app.integrations.store import InMemoryIntegrations, PostgresIntegrations
 from app.jobs.summary import SummaryJobs
 from app.live.follow_ups import follow_up_drafter
 from app.live.help import live_help_factory
@@ -70,6 +72,7 @@ class Services:
     documents: InMemoryDocuments | PostgresDocuments
     blobs: object
     privacy: InMemoryPrivacy | PostgresPrivacy | None = None
+    integrations: IntegrationService | None = None
     #: For tests: an httpx transport used when fetching project links.
     link_transport: object = None
 
@@ -143,6 +146,12 @@ def build_services(
     cards = PostgresCards(meetings) if pg else InMemoryCards()
     standups = PostgresStandups(meetings) if pg else InMemoryStandups()
     standup = StandupService(standups, meetings, router, profiles)
+    integrations = IntegrationService(
+        PostgresIntegrations(meetings) if pg else InMemoryIntegrations(),
+        fake_factory() if fake_providers_enabled() else real_factory(),
+        fake=fake_providers_enabled(),
+    )
+    standup.tickets = integrations.tickets_since
     sessions.plugin_factories.append(
         live_help_factory(router, search, cards, profiles, cfg.live_help, standup)
     )
@@ -167,6 +176,7 @@ def build_services(
         PostgresDocuments(meetings) if pg else InMemoryDocuments(),
         default_blobs(),
         privacy=privacy,
+        integrations=integrations,
     )
 
 

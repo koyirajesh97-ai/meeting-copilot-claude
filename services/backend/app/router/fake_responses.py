@@ -304,6 +304,13 @@ def standup(messages: list[dict[str, str]]) -> str:
     done = [p for p in parts if DONE.search(p) and not BLOCKER.search(p)]
     blockers = [p for p in parts if BLOCKER.search(p)]
     doing = [p for p in parts if p not in done and p not in blockers]
+    # Ticket updates: "KEY summary (Status)"; Done -> done, anything else open -> doing.
+    for t in re.split(r";\s*", section(_user(messages), "JIRA UPDATES SINCE LAST STANDUP")):
+        m = re.match(r"([A-Z][A-Z0-9]+-\d+) (.+) \(([^)]+)\)$", t.strip())
+        if not m or any(m.group(1) in p for p in parts):
+            continue
+        item = f"{m.group(1)} {m.group(2)}"
+        (done if m.group(3).lower() in ("done", "closed", "resolved") else doing).append(item)
     script = (
         "Yesterday "
         + ("; ".join(done) or "I wrapped up small items")

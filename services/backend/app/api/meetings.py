@@ -22,6 +22,8 @@ class CreateMeeting(BaseModel):
     #: Names and terms for this meeting; project vocabulary is merged in once projects exist.
     vocabulary: list[str] = Field(default_factory=list, max_length=500)
     agenda: str = Field(default="", max_length=4000)
+    #: Started from this calendar event: empty title, type and agenda are filled in from it.
+    calendar_event_id: str | None = Field(default=None, max_length=1024)
 
 
 class MeetingSocket(BaseModel):
@@ -173,6 +175,17 @@ async def create_meeting(body: CreateMeeting, request: Request, user: CurrentUse
 
         if problem := local_mode_problem():
             raise HTTPException(status.HTTP_409_CONFLICT, problem)
+    if body.calendar_event_id:
+        e = await services().integrations.event(user.user_id, body.calendar_event_id)
+        if e is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, "That calendar event isn't in your upcoming meetings"
+            )
+        if body.title in ("", "Untitled meeting"):
+            body.title = e.title[:200]
+        if "type" not in body.model_fields_set:
+            body.type = services().integrations.guess(e)  # type: ignore[assignment]
+        body.agenda = body.agenda or e.description[:4000]
     project_vocab = await check_project(body.project_id, body.visibility, user.user_id)
     # Project vocabulary feeds transcription key terms and Clarify.
     vocab = sorted({t.strip() for t in [*body.vocabulary, *project_vocab] if t.strip()})
@@ -186,6 +199,7 @@ async def create_meeting(body: CreateMeeting, request: Request, user: CurrentUse
         project_id=body.project_id,
         vocabulary=vocab,
         agenda=body.agenda,
+        calendar_event_id=body.calendar_event_id,
     )
     await services().meetings.create(m)
     return MeetingSocket(

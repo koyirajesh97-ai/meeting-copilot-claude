@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { DELETE_ACCOUNT_PHRASE, type PrivacySettings, type ProviderInfo } from "../../../shared/ipc";
 import { errorText } from "../projects/useProjects";
+import { useAppState } from "../useAppState";
 import { buttonClass, inputClass, secondaryButtonClass } from "./EmptyState";
 
 const TRAINS: Record<string, string> = { true: "May train on data", false: "Doesn't train", unknown: "Unknown (treated as may train)" };
@@ -11,7 +12,8 @@ export function PrivacySection() {
   const [note, setNote] = useState<string | null>(null);
   const [phrase, setPhrase] = useState("");
   const load = () => void window.copilot.privacy.get().then(setInfo, (e) => setNote(errorText(e)));
-  useEffect(load, []);
+  const signedIn = useAppState()?.auth.signedIn;
+  useEffect(load, [signedIn]);
 
   const save = async (patch: Partial<PrivacySettings>) => {
     if (!info) return;

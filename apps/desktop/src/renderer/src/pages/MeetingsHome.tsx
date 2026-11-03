@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { meetingRoute, type CachedMeeting, type SearchHit } from "../../../shared/ipc";
+import { meetingRoute, type CachedMeeting, type SearchHit, type UpcomingMeeting } from "../../../shared/ipc";
 import { MEETING_TYPES } from "../../../shared/meetings";
 import { buttonClass, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
 
@@ -87,6 +87,7 @@ export function MeetingsHome() {
           </ul>
         </div>
       )}
+      <Upcoming />
       <div className="mb-4" />
       {meetings.length === 0 ? (
         <EmptyState title="No meetings yet" body="Start a meeting and its transcript will show up here, even when you're offline." />
@@ -120,5 +121,39 @@ export function MeetingsHome() {
         </ul>
       )}
     </section>
+  );
+}
+
+/** Today's calendar (when a calendar is connected): start one with its title, type and agenda. */
+function Upcoming() {
+  const [events, setEvents] = useState<UpcomingMeeting[]>([]);
+  useEffect(() => {
+    const load = () => void window.copilot.integrations<UpcomingMeeting[]>({ op: "upcoming" }).then(setEvents, () => setEvents([]));
+    load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
+  if (events.length === 0) return null;
+  return (
+    <div className="mb-6">
+      <h2 className="mb-2 text-sm font-medium">Upcoming</h2>
+      <ul className="space-y-1" aria-label="Upcoming meetings">
+        {events.slice(0, 6).map((e) => (
+          <li key={e.id} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-800" data-testid="upcoming">
+            <span>
+              <span className="block font-medium">{e.title}</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {new Date(e.start * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })} · {TYPE_LABEL[e.guessed_type] ?? e.guessed_type}
+              </span>
+            </span>
+            {e.meeting_id ? (
+              <Link to={`/meetings/${e.meeting_id}`} className="text-xs underline">Recorded</Link>
+            ) : (
+              <Link to={`/start?event=${encodeURIComponent(e.id)}`} className={secondaryButtonClass}>Start</Link>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

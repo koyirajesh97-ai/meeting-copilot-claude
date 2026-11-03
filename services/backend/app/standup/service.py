@@ -42,12 +42,25 @@ class StandupService:
         self.meetings = meetings
         self.router = router
         self.profiles = profiles
+        #: (user_id, since) -> your Jira tickets updated since then; set when integrations exist.
+        self.tickets = None
 
     async def generate(self, user_id: str, notes: str, project_id: str | None) -> StandupEntry:
         profile = await self.profiles.get(user_id) or RoleProfile()
         day = today()
         previous = await self.store.previous(user_id, project_id, day)
         items = await self.meetings.open_action_items(user_id, 10)
+        tickets = []
+        if self.tickets:
+            import time as _time
+
+            week = _time.time() - 7 * 86400
+            since = (
+                max(week, _time.mktime(previous.day.timetuple()))
+                if previous
+                else _time.time() - 86400
+            )
+            tickets = await self.tickets(user_id, since)
         out = await self.router.complete(
             "standup",
             load("standup_script").render(
@@ -57,6 +70,7 @@ class StandupService:
                 notes=notes,
                 previous_entry=_entry_text(previous),
                 action_items="; ".join(i.text for i, _m in items) or "none",
+                tickets="; ".join(f"{t.key} {t.summary} ({t.status})" for t in tickets) or "none",
             ),
             "meeting",
             StandupOut,

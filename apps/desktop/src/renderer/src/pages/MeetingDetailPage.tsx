@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { speakerLabel, type CachedMeetingDetail } from "../../../shared/ipc";
+import { speakerLabel, type CachedMeetingDetail, type IntegrationInfo } from "../../../shared/ipc";
 import { buttonClass, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
 import { ShareControl } from "../projects/ShareControl";
 import { SummaryPanel } from "../summary/SummaryPanel";
@@ -82,6 +82,7 @@ export function MeetingDetailPage() {
         {meeting.ended_at ? ` – ${new Date(meeting.ended_at * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}` : " · in progress"}
       </p>
       <SummaryPanel meeting={meeting} />
+      {meeting.summary.status === "ready" && <PostSummary meetingId={meeting.id} />}
       <h2 className="mb-2 font-medium">Transcript</h2>
       {meeting.transcript.length === 0 ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">No transcript yet.</p>
@@ -139,5 +140,56 @@ function DeleteMeeting({ id }: { id: string }) {
         Cancel
       </button>
     </span>
+  );
+}
+
+/** Post the summary to Slack or Teams: always shows the exact text first; nothing is sent until you confirm. */
+function PostSummary({ meetingId }: { meetingId: string }) {
+  const [targets, setTargets] = useState<("slack" | "teams")[]>([]);
+  const [preview, setPreview] = useState<{ target: "slack" | "teams"; text: string; preview_token: string } | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    void window.copilot
+      .integrations<IntegrationInfo[]>({ op: "list" })
+      .then((l) => setTargets(l.filter((i) => (i.kind === "slack" || i.kind === "teams") && i.enabled && i.connected).map((i) => i.kind as "slack")), () => setTargets([]));
+  }, []);
+  const err = (e: unknown) => setNote((e as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+  if (targets.length === 0) return null;
+  const name = (t: string) => (t === "slack" ? "Slack" : "Teams");
+  return (
+    <div className="mb-6 space-y-2" data-testid="post-summary">
+      {!preview && (
+        <div className="flex gap-2">
+          {targets.map((t) => (
+            <button key={t} type="button" className={secondaryButtonClass} onClick={() => void window.copilot.integrations<typeof preview>({ op: "preview", meetingId, target: t }).then(setPreview, err)}>
+              Post to {name(t)}…
+            </button>
+          ))}
+        </div>
+      )}
+      {preview && (
+        <div className="space-y-2 rounded-md border border-gray-200 p-3 dark:border-gray-800">
+          <p className="text-sm font-medium">This is what will be posted to {name(preview.target)}. Edit it if you like.</p>
+          <textarea aria-label="Post preview" className={inputClass} rows={10} value={preview.text} onChange={(e) => setPreview({ ...preview, text: e.target.value })} />
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={buttonClass}
+              onClick={() =>
+                void window.copilot
+                  .integrations({ op: "post", meetingId, target: preview.target, text: preview.text, previewToken: preview.preview_token })
+                  .then(() => (setPreview(null), setNote(`Posted to ${name(preview.target)}.`)), err)
+              }
+            >
+              Post to {name(preview.target)}
+            </button>
+            <button type="button" className={secondaryButtonClass} onClick={() => setPreview(null)}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+      {note && <p role="status" className="text-xs text-gray-500 dark:text-gray-400">{note}</p>}
+    </div>
   );
 }

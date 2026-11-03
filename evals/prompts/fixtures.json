@@ -21,7 +21,7 @@
   },
   "standup_script": {
     "vars": {"name": "Sai", "role_title": "DevOps/SRE", "speaking_style": "brief", "notes": "finished OPS-142 cert renewal; today moving prod deploy; blocked on VPN access",
-             "previous_entry": "none", "action_items": "none"},
+             "previous_entry": "none", "action_items": "none", "tickets": "none"},
     "expect": {"keeps": "OPS-142"}
   },
   "summary_map": {

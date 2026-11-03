@@ -6,7 +6,7 @@ const MODES = new Set(["cloud", "local", "live-only"]);
 
 export function defaultStartOptions(now = new Date()): StartOptions {
   const when = now.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  return { title: `Meeting, ${when}`, type: "custom", mode: "cloud", visibility: "private", agenda: "", project_id: null };
+  return { title: `Meeting, ${when}`, type: "custom", mode: "cloud", visibility: "private", agenda: "", project_id: null, calendar_event_id: null };
 }
 
 /** Validate what a renderer sends; fall back to defaults for anything missing or invalid. */
@@ -24,6 +24,7 @@ export function sanitizeStartOptions(raw: unknown, now = new Date()): StartOptio
     visibility: project_id && r.visibility === "project" ? "project" : "private",
     agenda: typeof r.agenda === "string" ? r.agenda.slice(0, 4000) : "",
     project_id,
+    calendar_event_id: typeof r.calendar_event_id === "string" && r.calendar_event_id.length <= 1024 ? r.calendar_event_id : null,
   };
 }
 
