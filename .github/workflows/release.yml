@@ -18,7 +18,7 @@ jobs:
         include:
           - os: windows-latest
             dist: dist:win
-            exe: release/win-unpacked/Meeting Copilot.exe
+            exe: release/win-unpacked/meeting-copilot.exe
           - os: macos-latest
             dist: dist:mac
             exe: ""

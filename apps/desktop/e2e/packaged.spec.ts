@@ -1,5 +1,5 @@
 // Runs against a packaged build (after `pnpm dist:linux` or on the Windows test machine):
-//   COPILOT_PACKAGED_APP=release/linux-unpacked/meeting-copilot pnpm -C apps/desktop exec playwright test e2e/packaged.spec.ts
+//   COPILOT_PACKAGED_APP=release/linux-unpacked/meeting-copilot (Windows: release/win-unpacked/meeting-copilot.exe) pnpm -C apps/desktop exec playwright test e2e/packaged.spec.ts
 // Checks what packaging can break: the app starts, the first-run setup shows, and recording works
 // with Silero VAD loaded from inside the archive.
 
