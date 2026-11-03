@@ -5,7 +5,7 @@ live, and leaves a shared project memory afterward. The full spec is in [docs/PR
 the step-by-step build prompts are in [docs/plans/build-prompts.md](docs/plans/build-prompts.md).
 AI coding tools: read [AGENTS.md](AGENTS.md).
 
-Status: Prompts 0–16 are done (repo, shared event schema, desktop shell and overlay, two-channel
+Status: Prompts 0–17 are done (repo, shared event schema, desktop shell and overlay, two-channel
 audio capture to local WAV files, provider router, realtime gateway with live transcription,
 database with row-level security, sign-in, live captions and the offline meeting cache, summaries
 by meeting type, search and "Ask my meetings"). Phase 1 is complete; Phase 2 is done: voice
@@ -16,6 +16,19 @@ documents, the action-item board, consent tools (Announce, Pause/Resume), Live-o
 Local-only modes, the test-provider opt-in, retention, delete and export.
 
 ### Evals
+
+```bash
+pnpm -w check:evals
+```
+
+Runs every eval in Fake mode and compares with `evals/baseline.json`; it fails on a regression (part
+of `pnpm -w check`). It measures word error rate of the stored transcript through the real gateway
+(with a provider failing mid-meeting and the client reconnecting), me-vs-others labeling, named
+speakers (synthetic voices), action-item recall, live cards, and p50/p95 latency per stage and
+provider. After an intended change, refresh the baseline with
+`cd services/backend && uv run python ../../evals/run.py --update-baseline`.
+
+The single evals can also run alone:
 
 ```bash
 cd services/backend && uv run python ../../evals/summaries/run.py
@@ -101,6 +114,42 @@ pnpm -C apps/desktop dev
 
 Opens the main window and the overlay, and puts an icon in the tray. Hotkeys: Ctrl/Cmd+Shift plus
 R (record), C (catch up), L (clarify), F (follow up), E (expand the overlay).
+
+### First run
+
+A new install opens a short setup: an audio check (5 seconds, nothing saved), sign-in, the free-key
+wizard (each key is tested with one tiny request and saved in the backend's `.env` when the backend
+runs on the same computer; `scripts/dev-up` allows that), your role, and the default privacy mode.
+Settings → "Run the setup again" reopens it.
+
+### Installers and updates
+
+```bash
+pnpm -C apps/desktop dist:win      # NSIS installer for testers (unsigned)
+```
+
+```bash
+pnpm -C apps/desktop dist:mac      # dmg + zip; signed and notarized when the Apple secrets are set
+```
+
+Pushing a tag like `v0.1.0` runs `.github/workflows/release.yml`: it builds Windows, macOS and
+Linux packages, smoke-tests the packaged app, and publishes them as a GitHub Release, which the
+app's auto-update (Settings → Updates) reads. Windows builds stay unsigned (SmartScreen warns)
+until you add `CSC_LINK` and `CSC_KEY_PASSWORD` secrets; macOS needs `CSC_LINK` plus
+`APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`.
+
+Diagnostics are opt-in (Settings → Updates and diagnostics): crash reports go to Sentry when the
+build has `MAIN_VITE_SENTRY_DSN` (and the backend `SENTRY_DSN`), and request traces go to an
+OpenTelemetry collector (`MAIN_VITE_OTEL_ENDPOINT`, backend `OTEL_EXPORTER_OTLP_ENDPOINT`; install
+the backend's extra with `uv sync --extra telemetry`). They never include what was said. Every
+desktop request carries a `traceparent` header, and the backend logs its trace id, so the two
+sides line up even without a collector.
+
+Performance check (target: under 15% CPU and 500 MB RAM; CI runs 30 seconds):
+
+```bash
+COPILOT_PERF_MINUTES=60 pnpm -C apps/desktop test:perf
+```
 
 ### The phone app
 

@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { IntegrationsSection } from "../components/IntegrationsSection";
 import { PrivacySection } from "../components/PrivacySection";
 import { useEffect, useState } from "react";
@@ -71,6 +72,21 @@ export function SettingsPage() {
             ))}
           </tbody>
         </table>
+      </div>
+      <div className="space-y-2" role="region" aria-label="Updates and diagnostics">
+        <h2 className="font-medium">Updates and diagnostics</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={settings.autoUpdate} onChange={(e) => void update({ autoUpdate: e.target.checked })} />
+          Install updates automatically (from GitHub Releases, on the next start)
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={settings.diagnostics} onChange={(e) => void update({ diagnostics: e.target.checked })} />
+          <span>
+            Send crash reports and request timings
+            <span className="block text-xs text-gray-500 dark:text-gray-400">Off by default. Never includes what was said, summaries or names. Takes effect on the next start.</span>
+          </span>
+        </label>
+        <Link to="/setup" className="text-sm underline">Run the setup again</Link>
       </div>
       <IntegrationsSection />
       <PrivacySection />

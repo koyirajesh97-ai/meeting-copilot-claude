@@ -61,7 +61,29 @@ export const IPC = {
   accountExport: "account:export",
   accountDelete: "account:delete",
   integrations: "integrations:call",
+  setup: "setup:call",
 } as const;
+
+export interface ProviderKey {
+  provider: string;
+  key_env: string;
+  has_key: boolean;
+  signup_url: string | null;
+  trains_on_data: boolean | string;
+  tasks: string[];
+  required: boolean;
+}
+
+export interface AudioCheck {
+  mic: { state: string; message?: string; peak: number };
+  system: { state: string; message?: string; peak: number };
+}
+
+export type SetupCall =
+  /** Record 5 seconds (nothing saved or sent) and report what each channel heard. */
+  | { op: "audioCheck" }
+  | { op: "providers" }
+  | { op: "saveKey"; provider: string; key: string };
 
 export type IntegrationKind = "google" | "microsoft" | "jira" | "slack" | "teams";
 
@@ -397,6 +419,14 @@ export interface Settings {
   /** Supabase project URL and its public anon key (safe to ship; RLS protects data). */
   supabaseUrl: string;
   supabaseAnonKey: string;
+  /** Install updates from GitHub Releases when the packaged app starts (on by default). */
+  autoUpdate: boolean;
+  /** Opt-in: send crash reports (Sentry) and request timings (OpenTelemetry). Never meeting content. */
+  diagnostics: boolean;
+  /** The first-run setup was finished (or skipped). */
+  setupDone: boolean;
+  /** Mode Start meeting starts in. */
+  defaultMode: "cloud" | "live-only" | "local";
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -410,6 +440,10 @@ export const DEFAULT_SETTINGS: Settings = {
   systemAudioApp: null,
   supabaseUrl: "http://127.0.0.1:54321",
   supabaseAnonKey: "",
+  autoUpdate: true,
+  diagnostics: false,
+  setupDone: false,
+  defaultMode: "cloud",
 };
 
 export const CAPTION_FONT_RANGE = { min: 11, max: 28 } as const;
@@ -475,6 +509,8 @@ export interface CopilotApi {
   };
   /** Pre-meeting brief for a meeting about to start. */
   brief(title: string, type: string, agenda: string): Promise<Brief>;
+  /** First-run setup: audio check and the free-key wizard (keys go to the backend). */
+  setup<T = unknown>(call: SetupCall): Promise<T>;
   /** Calendars, Jira and Slack/Teams posting. */
   integrations<T = unknown>(call: IntegrationCall): Promise<T>;
   privacy: {
@@ -553,6 +589,7 @@ export const ROUTES = {
   systemAudioHelp: "/help/system-audio",
   voice: "/voice",
   profile: "/profile",
+  setup: "/setup",
 } as const;
 
 /** Allowed values for openMain(route): a fixed route or a meeting detail path. */

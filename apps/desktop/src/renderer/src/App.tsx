@@ -1,4 +1,5 @@
-import { HashRouter, NavLink, Route, Routes } from "react-router-dom";
+import { useEffect, useRef } from "react";
+import { HashRouter, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../shared/ipc";
 import { RecordingIndicator } from "./components/RecordingIndicator";
 import { AskPage } from "./pages/AskPage";
@@ -11,6 +12,7 @@ import { StandupPage } from "./pages/StandupPage";
 import { StartMeetingPage } from "./pages/StartMeetingPage";
 import { SystemAudioHelpPage } from "./pages/SystemAudioHelpPage";
 import { ProfilePage } from "./pages/ProfilePage";
+import { SetupPage } from "./pages/SetupPage";
 import { VoicePage } from "./pages/VoicePage";
 import { useAppState, useSettings } from "./useAppState";
 
@@ -25,11 +27,26 @@ const NAV = [
   { to: ROUTES.settings, label: "Settings" },
 ];
 
+/** First run: open the setup until it's finished or skipped. */
+function FirstRun({ setupDone }: { setupDone: boolean | undefined }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const done = useRef(false);
+  useEffect(() => {
+    // Once per launch, from the home screen only: finishing or skipping setup never loops back.
+    if (done.current || setupDone === undefined) return;
+    done.current = true;
+    if (setupDone === false && location.pathname === "/") navigate("/setup", { replace: true });
+  }, [setupDone, location.pathname, navigate]);
+  return null;
+}
+
 export function App() {
   const state = useAppState();
-  useSettings(); // applies the theme
+  const [settings] = useSettings(); // also applies the theme
   return (
     <HashRouter>
+      <FirstRun setupDone={settings?.setupDone} />
       <div className="flex h-full">
         <nav aria-label="Main" className="w-52 shrink-0 border-r border-gray-200 p-3 dark:border-gray-800">
           <div className="mb-4 px-2 text-lg font-semibold">Meeting Copilot</div>
@@ -68,6 +85,7 @@ export function App() {
             <Route path={ROUTES.systemAudioHelp} element={<SystemAudioHelpPage />} />
             <Route path={ROUTES.voice} element={<VoicePage />} />
             <Route path={ROUTES.profile} element={<ProfilePage />} />
+            <Route path={ROUTES.setup} element={<SetupPage />} />
           </Routes>
         </main>
       </div>

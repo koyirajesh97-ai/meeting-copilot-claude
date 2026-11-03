@@ -11,11 +11,17 @@ import {
 } from "../../../shared/meetings";
 import { buttonClass, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
 import { useProjects } from "../projects/useProjects";
+import { useSettings } from "../useAppState";
 
 export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<MeetingType>("standup");
   const [mode, setMode] = useState<MeetingMode>("cloud");
+  const [settings] = useSettings();
+  const [modeTouched, setModeTouched] = useState(false);
+  useEffect(() => {
+    if (settings && !modeTouched) setMode(settings.defaultMode);
+  }, [settings, modeTouched]);
   const [visibility, setVisibility] = useState<Visibility>("private");
   const [copied, setCopied] = useState<string | null>(null);
   const [agenda, setAgenda] = useState("");
@@ -109,7 +115,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
           <div className="mt-1 space-y-1">
             {MEETING_MODES.map((m) => (
               <label key={m.id} className="flex items-start gap-2">
-                <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => setMode(m.id)} className="mt-1" />
+                <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => (setMode(m.id), setModeTouched(true))} className="mt-1" />
                 <span>
                   {m.label} <span className="text-gray-500 dark:text-gray-400">— {m.hint}</span>
                 </span>

@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app import telemetry
 from app.api import (
     auth,
     integrations,
@@ -14,6 +15,7 @@ from app.api import (
     profiles,
     projects,
     search,
+    setup,
     speakers,
     standup,
     summaries,
@@ -48,7 +50,8 @@ async def lifespan(_app: FastAPI):
         await close()
 
 
-app = FastAPI(title="Meeting Copilot backend", version="0.0.0", lifespan=lifespan)
+app = FastAPI(title="Meeting Copilot backend", version="0.1.0", lifespan=lifespan)
+telemetry.setup(app)
 app.include_router(auth.router)
 app.include_router(usage.router)
 app.include_router(meetings.router)
@@ -60,6 +63,7 @@ app.include_router(standup.router)
 app.include_router(projects.router)
 app.include_router(privacy.router)
 app.include_router(integrations.router)
+app.include_router(setup.router)
 app.include_router(ws_meetings.router)
 
 

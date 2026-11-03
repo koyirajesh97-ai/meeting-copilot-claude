@@ -11,6 +11,8 @@ export function applySettingsPatch(current: Settings, patch: unknown): Settings 
   if (typeof p.theme === "string" && THEMES.has(p.theme)) next.theme = p.theme as Settings["theme"];
   if (typeof p.highContrast === "boolean") next.highContrast = p.highContrast;
   if (typeof p.overlayExpanded === "boolean") next.overlayExpanded = p.overlayExpanded;
+  for (const k of ["autoUpdate", "diagnostics", "setupDone"] as const) if (typeof p[k] === "boolean") next[k] = p[k];
+  if (p.defaultMode === "cloud" || p.defaultMode === "live-only" || p.defaultMode === "local") next.defaultMode = p.defaultMode;
   if (typeof p.captionFontSize === "number" && Number.isFinite(p.captionFontSize)) {
     next.captionFontSize = Math.round(
       Math.min(Math.max(p.captionFontSize, CAPTION_FONT_RANGE.min), CAPTION_FONT_RANGE.max),

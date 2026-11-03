@@ -1,5 +1,6 @@
 // REST calls to the backend. The token comes from the auth manager; API keys never live here.
 
+import { routeName, traceparent, type Span } from "../tracing";
 import type { ActionItem, AskAnswer, Brief, EnrolledVoice, RoleProfile, StandupEntry, CachedSegment, SearchHit, StartOptions, SummaryData, SummaryInfo } from "../../shared/ipc";
 
 export class BackendError extends Error {
@@ -49,6 +50,9 @@ export class BackendClient {
     private readonly fetchImpl: typeof fetch = fetch,
   ) {}
 
+  /** Called with each request's span (the trace context is sent as `traceparent`). */
+  onSpan: ((span: Span) => void) | null = null;
+
   async request<T>(method: string, path: string, body?: unknown, opts: { auth?: boolean; timeoutMs?: number } = {}): Promise<T> {
     const headers: Record<string, string> = {};
     if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -58,6 +62,10 @@ export class BackendClient {
       headers.Authorization = `Bearer ${t}`;
     }
     let res: Response;
+    const trace = traceparent();
+    headers.traceparent = trace.header;
+    const startMs = Date.now();
+    const span = (status: number) => this.onSpan?.({ traceId: trace.traceId, spanId: trace.spanId, name: routeName(method, path), startMs, endMs: Date.now(), status });
     try {
       res = await this.fetchImpl(`${this.baseUrl()}${path}`, {
         method,
@@ -66,8 +74,10 @@ export class BackendClient {
         signal: AbortSignal.timeout(opts.timeoutMs ?? 10_000),
       });
     } catch (err) {
+      span(0);
       throw new BackendError(`Backend unreachable: ${(err as Error).message}`, 0);
     }
+    span(res.status);
     if (!res.ok) {
       let detail = res.statusText;
       try {

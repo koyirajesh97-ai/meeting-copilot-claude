@@ -26,6 +26,7 @@ live_help:
 timeouts_s: {detect: 1.0, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
 providers:
   groq:
+    signup_url: https://console.groq.com/keys
     base_url: https://api.groq.com/openai/v1
     key_env: GROQ_API_KEY
     trains_on_data: false
@@ -35,26 +36,32 @@ providers:
       openai/gpt-oss-120b:  {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000}
       whisper-large-v3:     {rpm: 20, rpd: 2000}
   mistral:
+    signup_url: https://console.mistral.ai/api-keys
     base_url: https://api.mistral.ai/v1
     key_env: MISTRAL_API_KEY
     trains_on_data: false
   gemini:
+    signup_url: https://aistudio.google.com/apikey
     base_url: https://generativelanguage.googleapis.com/v1beta/openai/
     key_env: GEMINI_API_KEY
     trains_on_data: true      # free tier: test data only
   openrouter:
+    signup_url: https://openrouter.ai/settings/keys
     base_url: https://openrouter.ai/api/v1
     key_env: OPENROUTER_API_KEY
     trains_on_data: unknown   # treated as true until you verify the model's provider
   deepgram:
+    signup_url: https://console.deepgram.com/
     key_env: DEEPGRAM_API_KEY
     kind: stt_stream
     trains_on_data: false     # every request sets mip_opt_out=true (Model Improvement Program opt-out)
   gladia:
+    signup_url: https://app.gladia.io/
     key_env: GLADIA_API_KEY
     kind: stt_stream
     trains_on_data: unknown   # free-plan data terms not verified; meeting audio skips it until you check
   cloudflare:
+    signup_url: https://dash.cloudflare.com/profile/api-tokens
     kind: embed
     key_env: CLOUDFLARE_API_TOKEN
     account_env: CLOUDFLARE_ACCOUNT_ID

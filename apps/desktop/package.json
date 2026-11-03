@@ -1,6 +1,6 @@
 {
   "name": "@meeting-copilot/desktop",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,13 +9,21 @@
     "start": "electron-vite preview",
     "lint": "eslint src e2e && tsc -b",
     "test": "vitest run",
-    "test:e2e": "electron-vite build && playwright test"
+    "test:e2e": "electron-vite build && playwright test",
+    "dist": "electron-vite build && electron-builder --publish never",
+    "dist:win": "electron-vite build && electron-builder --win --publish never",
+    "dist:mac": "electron-vite build && electron-builder --mac --publish never",
+    "dist:linux": "electron-vite build && electron-builder --linux --publish never",
+    "release": "electron-vite build && electron-builder --publish always",
+    "test:perf": "electron-vite build && playwright test e2e/perf.spec.ts"
   },
   "dependencies": {
     "@meeting-copilot/shared": "workspace:*",
     "@ricky0123/vad-web": "0.0.31",
+    "@sentry/electron": "^8.3.0",
     "@supabase/supabase-js": "^2.118.0",
     "electron-store": "^12.0.0",
+    "electron-updater": "^6.8.11",
     "onnxruntime-web": "1.31.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -30,6 +38,7 @@
     "@types/ws": "^8.18.2",
     "@vitejs/plugin-react": "^6.2.1",
     "electron": "^45.2.1",
+    "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.3.5",
@@ -38,5 +47,9 @@
   "main": "out/main/index.js",
   "optionalDependencies": {
     "loopback-capture": "4.0.0"
+  },
+  "description": "Bot-free meeting copilot: live captions, answer cards and summaries.",
+  "author": {
+    "name": "Sai"
   }
 }

@@ -19,6 +19,8 @@ fi
 "${SUPABASE[@]}" status
 
 set -a; . ./.env; set +a
+# The setup wizard may save keys you paste into this file (local backend only).
+export COPILOT_ENV_FILE="$PWD/.env"
 # Applies supabase/migrations to the local database (first start applies them automatically).
 "${SUPABASE[@]}" migration up --local || true
 cd services/backend

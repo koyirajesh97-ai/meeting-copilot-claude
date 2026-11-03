@@ -11,7 +11,6 @@ results and the median/p95 time from the question's final caption to its card (t
 from __future__ import annotations
 
 import argparse
-import asyncio
 import json
 import statistics
 import sys

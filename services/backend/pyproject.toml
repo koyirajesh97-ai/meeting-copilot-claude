@@ -24,6 +24,12 @@ embeddings = ["fastembed>=0.4"]
 speakers = ["pyannote.audio>=3.3"]
 # PDF text for project documents.
 documents = ["pypdf>=5.0"]
+telemetry = [
+    "opentelemetry-exporter-otlp-proto-http>=1.38",
+    "opentelemetry-instrumentation-fastapi>=0.59b0",
+    "opentelemetry-sdk>=1.38",
+    "sentry-sdk[fastapi]>=2.40",
+]
 
 [dependency-groups]
 dev = [

@@ -14,7 +14,7 @@ import {
   type WebFrameMain,
 } from "electron";
 import { join } from "node:path";
-import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions, type UpcomingMeeting } from "../shared/ipc";
+import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions, type UpcomingMeeting, type AudioCheck, type SetupCall } from "../shared/ipc";
 import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
 import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
 import { recordMic } from "./audio/enroll";
@@ -36,7 +36,9 @@ import { rm } from "node:fs/promises";
 import { DEFAULT_CONSENT_MESSAGE } from "../shared/meetings";
 import { DELETE_ACCOUNT_PHRASE, type PrivacySettings, type ProviderInfo } from "../shared/ipc";
 import { BackendError } from "./backend/client";
+import { initAutoUpdate, initCrashReports } from "./release";
 import { liveConnectionAllowed, sanitizeStartOptions } from "./startOptions";
+import { Tracer } from "./tracing";
 import { deleteSecret, getSettings, hasSecret, secretBox, setSecret, updateSettings } from "./store";
 import { createMainWindow, createOverlayWindow, navigateMain, resizeOverlay } from "./windows";
 
@@ -123,6 +125,8 @@ function setupBackend(): void {
     secretBox,
   ));
   backend = new BackendClient(() => getSettings().backendUrl, () => a.token());
+  const tracer = new Tracer(() => import.meta.env.MAIN_VITE_OTEL_ENDPOINT || process.env.OTEL_EXPORTER_OTLP_ENDPOINT || null, () => getSettings().diagnostics, app.getVersion());
+  backend.onSpan = (span) => tracer.record(span);
   state.auth = a.state;
   a.on("change", (s) => {
     state.auth = s;
@@ -281,6 +285,40 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
   captureOp = op.catch(() => undefined);
   return op;
 }
+
+/** Setup's audio check: 5 s of capture with the indicator on; nothing written or sent. */
+async function audioCheck(): Promise<AudioCheck> {
+  if (state.capturing || !capture) throw new Error("Stop recording first");
+  const peak = { mic: 0, system: 0 };
+  const onLevels = (l: AudioLevels) => {
+    peak.mic = Math.max(peak.mic, l.mic);
+    peak.system = Math.max(peak.system, l.system);
+  };
+  capture.on("levels", onLevels);
+  state.capturing = true;
+  state.captureStartedAt = Date.now();
+  state.meetingMode = "live-only";
+  broadcast();
+  try {
+    const s = getSettings();
+    await capture.start({ micDeviceId: s.micDeviceId, systemApp: s.systemAudioApp, keepAudio: false });
+    await new Promise((r) => setTimeout(r, AUDIO_CHECK_MS));
+    const status = capture.currentStatus;
+    return {
+      mic: { state: status.mic.state, message: status.mic.message, peak: peak.mic },
+      system: { state: status.system.state, message: status.system.message, peak: peak.system },
+    };
+  } finally {
+    await capture.stop();
+    capture.outbound.clear(); // the check's audio is never sent anywhere
+    capture.off("levels", onLevels);
+    state.capturing = false;
+    state.captureStartedAt = null;
+    state.meetingMode = null;
+    broadcast();
+  }
+}
+const AUDIO_CHECK_MS = Number(process.env.COPILOT_AUDIO_CHECK_MS ?? 5000);
 
 /** Pause drops audio until Resume; the backend logs both as consent events. */
 function setPaused(paused: boolean): AppState {
@@ -455,6 +493,17 @@ function registerIpc(): void {
       await shell.openExternal(url);
     }),
   );
+  handle(IPC.setup, async (raw) => {
+    const call = (raw ?? {}) as SetupCall;
+    if (call.op === "audioCheck") return audioCheck();
+    if (call.op === "providers") return backend!.call("GET", "/setup/providers");
+    if (call.op === "saveKey") {
+      if (typeof call.provider !== "string" || typeof call.key !== "string") throw new Error("Bad key");
+      // The key passes through to the backend once; the desktop never stores it.
+      return backend!.call("POST", "/setup/keys", { provider: call.provider.slice(0, 50), key: call.key.trim().slice(0, 500) });
+    }
+    throw new Error("Unknown setup call");
+  });
   handle(IPC.pause, () => setPaused(true));
   handle(IPC.resume, () => setPaused(false));
   handle(IPC.privacyGet, async () => {
@@ -644,8 +693,14 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on("second-instance", () => openMain());
 
+  // Opt-in crash reports start before anything else can crash.
+  void initCrashReports(import.meta.env.MAIN_VITE_SENTRY_DSN || process.env.SENTRY_DSN, getSettings().diagnostics);
+
   app.whenReady().then(() => {
+    // Tests (and scripted installs) can start past the first-run setup.
+    if (process.env.COPILOT_SKIP_SETUP === "1") updateSettings({ setupDone: true });
     state.overlayExpanded = getSettings().overlayExpanded;
+    void initAutoUpdate(getSettings().autoUpdate);
     hardenSessions();
     registerIpc();
     setupCapture();

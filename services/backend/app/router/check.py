@@ -21,11 +21,54 @@ from .config import Deployment, RouterConfig, load_config
 
 PING = [{"role": "user", "content": 'Reply with the JSON {"ok": true} and nothing else.'}]
 
+#: Response headers that report a provider's limits, and the config field each one maps to.
+LIMIT_HEADERS = {
+    "groq": {"x-ratelimit-limit-requests": "rpd", "x-ratelimit-limit-tokens": "tpm"},
+}
+
+
+def limit_changes(cfg: RouterConfig, d: Deployment, headers: dict[str, str]) -> list[str]:
+    """Limits the provider reports that differ from config/providers.yaml."""
+    limits = cfg.limits(d)
+    out = []
+    for header, field in LIMIT_HEADERS.get(d.provider, {}).items():
+        reported, configured = headers.get(header), getattr(limits, field)
+        if (
+            reported
+            and reported.isdigit()
+            and configured is not None
+            and int(reported) != configured
+        ):
+            out.append(f"{field} is {reported} (config says {configured})")
+    return out
+
+
+async def model_listed(cfg: RouterConfig, d: Deployment, transport=None) -> bool | None:
+    """Whether the provider still lists the model (None when the list can't be read)."""
+    p = cfg.provider(d.provider)
+    if not p.base_url or not p.api_key or p.local:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=15, transport=transport) as c:
+            r = await c.get(
+                f"{p.base_url.rstrip('/')}/models", headers={"Authorization": f"Bearer {p.api_key}"}
+            )
+    except httpx.HTTPError:
+        return None
+    if r.status_code != 200:
+        return None
+    ids = {str(m.get("id", "")).removeprefix("models/") for m in r.json().get("data", [])}
+    return d.model in ids if ids else None
+
 
 async def check_llm(cfg: RouterConfig, d: Deployment) -> dict:
     p = cfg.provider(d.provider)
+    if p.local:
+        return {"status": "skipped", "detail": "runs on this machine"}
     if not p.api_key:
         return {"status": "skipped", "detail": f"{p.key_env} not set"}
+    if await model_listed(cfg, d) is False:
+        return {"status": "model_missing", "detail": f"{d.provider} no longer lists {d.model}"}
     t0 = time.perf_counter()
     try:
         r = await LiteLLMClient().complete(d, p, PING, timeout=20, json_mode=False)
@@ -36,12 +79,15 @@ async def check_llm(cfg: RouterConfig, d: Deployment) -> dict:
             "latency_ms": int((time.perf_counter() - t0) * 1000),
         }
     hints = {k: v for k, v in r.headers.items() if k.startswith("x-ratelimit-remaining")}
-    return {
+    out = {
         "status": "ok",
         "latency_ms": int((time.perf_counter() - t0) * 1000),
         "tokens": r.total_tokens,
         "remaining": hints,
     }
+    if changes := limit_changes(cfg, d, r.headers):
+        out |= {"status": "limits_changed", "detail": "; ".join(changes)}
+    return out
 
 
 async def check_stt(cfg: RouterConfig, d: Deployment) -> dict:
@@ -115,6 +161,10 @@ async def run(cfg: RouterConfig) -> list[dict]:
     return [{"deployment": d.id, **r} for (d, _), r in zip(seen.values(), results, strict=True)]
 
 
+#: Statuses that need a person: the nightly job opens an issue for them.
+PROBLEMS = ("fail", "model_missing", "limits_changed")
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--json", action="store_true", help="print JSON instead of a table")
@@ -130,7 +180,7 @@ def main() -> int:
             print(
                 f"{r['status']:8} {r['deployment']:40} {str(r.get('latency_ms', '-')) + ' ms':>9}  {extra}"
             )
-    failed = [r for r in results if r["status"] == "fail"]
+    failed = [r for r in results if r["status"] in PROBLEMS]
     if os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as f:
             f.write("| Status | Provider | Latency | Detail |\n|---|---|---|---|\n")

@@ -28,7 +28,7 @@ test.beforeAll(async () => {
   // Chromium refuses to start as root (containers, CI) without this. The app's own
   // renderer sandbox settings are unchanged.
   if (process.getuid?.() === 0) args.push("--no-sandbox");
-  app = await electron.launch({ args, cwd: join(import.meta.dirname, "..") });
+  app = await electron.launch({ args, cwd: join(import.meta.dirname, ".."), env: { ...process.env, COPILOT_SKIP_SETUP: "1" } });
 });
 
 test.afterAll(async () => {
@@ -66,7 +66,7 @@ test("renderer is isolated: no Node, only the typed bridge", async () => {
     [
       "auth", "capture", "getSettings", "getState", "meetings", "onLevels", "onLive", "onState", "openMain",
       "overlay", "secrets", "setSettings", "startMeeting", "toggleCapture", "search", "ask", "voice", "profile", "cardFeedback", "standup", "brief",
-      "projects", "editMeeting", "watch", "privacy", "integrations",
+      "projects", "editMeeting", "watch", "privacy", "integrations", "setup",
     ].sort(),
   );
 });

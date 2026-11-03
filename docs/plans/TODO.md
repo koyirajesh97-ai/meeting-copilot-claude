@@ -65,3 +65,15 @@ Follow-ups that were out of scope for the prompt that found them.
   connectors if anyone still uses them).
 - Calendar nudge: only while the desktop app is running; add a phone push for the companion.
 - Jira Server / Data Center (PAT auth) isn't supported yet; only Jira Cloud.
+- Prompt 17 acceptance on a clean Windows 10/11 machine: install the NSIS build, finish setup,
+  record a Teams meeting end to end (captions, cards, summary), then update to a newer tag.
+  CI covers the Linux package and the packaged-app smoke test; Windows and macOS packages are
+  built and smoke-tested by the release workflow but haven't been run on real machines yet.
+- Buy a Windows code-signing certificate and join the Apple Developer Program, then add the
+  signing secrets (see README "Installers and updates").
+- Run the 60-minute performance check on a real 16 GB laptop with real providers (CI measures
+  30 s in Fake mode under xvfb: about 2% CPU and 460 MB proportional memory, close to the
+  500 MB target, mostly the hidden capture window and software rendering; check on hardware).
+- Word error rate with real providers needs your own consented recordings with reference
+  transcripts; the CI eval measures our pipeline (no lost or duplicated captions), not the model.
+- App icons for the installers (build/icon.ico, build/icon.icns) before the first public release.

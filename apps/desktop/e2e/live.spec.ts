@@ -63,7 +63,7 @@ async function launch(): Promise<ElectronApplication> {
   return electron.launch({
     args,
     cwd: join(import.meta.dirname, ".."),
-    env: { ...process.env, COPILOT_ENROLL_SECONDS: "10" },
+    env: { ...process.env, COPILOT_ENROLL_SECONDS: "10", COPILOT_SKIP_SETUP: "1" },
   });
 }
 

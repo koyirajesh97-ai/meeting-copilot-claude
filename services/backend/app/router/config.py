@@ -47,6 +47,8 @@ class ProviderConfig(BaseModel):
     # Unknown is treated as "trains on data": meeting content never goes there.
     trains_on_data: TrainsOnData = "unknown"
     kind: Literal["llm", "stt_stream", "stt_local", "embed"] = "llm"
+    #: Where to get a free key (the setup wizard links to it).
+    signup_url: str | None = None
     #: Runs on this machine (no network beyond localhost). Local-only meetings use only these.
     local: bool = False
     #: Some providers need an account id in the URL (Cloudflare).

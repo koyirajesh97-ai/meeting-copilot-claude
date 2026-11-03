@@ -1,19 +1,61 @@
-# Packaging config (electron-builder is added in Prompt 17). Kept here now so the macOS
-# permission strings and native/wasm unpacking are decided alongside the capture code.
+# Packaging: `pnpm -C apps/desktop dist:win` (testers), `dist:mac`, `dist:linux`.
+# Windows builds are unsigned until a code-signing certificate is bought: set CSC_LINK and
+# CSC_KEY_PASSWORD and the same command signs them. macOS builds are signed and notarized when
+# CSC_LINK plus APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID are set (Apple Developer
+# Program); without them the mac build is unsigned and for local testing only.
 appId: com.meetingcopilot.desktop
 productName: Meeting Copilot
+executableName: meeting-copilot
+artifactName: "${productName}-${version}-${os}-${arch}.${ext}"
 directories:
   output: release
+  buildResources: build
 files:
   - out/**
+  - package.json
+  - "!**/*.map"
+  # onnxruntime-web: the main process only needs its Node build and one WebAssembly file.
+  - "!**/node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.{jsep,asyncify,jspi}.*"
+  - "!**/node_modules/onnxruntime-web/dist/ort.{all,webgl,webgpu,jspi,wasm,bundle}*"
+  - "!**/node_modules/onnxruntime-web/dist/ort.{js,mjs,min.js,min.mjs}"
 asarUnpack:
-  - node_modules/loopback-capture/prebuilds/**
-  - node_modules/onnxruntime-web/dist/*.wasm
+  - node_modules/loopback-capture/**
+  - node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.*
   - node_modules/@ricky0123/vad-web/dist/*.onnx
+# Auto-update reads new versions from this repo's GitHub Releases (electron-updater).
+publish:
+  provider: github
+  owner: koyirajesh97-ai
+  repo: meeting-copilot-claude
+  releaseType: release
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  # Unsigned test builds: updates still work; SmartScreen warns until the build is signed.
+  verifyUpdateCodeSignature: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  runAfterFinish: true
 mac:
   category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarizes only when the APPLE_* variables are set.
+  notarize: true
   extendInfo:
     NSMicrophoneUsageDescription: Meeting Copilot records your microphone so it can transcribe what you say in meetings.
     NSAudioCaptureUsageDescription: Meeting Copilot records the meeting audio your Mac plays so it can transcribe what others say.
-win:
-  target: nsis
+linux:
+  target: [AppImage]
+  category: Office

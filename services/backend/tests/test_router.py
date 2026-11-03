@@ -251,3 +251,55 @@ def test_real_config_has_a_meeting_safe_provider_for_every_task() -> None:
     assert cfg.timeout("card") == 1.5
     assert cfg.tasks["card"][0].id == "groq/openai/gpt-oss-20b"
     assert cfg.limits(cfg.tasks["detect"][0]).rpd == 14400
+
+
+# ---------- nightly provider check ----------
+
+
+async def test_provider_check_spots_dropped_models_and_changed_limits(monkeypatch) -> None:
+    import httpx
+
+    from app.router.check import limit_changes, model_listed
+    from app.router.config import Deployment
+    from app.router.report import issue
+
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    cfg = load_config()
+    d = Deployment.parse("groq/llama-3.1-8b-instant")
+    listed = httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"data": [{"id": "llama-3.1-8b-instant"}]})
+    )
+    dropped = httpx.MockTransport(
+        lambda r: httpx.Response(200, json={"data": [{"id": "llama-4-scout"}]})
+    )
+    down = httpx.MockTransport(lambda r: httpx.Response(503))
+    assert await model_listed(cfg, d, listed) is True
+    assert await model_listed(cfg, d, dropped) is False
+    assert await model_listed(cfg, d, down) is None  # can't tell: don't raise an alarm
+    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "14400"}) == []
+    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "1000"}) == [
+        "rpd is 1000 (config says 14400)"
+    ]
+
+    assert issue([{"deployment": "groq/x", "status": "ok"}]) is None
+    title, body = issue(
+        [
+            {"deployment": "groq/x", "status": "ok"},
+            {
+                "deployment": "gemini/gemini-flash",
+                "status": "model_missing",
+                "detail": "gemini no longer lists gemini-flash",
+            },
+            {
+                "deployment": "groq/y",
+                "status": "limits_changed",
+                "detail": "rpd is 1000 (config says 14400)",
+            },
+            {"deployment": "mistral/m", "status": "skipped"},
+        ],
+        "https://github.com/o/r/actions/runs/1",
+    )
+    assert "provider" in title.lower()
+    assert "`gemini/gemini-flash` | model_missing" in body and "replacement model" in body
+    assert "rpd is 1000" in body and "1 provider(s) were fine; 1 were skipped" in body
+    assert body.rstrip().endswith("actions/runs/1")

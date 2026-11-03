@@ -273,7 +273,7 @@ a Settings toggle:
 - Post a summary to Teams or Slack by webhook only after the user previews and confirms.
 ```
 
-## Prompt 17: Hardening and release
+## Prompt 17: Hardening and release — DONE
 
 ```
 Read AGENTS.md and docs/PRD.md (Non-functional requirements, Success metrics).

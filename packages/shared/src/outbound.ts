@@ -44,6 +44,11 @@ export class OutboundAudio {
     return backlog.length;
   }
 
+  /** Drop everything buffered (audio that must never be sent, like setup's audio check). */
+  clear(): void {
+    this.buffer.drain();
+  }
+
   detach(): void {
     this.send = null;
   }
