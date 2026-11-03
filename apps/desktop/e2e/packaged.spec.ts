@@ -17,8 +17,8 @@ test("the packaged app starts, shows setup and records with Silero", async () =>
   const app = await launchApp(dir, {}, resolve(exe!));
   try {
     const main = await windowByTitle(app, "Meeting Copilot");
-    await expect(main.getByRole("heading", { name: "Set up Meeting Copilot" })).toBeVisible();
-    await main.getByRole("button", { name: "Skip setup" }).click();
+    await expect(main.getByRole("heading", { name: "Welcome to Meeting Copilot" })).toBeVisible();
+    await main.getByRole("button", { name: "Skip" }).click();
     await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
     await main.getByRole("button", { name: "Start recording" }).click();
     await expect.poll(async () => (await main.evaluate(() => window.copilot.getState())).audio.mic.source ?? "", { timeout: 20_000 }).toContain("vad: silero");

@@ -399,29 +399,31 @@ USER: QUESTION: {question}  ASKED BY: {asker}  FACTS: {facts}
 
 Ten screens cover the whole app, and the overlay is the one that matters most: it has to help in a glance without ever stealing focus from the meeting.
 
+**Keep it simple.** The main path is: open the app, press Start meeting, join the call, read the summary. The sidebar has one big "Start meeting" button and four places (Meetings, Ask, Projects, Settings). Each screen shows the one or two things you need; everything else is folded away ("More options" on Start meeting, the "More" menu on a meeting, collapsed transcript, Settings tabs with technical items under Advanced). Empty sections aren't shown.
+
 | Screen | Purpose | Key elements |
 |---|---|---|
-| First-run setup | Get capture, AI keys and profile working in under 5 minutes | Mic and system-audio permission checks with live meters; sign in (emailed one-time code; the same email carries the magic link); free-key wizard that tests each key; role profile; optional voice enrollment; privacy mode |
-| Meetings home | Find and start meetings | Search bar, filters (project, type, date), recent meetings, Start meeting button |
-| Start meeting | Set up a session in two clicks | Project, meeting type, title, mode (Cloud, Live-only, Local), visibility, Announce button that copies the consent message |
+| First-run setup | Ready in a few minutes, no sidebar | Three steps with a progress bar: sign in (emailed code), check audio (5 s, live meters), about you (name and role). An AI-keys step appears only when the backend is missing a required key. Skip anytime |
+| Meetings home | Find meetings | Search, the next three calendar meetings with Start, recent meetings, Standup prep |
+| Start meeting | Start in one click | A name field, Start recording and Announce; "More options" (folded) holds type, project and sharing, privacy mode, agenda and the consent message; the brief below |
 | Overlay | Live help during the meeting | Recording dot and timer, level meters, captions, card stack, Catch me up / Clarify / I'll follow up, provider chip |
-| Meeting detail | Review and share | Editable summary sections, action items, transcript with speakers and timestamps, rename speaker, export and copy, regenerate with another template |
+| Meeting detail | Review and share | The summary (only sections with content) and Copy summary; a More menu with Edit, Export, Regenerate as another type, Post to Slack/Teams, who can see it, Delete; the transcript folded below (opens at the moment when you come from a citation) |
 | Ask my meetings | Find anything said before | Chat with cited answers; a citation opens the meeting at that moment |
 | Standup prep | Ready in two minutes | Notes box, generated done / doing / blockers, editable 30-second script |
 | Projects | Shared memory | Members and roles, vocabulary, documents, action-item board |
-| Settings | Control | Providers and fallback order per task, usage and quota today, audio devices, hotkeys, retention, export and delete |
+| Settings | Control, in tabs | Account (sign-in, your role, your voice), General (default mode, audio devices, look), Connections (calendar, Jira, Slack/Teams), Privacy (retention, consent message, export, delete; which AI services see meeting data, folded), Advanced (server, sync, updates and diagnostics, hotkeys, run setup again) |
 | Phone companion | Capture where the laptop can't | Start and stop, captions, cards, summaries |
 
 ### Integrations
 
-- Settings → Integrations has a toggle per integration. Each one sits behind an interface (`Calendar`, `Tickets`, `Poster` in `services/backend/app/integrations`) with a Fake used in tests, CI and `COPILOT_FAKE_PROVIDERS=1`.
+- Settings → Connections has a toggle per integration. Each one sits behind an interface (`Calendar`, `Tickets`, `Poster` in `services/backend/app/integrations`) with a Fake used in tests, CI and `COPILOT_FAKE_PROVIDERS=1`.
 - Calendars (Google Calendar, Outlook via Microsoft Graph): Meetings home lists upcoming meetings with the guessed type; "Start" opens Start meeting with the title, type and agenda filled in. A desktop notification comes up one minute before an event that hasn't been recorded yet ("starts in a minute"); clicking it opens Start meeting for that event, so you still see the brief and Announce before recording. A meeting record is created when you start recording from the event, never for meetings you don't record.
 - Jira: your tickets updated since your last standup appear on Standup prep and go into the generated update.
 - Slack and Teams: "Post to Slack/Teams…" on a meeting with a summary shows the exact text first (editable); it posts only when you confirm.
 
 ### First-run setup, releases and diagnostics
 
-- First run opens Setup: welcome and privacy basics; a 5-second audio check (the recording indicator is on, nothing is written or sent, and the check's audio is cleared from the replay buffer) with per-channel results and a link to the system-audio help; backend URL and sign-in; the free-key wizard; role (name and preset) with a link to voice enrollment; default meeting mode and the diagnostics opt-in. Every step can be skipped; it never opens again once finished or skipped.
+- First run opens Setup (full window, no sidebar): sign-in (the server address is folded under "Using a different server?"); the free-key wizard only if the backend lacks a required key; a 5-second audio check (the recording indicator is on, nothing is written or sent, and the check's audio is cleared from the replay buffer) with per-channel results and a "Fix" link; name and role with a link to voice enrollment. The default meeting mode and the diagnostics opt-in are in Settings. Every step can be skipped; it never opens again once finished or skipped.
 - Free-key wizard: `GET /setup/providers` lists each provider's key variable, whether it's set, the sign-up link (from config/providers.yaml), its data policy and tasks. `POST /setup/keys` tests a key with one tiny request (the same checks as `scripts/check-providers`) and saves it in the backend's `.env` only when the request comes from this computer and the backend was started with `COPILOT_ENV_FILE` (`scripts/dev-up` sets it); otherwise it says which variable to add. The desktop never stores keys.
 - Packaging with electron-builder: NSIS for Windows testers (unsigned until a certificate is bought), signed and notarized dmg/zip for macOS once the Apple program is joined, AppImage for Linux. The release workflow smoke-tests each packaged app (starts, shows setup, records with Silero VAD loaded from the archive) and publishes to GitHub Releases; electron-updater installs updates on the next start (Settings toggle, on by default).
 - Diagnostics are opt-in (off by default): Sentry crash reports (no request bodies, breadcrumbs or user details) and OpenTelemetry request traces from desktop to backend (W3C `traceparent` on every request; span names have ids replaced). Without a collector, the backend still logs each request's trace id.
@@ -536,7 +538,7 @@ Recording your own meetings is allowed in Texas and Indiana, but anyone dialing 
 
 ### Free AI services and meeting data
 
-Free tiers treat your data differently. Google's free Gemini tier may use prompts to improve its products, with human review, while Groq doesn't retain inputs by default and Mistral's API data isn't used for training. The router enforces this: real meeting content goes only to providers flagged as not training on it, and test-only providers need an explicit opt-in in Settings (Settings → Privacy lists every provider's flag; the opt-in is off by default and applies only to your own meetings).
+Free tiers treat your data differently. Google's free Gemini tier may use prompts to improve its products, with human review, while Groq doesn't retain inputs by default and Mistral's API data isn't used for training. The router enforces this: real meeting content goes only to providers flagged as not training on it, and test-only providers need an explicit opt-in in Settings (Settings → Privacy → "Which AI services see meeting data" lists every provider's flag; the opt-in is off by default and applies only to your own meetings).
 
 ### Your government client work
 

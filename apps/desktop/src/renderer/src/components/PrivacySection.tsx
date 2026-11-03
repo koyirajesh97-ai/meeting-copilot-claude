@@ -39,45 +39,9 @@ export function PrivacySection() {
   const s = info.settings;
   return (
     <div className="space-y-4" role="region" aria-label="Privacy">
-      <h2 className="font-medium">Privacy</h2>
       {!info.signedIn && <p className="text-sm text-gray-500 dark:text-gray-400">Sign in to see AI providers, retention, export and delete.</p>}
       {info.signedIn && (
         <>
-          <div>
-            <h3 className="mb-1 text-sm font-medium">AI providers</h3>
-            <table className="w-full text-xs" data-testid="providers">
-              <thead className="text-left text-gray-500">
-                <tr>
-                  <th className="py-1">Provider</th>
-                  <th>Training on your data</th>
-                  <th>Meeting data</th>
-                  <th>Used for</th>
-                </tr>
-              </thead>
-              <tbody>
-                {info.providers.map((p) => (
-                  <tr key={p.name} className="border-t border-gray-200 dark:border-gray-800" data-provider={p.name}>
-                    <td className="py-1 font-medium">
-                      {p.name}
-                      {p.local && <span className="ml-1 rounded bg-emerald-100 px-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">this computer</span>}
-                    </td>
-                    <td>{TRAINS[String(p.trains_on_data)]}</td>
-                    <td>{p.meeting_data_allowed ? "Allowed" : "Test data only"}</td>
-                    <td className="text-gray-500">{p.tasks.join(", ") || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <label className="flex items-start gap-2 text-sm">
-            <input type="checkbox" className="mt-1" checked={s.allow_test_providers} onChange={(e) => void save({ allow_test_providers: e.target.checked })} />
-            <span>
-              Allow test-only providers for meeting data
-              <span className="block text-xs text-gray-500 dark:text-gray-400">
-                Off by default. These providers may use what you send to train their models; leave it off for real meetings.
-              </span>
-            </span>
-          </label>
           <label className="block text-sm">
             Delete meetings older than
             <select
@@ -109,6 +73,43 @@ export function PrivacySection() {
               Export my data
             </button>
           </div>
+          <details className="rounded-lg border border-gray-200 text-sm dark:border-gray-800">
+            <summary className="cursor-pointer select-none px-3 py-2 text-gray-600 dark:text-gray-300">Which AI services see meeting data</summary>
+            <div className="space-y-3 border-t border-gray-200 p-3 dark:border-gray-800">
+            <table className="w-full text-xs" data-testid="providers">
+              <thead className="text-left text-gray-500">
+                <tr>
+                  <th className="py-1">Provider</th>
+                  <th>Training on your data</th>
+                  <th>Meeting data</th>
+                  <th>Used for</th>
+                </tr>
+              </thead>
+              <tbody>
+                {info.providers.map((p) => (
+                  <tr key={p.name} className="border-t border-gray-200 dark:border-gray-800" data-provider={p.name}>
+                    <td className="py-1 font-medium">
+                      {p.name}
+                      {p.local && <span className="ml-1 rounded bg-emerald-100 px-1 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200">this computer</span>}
+                    </td>
+                    <td>{TRAINS[String(p.trains_on_data)]}</td>
+                    <td>{p.meeting_data_allowed ? "Allowed" : "Test data only"}</td>
+                    <td className="text-gray-500">{p.tasks.join(", ") || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          <label className="flex items-start gap-2 text-sm">
+            <input type="checkbox" className="mt-1" checked={s.allow_test_providers} onChange={(e) => void save({ allow_test_providers: e.target.checked })} />
+            <span>
+              Allow test-only providers for meeting data
+              <span className="block text-xs text-gray-500 dark:text-gray-400">
+                Off by default. These providers may use what you send to train their models; leave it off for real meetings.
+              </span>
+            </span>
+          </label>
+            </div>
+          </details>
           <div className="rounded-md border border-red-300 p-3 dark:border-red-900">
             <h3 className="text-sm font-medium text-red-700 dark:text-red-400">Delete my account</h3>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">

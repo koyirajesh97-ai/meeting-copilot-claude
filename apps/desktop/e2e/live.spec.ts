@@ -97,7 +97,8 @@ test("record a meeting with live captions, then find its transcript after a rest
   await main.getByRole("button", { name: "Use the local dev login" }).click();
   await expect(main.getByTestId("signed-in-as")).toContainText("dev@localhost");
 
-  // Integrations (Fake adapters): a calendar, Jira and a Slack webhook.
+  // Integrations (Fake adapters): a calendar, Jira and a Slack webhook (Settings → Connections).
+  await main.getByRole("tab", { name: "Connections" }).click();
   const google = main.getByTestId("integration-google");
   await google.getByLabel("Use Google Calendar").check();
   await expect(google).toContainText("Connected");
@@ -116,7 +117,8 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(slack).toContainText("Connected");
 
   // Your role: pick a preset, fill in names and systems, save, and see it come back.
-  await main.getByRole("navigation").getByRole("link", { name: "Your role" }).click();
+  await main.getByRole("tab", { name: "Account" }).click();
+  await main.getByRole("link", { name: /^Your role/ }).click();
   await main.getByLabel("Start from a preset").selectOption("devops_sre");
   await expect(main.getByLabel("Role title")).toHaveValue("DevOps/SRE");
   await main.getByLabel("Your name (as people say it)").fill("Dev User");
@@ -128,7 +130,8 @@ test("record a meeting with live captions, then find its transcript after a rest
   expect(saved).toMatchObject({ name: "Dev User", title: "DevOps/SRE", systems_owned: ["payments cluster", "ArgoCD"] });
 
   // Standup prep: rough notes in, done / doing / blockers and a script out.
-  await main.getByRole("navigation").getByRole("link", { name: "Standup prep" }).click();
+  await main.getByRole("navigation").getByRole("link", { name: "Meetings", exact: true }).click();
+  await main.getByRole("link", { name: "Standup prep" }).click();
   await expect(main.getByTestId("jira-tickets")).toContainText("OPS-150");
   await main.getByLabel("Standup notes").fill("finished OPS-142 cert renewal\ntoday moving the prod deploy\nblocked on VPN access");
   await main.getByRole("button", { name: "Make my update" }).click();
@@ -136,7 +139,8 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(main.getByTestId("standup-blockers")).toHaveValue(/VPN/);
 
   // Enroll a voice: consent is required, the indicator shows while recording, and it can be deleted.
-  await main.getByRole("navigation").getByRole("link", { name: "Your voice" }).click();
+  await main.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
+  await main.getByRole("link", { name: /^Your voice/ }).click();
   const record = main.getByRole("button", { name: /Record \d+ seconds/ });
   await expect(record).toBeDisabled();
   await main.getByLabel("I agree to a voiceprint").check();
@@ -223,12 +227,15 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(row).toBeVisible();
   await row.click();
   await expect(main.getByRole("heading", { name: "E2E standup", level: 1 })).toBeVisible();
+  await main.getByRole("button", { name: "More" }).click();
   await expect(main.getByLabel("Sharing")).toHaveValue(/\|project$/);
+  await main.getByRole("button", { name: "More" }).click();
   // The announcement, the pause and the resume are in the meeting's consent log.
   const meetingId = (await main.evaluate(() => location.hash)).split("/").pop()!;
   const { token } = (await (await fetch(`${backendUrl}/auth/dev-session`, { method: "POST" })).json()) as { token: string };
   const consent = (await (await fetch(`${backendUrl}/meetings/${meetingId}/consent`, { headers: { Authorization: `Bearer ${token}` } })).json()) as { kind: string }[];
   expect(consent.map((e) => e.kind)).toEqual(["announced", "paused", "resumed"]);
+  await main.getByRole("button", { name: /Transcript \(/ }).click();
   const lines = main.getByTestId("transcript-line");
   await expect(lines.first()).toContainText("You:Morning everyone, let's start the standup.");
   const count = await lines.count();
@@ -238,18 +245,20 @@ test("record a meeting with live captions, then find its transcript after a rest
   await expect(summary).toBeVisible({ timeout: 30_000 });
   await expect(summary).toContainText("Yesterday I finished the certificate renewal");
   // Regenerate with another template.
+  await main.getByRole("button", { name: "More" }).click();
   await main.getByLabel("Template").selectOption("incident");
   await main.getByRole("button", { name: "Regenerate" }).click();
   await expect(summary.getByRole("heading", { name: "Timeline" })).toBeVisible({ timeout: 30_000 });
 
   // Post the summary to Slack: preview (editable) first, then confirm.
+  await main.getByRole("button", { name: "More" }).click();
   await main.getByRole("button", { name: "Post to Slack…" }).click();
   await expect(main.getByLabel("Post preview")).toHaveValue(/^# E2E standup/);
   await main.getByRole("button", { name: "Post to Slack", exact: true }).click();
   await expect(main.getByTestId("post-summary")).toContainText("Posted to Slack.");
 
   // Ask my meetings: a cited answer whose citation opens the meeting at that moment.
-  await main.getByRole("navigation").getByRole("link", { name: "Ask my meetings" }).click();
+  await main.getByRole("navigation").getByRole("link", { name: "Ask" }).click();
   await main.getByLabel("Question").fill("Who finished the certificate renewal?");
   await main.getByRole("button", { name: "Ask" }).click();
   const answer = main.getByTestId("answer");
@@ -262,6 +271,8 @@ test("record a meeting with live captions, then find its transcript after a rest
 
   // Settings → Privacy shows each provider's data policy; test-only ones are off for meeting data.
   await main.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
+  await main.getByRole("tab", { name: "Privacy" }).click();
+  await main.getByText("Which AI services see meeting data").click();
   const gemini = main.getByTestId("providers").locator('[data-provider="gemini"]');
   await expect(gemini).toContainText("May train on data");
   await expect(gemini).toContainText("Test data only");
@@ -281,6 +292,7 @@ test("record a meeting with live captions, then find its transcript after a rest
   app = await launch();
   main = await windowByTitle(app, "Meeting Copilot");
   await main.getByRole("list", { name: "Meetings" }).getByRole("link", { name: /E2E standup/ }).click();
+  await main.getByRole("button", { name: /Transcript \(/ }).click();
   await expect(main.getByTestId("transcript-line")).toHaveCount(count);
   await expect(main.getByTestId("summary").getByRole("heading", { name: "Timeline" })).toBeVisible();
   await app.close();

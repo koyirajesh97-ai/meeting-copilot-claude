@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { AppState, Brief, PrivacySettings, UpcomingMeeting } from "../../../shared/ipc";
 import {
   DEFAULT_CONSENT_MESSAGE,
@@ -9,7 +9,7 @@ import {
   type MeetingType,
   type Visibility,
 } from "../../../shared/meetings";
-import { buttonClass, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
+import { buttonClass, inputClass, secondaryButtonClass } from "../components/EmptyState";
 import { useProjects } from "../projects/useProjects";
 import { useSettings } from "../useAppState";
 
@@ -72,87 +72,103 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
     setTimeout(() => setCopied(null), 2500);
   };
 
+  const start = () =>
+    void (state?.capturing
+      ? window.copilot.toggleCapture()
+      : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null, calendar_event_id: event?.id ?? null }));
+
   return (
-    <section className="max-w-xl">
-      <PageHeader title="Start meeting" />
-      {event && (
-        <p className="-mt-4 mb-4 text-sm text-gray-500 dark:text-gray-400" data-testid="from-calendar">
-          From your calendar: {event.title}, {new Date(event.start * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}. Type guessed from the title; change it if it's wrong.
-        </p>
-      )}
-      <div className="space-y-4">
+    <section className="mx-auto max-w-lg pt-6">
+      <h1 className="text-2xl font-semibold">Start meeting</h1>
+      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400" data-testid={event ? "from-calendar" : undefined}>
+        {event ? `From your calendar: ${event.title}` : "Give it a name, press Start, and join your call as usual."}
+      </p>
+
+      <div className="mt-6 space-y-4">
         <label className="block text-sm">
-          Title
-          <input className={`${inputClass} mt-1`} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Daily standup" />
+          <span className="sr-only">Title</span>
+          <input
+            aria-label="Title"
+            className={`${inputClass} py-2.5 text-base`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Meeting name (optional)"
+          />
         </label>
-        <label className="block text-sm">
-          Project
-          <select aria-label="Project" className={`${inputClass} mt-1`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-            <option value="">Personal</option>
-            {projects?.filter((p) => p.role !== "viewer").map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          Meeting type
-          <select className={`${inputClass} mt-1`} value={type} onChange={(e) => setType(e.target.value as MeetingType)}>
-            {MEETING_TYPES.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          Agenda (optional)
-          <textarea className={`${inputClass} mt-1`} rows={2} value={agenda} onChange={(e) => setAgenda(e.target.value)} />
-        </label>
-        <fieldset className="text-sm">
-          <legend>Mode</legend>
-          <div className="mt-1 space-y-1">
-            {MEETING_MODES.map((m) => (
-              <label key={m.id} className="flex items-start gap-2">
-                <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => (setMode(m.id), setModeTouched(true))} className="mt-1" />
-                <span>
-                  {m.label} <span className="text-gray-500 dark:text-gray-400">— {m.hint}</span>
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-        <label className={`flex items-center gap-2 text-sm ${projectId ? "" : "opacity-50"}`}>
-          <input type="checkbox" disabled={!projectId} checked={visibility === "project" && !!projectId} onChange={(e) => setVisibility(e.target.checked ? "project" : "private")} />
-          Share with the project
-        </label>
-        <div className="flex gap-2 pt-2">
-          <button
-            type="button"
-            className={buttonClass}
-            onClick={() =>
-              void (state?.capturing ? window.copilot.toggleCapture() : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null, calendar_event_id: event?.id ?? null }))
-            }
-          >
+        <div className="flex gap-2">
+          <button type="button" className={`${buttonClass} flex-1 py-2.5 text-base`} onClick={start}>
             {state?.capturing ? "Stop recording" : "Start recording"}
           </button>
-          <button type="button" className={secondaryButtonClass} onClick={() => void announce()}>
+          <button type="button" className={secondaryButtonClass} title="Copy a short message for the meeting chat so everyone knows you're recording" onClick={() => void announce()}>
             {copied ?? "Announce"}
           </button>
         </div>
         {state && !state.auth.signedIn && (
           <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800 dark:bg-amber-950 dark:text-amber-200">
-            You're not signed in, so this records to your computer only (no live captions). Sign in under Settings.
+            You're not signed in, so this only records to your computer (no live captions). Sign in under Settings.
           </p>
         )}
-        <label className="block text-sm">
-          Consent message
-          <textarea aria-label="Consent message" className={`${inputClass} mt-1`} rows={2} value={consent} onChange={(e) => setConsent(e.target.value)} />
-        </label>
-        <p className="text-xs text-gray-500 dark:text-gray-400">
-          Announce copies this message to paste in the meeting chat so everyone knows you're recording, and notes that you announced it.
-        </p>
+        {type === "standup" && (
+          <Link to="/standup" className="block text-sm text-blue-600 underline dark:text-blue-400">
+            Prep my standup update first
+          </Link>
+        )}
+
+        <details className="group rounded-lg border border-gray-200 text-sm dark:border-gray-800" open={!!eventId}>
+          <summary className="cursor-pointer select-none px-3 py-2 text-gray-600 dark:text-gray-300">More options</summary>
+          <div className="space-y-4 border-t border-gray-200 p-3 dark:border-gray-800">
+            <div className="grid grid-cols-2 gap-3">
+              <label className="block">
+                Meeting type
+                <select className={`${inputClass} mt-1`} value={type} onChange={(e) => setType(e.target.value as MeetingType)}>
+                  {MEETING_TYPES.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                Project
+                <select aria-label="Project" className={`${inputClass} mt-1`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                  <option value="">Personal</option>
+                  {projects?.filter((p) => p.role !== "viewer").map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            {projectId && (
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={visibility === "project"} onChange={(e) => setVisibility(e.target.checked ? "project" : "private")} />
+                Share with the project
+              </label>
+            )}
+            <fieldset>
+              <legend>Privacy</legend>
+              <div className="mt-1 space-y-1">
+                {MEETING_MODES.map((m) => (
+                  <label key={m.id} className="flex items-start gap-2">
+                    <input type="radio" name="mode" value={m.id} checked={mode === m.id} onChange={() => (setMode(m.id), setModeTouched(true))} className="mt-1" />
+                    <span>
+                      {m.label} <span className="text-gray-500 dark:text-gray-400">— {m.hint}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <label className="block">
+              Agenda
+              <textarea className={`${inputClass} mt-1`} rows={2} value={agenda} onChange={(e) => setAgenda(e.target.value)} />
+            </label>
+            <label className="block">
+              Consent message (copied by Announce)
+              <textarea aria-label="Consent message" className={`${inputClass} mt-1`} rows={2} value={consent} onChange={(e) => setConsent(e.target.value)} />
+            </label>
+          </div>
+        </details>
       </div>
       {brief && <BriefPanel brief={brief} />}
     </section>
@@ -163,7 +179,7 @@ function BriefPanel({ brief }: { brief: Brief }) {
   const empty = !brief.last_meeting && brief.open_action_items.length === 0 && !brief.agenda;
   if (empty) return null;
   return (
-    <aside className="mt-8 space-y-3 rounded-md border border-gray-200 p-4 text-sm dark:border-gray-800" data-testid="brief" aria-label="Brief">
+    <aside className="mt-6 space-y-3 rounded-lg bg-gray-50 p-4 text-sm dark:bg-gray-900" data-testid="brief" aria-label="Brief">
       <h2 className="font-medium">Before you start</h2>
       {brief.agenda && (
         <div>

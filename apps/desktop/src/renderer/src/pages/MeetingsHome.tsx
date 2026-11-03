@@ -24,7 +24,6 @@ export function useCachedMeetings(): CachedMeeting[] {
 export function MeetingsHome() {
   const meetings = useCachedMeetings();
   const [q, setQ] = useState("");
-  const [syncNote, setSyncNote] = useState<string | null>(null);
   const shown = meetings.filter((m) => m.title.toLowerCase().includes(q.trim().toLowerCase()));
   const [hits, setHits] = useState<SearchHit[] | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -52,25 +51,15 @@ export function MeetingsHome() {
     return () => clearTimeout(t);
   }, [q]);
 
-  const sync = async () => {
-    const r = await window.copilot.meetings.sync();
-    setSyncNote(r.error ? `Couldn't sync: ${r.error}` : `Synced ${r.meetings} meeting(s)`);
-  };
 
   return (
     <section>
       <PageHeader title="Meetings">
-        <div className="flex gap-2">
-          <button type="button" className={secondaryButtonClass} onClick={() => void sync()}>
-            Sync
-          </button>
-          <Link to="/start" className={buttonClass}>
-            Start meeting
-          </Link>
-        </div>
+        <Link to="/standup" className={secondaryButtonClass}>
+          Standup prep
+        </Link>
       </PageHeader>
-      {syncNote && <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{syncNote}</p>}
-      <input type="search" placeholder="Search everything that was said" aria-label="Search meetings" className={`${inputClass} mb-2`} value={q} onChange={(e) => setQ(e.target.value)} />
+      <input type="search" placeholder="Search your meetings" aria-label="Search meetings" className={`${inputClass} mb-4 py-2`} value={q} onChange={(e) => setQ(e.target.value)} />
       {searchError && <p className="mb-2 text-xs text-gray-500 dark:text-gray-400">{searchError}</p>}
       {hits && (
         <div className="mb-6">
@@ -88,9 +77,12 @@ export function MeetingsHome() {
         </div>
       )}
       <Upcoming />
-      <div className="mb-4" />
       {meetings.length === 0 ? (
-        <EmptyState title="No meetings yet" body="Start a meeting and its transcript will show up here, even when you're offline." />
+        <EmptyState
+          title="No meetings yet"
+          body="Press Start meeting, join your call as usual, and the transcript and summary show up here."
+          action={<Link to="/start" className={buttonClass}>Start meeting</Link>}
+        />
       ) : (
         <ul className="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-800" aria-label="Meetings">
           {shown.map((m) => (
@@ -109,7 +101,6 @@ export function MeetingsHome() {
                   </span>
                 )}
 
-                <span className="shrink-0 text-xs text-gray-500 dark:text-gray-400">{m.segment_count} lines</span>
               </Link>
               {!m.is_mine && m.is_live && (
                 <Link to={`/meetings/${m.id}/live`} className="shrink-0 px-4 text-xs font-medium text-blue-600 underline">
@@ -136,9 +127,9 @@ function Upcoming() {
   if (events.length === 0) return null;
   return (
     <div className="mb-6">
-      <h2 className="mb-2 text-sm font-medium">Upcoming</h2>
+      <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-500">Coming up</h2>
       <ul className="space-y-1" aria-label="Upcoming meetings">
-        {events.slice(0, 6).map((e) => (
+        {events.slice(0, 3).map((e) => (
           <li key={e.id} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm dark:border-gray-800" data-testid="upcoming">
             <span>
               <span className="block font-medium">{e.title}</span>

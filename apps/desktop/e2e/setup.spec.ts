@@ -24,28 +24,21 @@ test.afterAll(async () => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-test("first-run setup, then a meeting end to end", async () => {
+test("first-run setup (sign in, keys, audio, about you), then a meeting end to end", async () => {
   test.setTimeout(120_000);
   app = await launchApp(join(dir, "profile"), { COPILOT_AUDIO_CHECK_MS: "2500" });
   const main = await windowByTitle(app, "Meeting Copilot");
   await main.evaluate((url) => window.copilot.setSettings({ backendUrl: url }), backend.url);
-  await expect(main.getByRole("heading", { name: "Set up Meeting Copilot" })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Welcome to Meeting Copilot" })).toBeVisible();
+  // Setup has the window to itself.
+  await expect(main.getByRole("navigation")).toBeHidden();
 
-  // 1-2. Welcome, then the audio check (the indicator is on while it listens).
-  await main.getByRole("button", { name: "Next" }).click();
-  await main.getByRole("button", { name: "Test audio" }).click();
-  const overlay = await windowByTitle(app, "Meeting Copilot overlay");
-  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "true");
-  await expect(main.getByTestId("audio-result")).toContainText("Your microphone works", { timeout: 15_000 });
-  await expect(main.getByTestId("audio-result")).toContainText("No meeting audio"); // no system audio on Linux CI
-  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "false");
-
-  // 3. Sign in (local dev login).
-  await main.getByRole("button", { name: "Next" }).click();
+  // 1. Sign in (local dev login).
   await main.getByRole("button", { name: "Use the local dev login" }).click();
   await expect(main.getByTestId("signed-in-as")).toContainText("dev@localhost");
 
-  // 4. The free-key wizard: a bad key is rejected, a good one is tested and saved on the backend.
+  // 2. The server has no AI keys yet, so the key step appears: a bad key is rejected, a good one
+  // is tested and saved on the backend.
   await main.getByRole("button", { name: "Next" }).click();
   const groq = main.getByTestId("key-groq");
   await expect(groq).toContainText("No key yet");
@@ -57,22 +50,37 @@ test("first-run setup, then a meeting end to end", async () => {
   await expect(groq.getByRole("status")).toContainText("saved on your backend");
   await expect(groq).toContainText("Key set");
   expect(readFileSync(join(dir, ".env"), "utf8")).toContain("GROQ_API_KEY=gsk_e2e_working_key");
+  await expect(main.getByTestId("key-gemini")).toHaveCount(0); // optional fallbacks aren't asked for
 
-  // 5. Role, 6. default mode, then finish.
+  // 3. Audio check (the indicator is on while it listens).
+  await main.getByRole("button", { name: "Next" }).click();
+  await main.getByRole("button", { name: "Test audio" }).click();
+  const overlay = await windowByTitle(app, "Meeting Copilot overlay");
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "true");
+  await expect(main.getByTestId("audio-result")).toContainText("Your microphone works", { timeout: 15_000 });
+  await expect(main.getByTestId("audio-result")).toContainText("No meeting audio"); // no system audio on Linux CI
+  await expect(overlay.getByTestId("recording-indicator")).toHaveAttribute("data-recording", "false");
+
+  // 4. About you, then finish.
   await main.getByRole("button", { name: "Next" }).click();
   await main.getByLabel("Your name (as people say it)").fill("Dev User");
   await main.getByLabel("Role preset").selectOption({ label: "DevOps/SRE" });
   await main.getByRole("button", { name: "Save" }).click();
   await expect(main.getByRole("button", { name: "Saved" })).toBeVisible();
-  await main.getByRole("button", { name: "Next" }).click();
-  await main.getByLabel(/Live-only/).click();
-  await expect(main.getByLabel(/Live-only/)).toBeChecked();
   await main.getByRole("button", { name: "Finish" }).click();
   await expect(main.getByRole("heading", { name: "Meetings", level: 1 })).toBeVisible();
-  expect(await main.evaluate(() => window.copilot.getSettings())).toMatchObject({ setupDone: true, defaultMode: "live-only" });
+  await expect(main.getByRole("navigation")).toBeVisible();
+  expect(await main.evaluate(() => window.copilot.getSettings())).toMatchObject({ setupDone: true });
+
+  // The default meeting mode lives in Settings → General.
+  await main.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
+  await main.getByRole("tab", { name: "General" }).click();
+  await main.getByRole("radio", { name: /Live-only/ }).click();
+  await expect(main.getByRole("radio", { name: /Live-only/ })).toBeChecked();
 
   // A meeting, in the default mode chosen during setup.
   await main.getByRole("navigation").getByRole("link", { name: "Start meeting" }).click();
+  await main.getByText("More options").click();
   await expect(main.getByRole("radio", { name: /Live-only/ })).toBeChecked();
   await main.getByRole("radio", { name: /^Cloud/ }).click();
   await main.getByLabel("Title").fill("After setup");

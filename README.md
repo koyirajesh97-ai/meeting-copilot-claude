@@ -117,10 +117,10 @@ R (record), C (catch up), L (clarify), F (follow up), E (expand the overlay).
 
 ### First run
 
-A new install opens a short setup: an audio check (5 seconds, nothing saved), sign-in, the free-key
-wizard (each key is tested with one tiny request and saved in the backend's `.env` when the backend
-runs on the same computer; `scripts/dev-up` allows that), your role, and the default privacy mode.
-Settings → "Run the setup again" reopens it.
+A new install opens a short setup: sign in, check audio (5 seconds, nothing saved), and your name
+and role. If the backend is missing an AI key, a key step appears: each key is tested with one tiny
+request and saved in the backend's `.env` when the backend runs on the same computer
+(`scripts/dev-up` allows that). Settings → Advanced → "Run the setup again" reopens it.
 
 ### Installers and updates
 
@@ -134,11 +134,11 @@ pnpm -C apps/desktop dist:mac      # dmg + zip; signed and notarized when the Ap
 
 Pushing a tag like `v0.1.0` runs `.github/workflows/release.yml`: it builds Windows, macOS and
 Linux packages, smoke-tests the packaged app, and publishes them as a GitHub Release, which the
-app's auto-update (Settings → Updates) reads. Windows builds stay unsigned (SmartScreen warns)
+app's auto-update (Settings → Advanced) reads. Windows builds stay unsigned (SmartScreen warns)
 until you add `CSC_LINK` and `CSC_KEY_PASSWORD` secrets; macOS needs `CSC_LINK` plus
 `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and `APPLE_TEAM_ID`.
 
-Diagnostics are opt-in (Settings → Updates and diagnostics): crash reports go to Sentry when the
+Diagnostics are opt-in (Settings → Advanced): crash reports go to Sentry when the
 build has `MAIN_VITE_SENTRY_DSN` (and the backend `SENTRY_DSN`), and request traces go to an
 OpenTelemetry collector (`MAIN_VITE_OTEL_ENDPOINT`, backend `OTEL_EXPORTER_OTLP_ENDPOINT`; install
 the backend's extra with `uv sync --extra telemetry`). They never include what was said. Every

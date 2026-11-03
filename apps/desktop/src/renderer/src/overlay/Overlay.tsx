@@ -22,11 +22,11 @@ const ACTION_LABEL: Record<OverlayAction, string> = {
 };
 
 function LiveChip({ live, provider }: { live: LiveState; provider: string | null }) {
-  const text =
-    live.status === "live" ? (provider ?? "live") : live.status === "off" ? "offline" : live.status.replace("-", " ");
+  // Live is just a green "Live"; the provider name is in the tooltip, not on screen.
+  const text = live.status === "live" ? "Live" : live.status === "off" ? "offline" : live.status.replace("-", " ");
   const color = live.status === "live" ? "bg-green-900/60 text-green-200" : live.status === "off" ? "bg-white/10 text-gray-300" : "bg-amber-900/60 text-amber-200";
   return (
-    <span data-testid="live-status" data-status={live.status} className={`max-w-28 truncate rounded px-1.5 py-0.5 text-[10px] ${color}`} title={live.message ?? text}>
+    <span data-testid="live-status" data-status={live.status} className={`max-w-28 truncate rounded px-1.5 py-0.5 text-[10px] ${color}`} title={live.message ?? (live.status === "live" && provider ? `Live · ${provider}` : text)}>
       {text}
     </span>
   );
@@ -82,9 +82,9 @@ export function Overlay() {
       <div className="flex min-h-0 flex-1 flex-col px-3 py-1.5">
         {state.capturing && ["silent", "unavailable", "error"].includes(state.audio.system.state) && (
           <p data-testid="system-audio-warning" className="mb-1 flex items-center gap-2 text-xs text-amber-300">
-            <span className="truncate">{state.audio.system.message ?? "No meeting audio"}</span>
+            <span className="truncate" title={state.audio.system.message}>Not hearing the meeting</span>
             <button type="button" className="no-drag shrink-0 underline" onClick={() => void window.copilot.openMain("/help/system-audio")}>
-              Help
+              Fix
             </button>
           </p>
         )}

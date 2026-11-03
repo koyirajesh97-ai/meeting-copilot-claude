@@ -1,22 +1,21 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { Menu, MenuItem } from "../components/Menu";
 import type { CachedMeetingDetail } from "../../../shared/ipc";
 import { MEETING_TYPES } from "../../../shared/meetings";
 import { buttonClass, inputClass, secondaryButtonClass } from "../components/EmptyState";
 import { fromEditable, toEditable, type EditableSummary } from "./edit";
 
+/** A titled list; empty lists aren't shown at all (no "None" clutter). */
 function List({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
   return (
     <div>
       <h3 className="mb-1 text-sm font-medium">{title}</h3>
-      {items.length ? (
-        <ul className="list-disc space-y-0.5 pl-5 text-sm">
-          {items.map((t, i) => (
-            <li key={i}>{t}</li>
-          ))}
-        </ul>
-      ) : (
-        <p className="text-sm text-gray-400">None</p>
-      )}
+      <ul className="list-disc space-y-0.5 pl-5 text-sm">
+        {items.map((t, i) => (
+          <li key={i}>{t}</li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -30,7 +29,7 @@ function Field({ label, value, onChange, rows = 3 }: { label: string; value: str
   );
 }
 
-export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
+export function SummaryPanel({ meeting, extra }: { meeting: CachedMeetingDetail; extra?: ReactNode }) {
   const { summary } = meeting;
   const [editing, setEditing] = useState<EditableSummary | null>(null);
   const [template, setTemplate] = useState(summary.template ?? meeting.type);
@@ -50,40 +49,50 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
     }
   };
 
+  // One visible action (Copy summary); everything else sits in the More menu.
   const toolbar = (
-    <div className="flex flex-wrap items-center gap-2">
-      <select aria-label="Template" className={`${inputClass} w-auto`} value={template} onChange={(e) => setTemplate(e.target.value)}>
-        {MEETING_TYPES.map((t) => (
-          <option key={t.id} value={t.id}>
-            {t.label}
-          </option>
-        ))}
-      </select>
-      {meeting.is_mine && (
-        <button type="button" className={secondaryButtonClass} disabled={busy || summary.status === "pending"} onClick={() => void act(() => window.copilot.meetings.regenerate(meeting.id, template))}>
-          Regenerate
+    <div className="flex items-center gap-2">
+      {summary.data && !editing && (
+        <button type="button" className={buttonClass} disabled={busy} onClick={() => void act(async () => {
+          await navigator.clipboard.writeText(await window.copilot.meetings.markdown(meeting.id, false));
+        }, "Copied. Paste it into an email, Teams or Slack.")}>
+          Copy summary
         </button>
       )}
-      {summary.data && !editing && (
-        <>
-          {meeting.is_mine && (
-            <button type="button" className={secondaryButtonClass} onClick={() => setEditing(toEditable(summary.data!))}>
-              Edit
-            </button>
-          )}
-          <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => void act(async () => {
-            await navigator.clipboard.writeText(await window.copilot.meetings.markdown(meeting.id, false));
-          }, "Copied the summary. Paste it into an email, Teams or Slack.")}>
-            Copy summary
-          </button>
-          <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => void act(async () => {
+      <Menu>
+        {meeting.is_mine && summary.data && !editing && (
+          <MenuItem onClick={() => setEditing(toEditable(summary.data!))}>Edit summary</MenuItem>
+        )}
+        {summary.data && (
+          <MenuItem onClick={() => void act(async () => {
             const path = await window.copilot.meetings.exportMarkdown(meeting.id);
             if (path) setNote(`Saved to ${path}`);
           })}>
             Export Markdown
-          </button>
-        </>
-      )}
+          </MenuItem>
+        )}
+        {meeting.is_mine && (
+          <div className="space-y-1 px-3 py-2">
+            <label className="block text-xs text-gray-500">
+              Summarize as
+              <select aria-label="Template" className={`${inputClass} mt-1`} value={template} onChange={(e) => setTemplate(e.target.value)}>
+                {MEETING_TYPES.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className={`${secondaryButtonClass} w-full`} disabled={busy || summary.status === "pending"} onClick={(e) => {
+              e.currentTarget.closest("details")?.removeAttribute("open");
+              void act(() => window.copilot.meetings.regenerate(meeting.id, template));
+            }}>
+              Regenerate
+            </button>
+          </div>
+        )}
+        {extra}
+      </Menu>
     </div>
   );
 
@@ -124,12 +133,12 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
     const d = summary.data;
     body = (
       <div className="space-y-4" data-testid="summary">
-        {d.overview && <p className="text-sm">{d.overview}</p>}
+        {d.overview && <p className="text-[15px] leading-relaxed">{d.overview}</p>}
         {d.sections.map((s) => (
           <List key={s.key} title={s.title} items={s.items} />
         ))}
         {d.per_person.map((p) => (
-          <div key={p.person} className="rounded-md border border-gray-200 p-3 dark:border-gray-800">
+          <div key={p.person} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
             <h3 className="mb-2 font-medium">{p.person}</h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <List title="Done" items={p.done} />
@@ -139,6 +148,7 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
           </div>
         ))}
         <List title="Decisions" items={d.decisions.map((x) => (x.rationale ? `${x.text} (${x.rationale})` : x.text))} />
+        {meeting.action_items.length > 0 && (
         <div>
           <h3 className="mb-1 text-sm font-medium">Action items</h3>
           {meeting.action_items.length ? (
@@ -155,10 +165,9 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
                 </li>
               ))}
             </ul>
-          ) : (
-            <p className="text-sm text-gray-400">None</p>
-          )}
+          ) : null}
         </div>
+        )}
         <FollowUps meeting={meeting} />
         {d.takeaways.length > 0 && <List title="Takeaways" items={d.takeaways} />}
         <List title="Blockers" items={d.blockers} />
@@ -170,7 +179,7 @@ export function SummaryPanel({ meeting }: { meeting: CachedMeetingDetail }) {
   return (
     <section className="mb-8 space-y-3" aria-label="Summary">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-medium">Summary</h2>
+        <h2 className="text-lg font-medium">Summary</h2>
         {toolbar}
       </div>
       {note && <p className="text-xs text-gray-500 dark:text-gray-400" role="status">{note}</p>}

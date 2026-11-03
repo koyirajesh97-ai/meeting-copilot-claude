@@ -3,7 +3,8 @@ import type { Settings } from "../../../shared/ipc";
 import { useAppState } from "../useAppState";
 import { buttonClass, inputClass, secondaryButtonClass } from "./EmptyState";
 
-export function AccountSettings({ settings, update }: { settings: Settings; update: (p: Partial<Settings>) => Promise<void> }) {
+/** Sign-in. `compact` (first-run setup) leaves out the heading and the server fields. */
+export function AccountSettings({ settings, update, compact = false }: { settings: Settings; update: (p: Partial<Settings>) => Promise<void>; compact?: boolean }) {
   const state = useAppState();
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
@@ -31,7 +32,7 @@ export function AccountSettings({ settings, update }: { settings: Settings; upda
   const auth = state?.auth;
   return (
     <div className="space-y-4" data-testid="account">
-      <h2 className="font-medium">Account</h2>
+      {!compact && <h2 className="font-medium">Account</h2>}
       {auth?.signedIn ? (
         <div className="flex items-center justify-between rounded-md border border-gray-200 p-3 text-sm dark:border-gray-800">
           <span data-testid="signed-in-as">
@@ -49,7 +50,7 @@ export function AccountSettings({ settings, update }: { settings: Settings; upda
           </p>
           <div className="flex gap-2">
             <input className={inputClass} type="email" placeholder="you@example.com" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button type="button" className={buttonClass} disabled={busy || !email.includes("@")} onClick={() => void run(async () => {
+            <button type="button" className={`${buttonClass} whitespace-nowrap`} disabled={busy || !email.includes("@")} onClick={() => void run(async () => {
               await window.copilot.auth.sendCode(email);
               setSent(true);
             })}>
@@ -72,8 +73,17 @@ export function AccountSettings({ settings, update }: { settings: Settings; upda
         </div>
       )}
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
-      <details className="text-sm">
-        <summary className="cursor-pointer text-gray-500 dark:text-gray-400">Supabase project</summary>
+      {!compact && <ServerFields settings={settings} update={update} title="Supabase project" />}
+    </div>
+  );
+}
+
+/** Where the app connects to: Supabase (sign-in) and, in setup, the backend. Rarely changed. */
+export function ServerFields({ settings, update, title, children }: { settings: Settings; update: (p: Partial<Settings>) => Promise<void>; title: string; children?: React.ReactNode }) {
+  return (
+    <details className="text-sm">
+      <summary className="cursor-pointer text-gray-500 dark:text-gray-400">{title}</summary>
+      {children}
         <div className="mt-2 space-y-2">
           <label className="block">
             Supabase URL
@@ -87,7 +97,6 @@ export function AccountSettings({ settings, update }: { settings: Settings; upda
             From <code>supabase status</code> locally, or your project's API settings. The anon key is public; your data is protected by row-level security.
           </p>
         </div>
-      </details>
-    </div>
+    </details>
   );
 }

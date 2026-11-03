@@ -41,14 +41,17 @@ test("opens the main window with every route", async () => {
   await expect(main.getByRole("heading", { name: "Meetings" })).toBeVisible();
   for (const [link, heading] of [
     ["Start meeting", "Start meeting"],
-    ["Ask my meetings", "Ask my meetings"],
-    ["Standup prep", "Standup prep"],
+    ["Ask", "Ask my meetings"],
     ["Projects", "Projects"],
     ["Settings", "Settings"],
   ]) {
     await main.getByRole("navigation").getByRole("link", { name: link }).click();
     await expect(main.getByRole("heading", { name: heading, level: 1 })).toBeVisible();
   }
+  // Standup prep is one click from Meetings.
+  await main.getByRole("navigation").getByRole("link", { name: "Meetings", exact: true }).click();
+  await main.getByRole("link", { name: "Standup prep" }).click();
+  await expect(main.getByRole("heading", { name: "Standup prep", level: 1 })).toBeVisible();
   await main.evaluate(() => (location.hash = "#/meetings/m_123"));
   await expect(main.getByRole("heading", { name: "Meeting", level: 1 })).toBeVisible();
 });

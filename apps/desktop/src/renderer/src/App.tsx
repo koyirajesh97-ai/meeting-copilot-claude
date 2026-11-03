@@ -16,14 +16,12 @@ import { SetupPage } from "./pages/SetupPage";
 import { VoicePage } from "./pages/VoicePage";
 import { useAppState, useSettings } from "./useAppState";
 
+// Four places to go, plus the one thing you do most: start a meeting. Standup prep, your role
+// and your voice are reached from Meetings and Settings.
 const NAV = [
   { to: ROUTES.home, label: "Meetings" },
-  { to: ROUTES.start, label: "Start meeting" },
-  { to: ROUTES.ask, label: "Ask my meetings" },
-  { to: ROUTES.standup, label: "Standup prep" },
+  { to: ROUTES.ask, label: "Ask" },
   { to: ROUTES.projects, label: "Projects" },
-  { to: ROUTES.profile, label: "Your role" },
-  { to: ROUTES.voice, label: "Your voice" },
   { to: ROUTES.settings, label: "Settings" },
 ];
 
@@ -42,14 +40,30 @@ function FirstRun({ setupDone }: { setupDone: boolean | undefined }) {
 }
 
 export function App() {
-  const state = useAppState();
-  const [settings] = useSettings(); // also applies the theme
   return (
     <HashRouter>
+      <Shell />
+    </HashRouter>
+  );
+}
+
+function Shell() {
+  const state = useAppState();
+  const [settings] = useSettings(); // also applies the theme
+  // Setup gets the whole window: no sidebar to wander off into.
+  const inSetup = useLocation().pathname === ROUTES.setup;
+  return (
+    <>
       <FirstRun setupDone={settings?.setupDone} />
       <div className="flex h-full">
-        <nav aria-label="Main" className="w-52 shrink-0 border-r border-gray-200 p-3 dark:border-gray-800">
-          <div className="mb-4 px-2 text-lg font-semibold">Meeting Copilot</div>
+        <nav hidden={inSetup} aria-label="Main" className="w-52 shrink-0 border-r border-gray-200 p-3 dark:border-gray-800">
+          <div className="mb-5 px-2 text-lg font-semibold">Meeting Copilot</div>
+          <NavLink
+            to={ROUTES.start}
+            className="mb-5 block rounded-lg bg-blue-600 px-3 py-2.5 text-center text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+          >
+            Start meeting
+          </NavLink>
           <ul className="space-y-1">
             {NAV.map((n) => (
               <li key={n.to}>
@@ -89,6 +103,6 @@ export function App() {
           </Routes>
         </main>
       </div>
-    </HashRouter>
+    </>
   );
 }
