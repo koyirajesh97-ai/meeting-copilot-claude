@@ -77,8 +77,7 @@ describe("projects", () => {
       call: async (method: string, path: string, body?: unknown) => (seen.push(`${method} ${path} ${JSON.stringify(body ?? null)}`), []),
       upload: async (path: string, form: FormData) => (seen.push(`UPLOAD ${path} ${(form.get("file") as File).name}`), {}),
     } as never;
-    const file = join(dir, "runbook.md");
-    (await import("node:fs")).writeFileSync(file, "# Runbook");
+    const file = { data: new Blob(["# Runbook"]), name: "runbook.md" };
     await projectCall(backend, { op: "invite", id: "p1", email: "a@b.co", role: "viewer" }, async () => null);
     await projectCall(backend, { op: "board", id: "p1", filter: "overdue" }, async () => null);
     await projectCall(backend, { op: "editItem", itemId: "i1", status: "done" }, async () => null);

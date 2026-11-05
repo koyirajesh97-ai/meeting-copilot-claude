@@ -188,6 +188,29 @@ macOS runners (run it from the Actions tab, or push a `v*` tag). Each run produc
   `APPLE_TEAM_ID`) from the Apple Developer Program: installs on the devices in that profile.
   TestFlight and the App Store need the same membership.
 
+### The web app
+
+`apps/web` is the desktop app's screens running in a browser (Chrome or Edge for meeting audio).
+It records your microphone plus the meeting's audio from a shared tab ("Share tab audio") and
+shows the overlay as a floating panel; **Pop out** keeps it on top of the meeting tab. Nothing
+is saved in the browser: meetings live on your backend. With no backend configured it runs as a
+demo with sample meetings and records nothing.
+
+```bash
+pnpm -C apps/web dev          # http://localhost:5190
+pnpm -C apps/web build        # static site in apps/web/dist
+```
+
+Deploying to Vercel (static hosting; the backend runs elsewhere because it needs WebSockets):
+
+1. Host the backend (Render, Fly.io, Railway or your own server) and set
+   `COPILOT_WEB_ORIGINS=https://your-site.vercel.app` on it so the browser may call it.
+2. In Vercel, import the repo with **Root Directory** `apps/web` (`apps/web/vercel.json` does the
+   install and build) and set `VITE_BACKEND_URL`, `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_ANON_KEY` (the public anon key; never a provider API key).
+3. Deploy. Without `VITE_BACKEND_URL` the site is the demo; anyone can still enter a server URL
+   in Settings.
+
 ### Check your AI keys
 
 ```bash

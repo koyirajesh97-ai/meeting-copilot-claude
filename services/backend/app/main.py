@@ -52,6 +52,27 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="Meeting Copilot backend", version="0.1.0", lifespan=lifespan)
 telemetry.setup(app)
+
+
+def web_origins() -> list[str]:
+    """Origins of the web app allowed to call this backend from a browser (comma-separated
+    COPILOT_WEB_ORIGINS, e.g. "https://meeting-copilot.vercel.app"). None by default; the
+    desktop and phone apps don't need CORS."""
+    raw = os.environ.get("COPILOT_WEB_ORIGINS", "")
+    return [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+
+
+if web_origins():
+    from fastapi.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=web_origins(),
+        allow_credentials=False,  # the backend token is sent as a header, never a cookie
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "traceparent"],
+        max_age=600,
+    )
 app.include_router(auth.router)
 app.include_router(usage.router)
 app.include_router(meetings.router)

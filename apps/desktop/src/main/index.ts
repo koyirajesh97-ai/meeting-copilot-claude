@@ -13,7 +13,7 @@ import {
   type IpcMainInvokeEvent,
   type WebFrameMain,
 } from "electron";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { ENROLL_SECONDS, IPC, isAllowedRoute, type AppState, type AudioLevels, type OverlayAction, type StartOptions, type UpcomingMeeting, type AudioCheck, type SetupCall } from "../shared/ipc";
 import { AudioCapture, OFF, repairRecordings } from "./audio/capture";
 import { CaptureWindowHost, installDisplayMediaHandler, RendererSource, systemSourceFor } from "./audio/electronSources";
@@ -28,7 +28,7 @@ import { dueNudges, integrationCall } from "./backend/integrations";
 import { projectCall } from "./backend/projects";
 import { syncAll, syncMeeting, waitForSummary } from "./backend/sync";
 import { WatchConnection } from "./backend/watch";
-import { writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { contentSecurityPolicy } from "./csp";
 import { HOTKEYS, type HotkeyCommand } from "./hotkeys";
 import { trayIcons } from "./icons";
@@ -568,7 +568,8 @@ function registerIpc(): void {
         properties: ["openFile"],
         filters: [{ name: "Documents", extensions: ["md", "txt", "html", "htm", "pdf", "csv", "json", "yaml", "yml"] }],
       });
-      return r.canceled ? null : (r.filePaths[0] ?? null);
+      const path = r.canceled ? null : r.filePaths[0];
+      return path ? { data: new Blob([new Uint8Array(await readFile(path))]), name: basename(path) } : null;
     }),
   );
   handle(IPC.meetingEdit, async (id, patch) => {

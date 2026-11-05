@@ -3,7 +3,6 @@
 // on and an OTLP endpoint is configured, the spans (route and timing only, never meeting content)
 // are exported as OTLP/HTTP JSON.
 
-import { randomBytes } from "node:crypto";
 
 export interface Span {
   traceId: string;
@@ -14,7 +13,8 @@ export interface Span {
   status: number;
 }
 
-const hex = (n: number) => randomBytes(n).toString("hex");
+// Web Crypto works in Electron's main process and in browsers (the web app reuses this file).
+const hex = (n: number) => Array.from(globalThis.crypto.getRandomValues(new Uint8Array(n)), (b) => b.toString(16).padStart(2, "0")).join("");
 
 export function traceparent(): { header: string; traceId: string; spanId: string } {
   const traceId = hex(16);

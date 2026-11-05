@@ -1,8 +1,6 @@
 // Maps each Projects-screen action to one backend route. Paths are built here from validated
 // ids, so a renderer can't reach arbitrary backend routes.
 
-import { readFile } from "node:fs/promises";
-import { basename } from "node:path";
 import type { ProjectCall } from "../../shared/ipc";
 import type { BackendClient } from "./client";
 
@@ -14,7 +12,8 @@ const id = (v: unknown): string => {
 export async function projectCall(
   backend: BackendClient,
   call: ProjectCall,
-  pickFile: () => Promise<string | null>,
+  /** Ask the user for a file; null if they cancel. */
+  pickFile: () => Promise<{ data: Blob; name: string } | null>,
 ): Promise<unknown> {
   switch (call.op) {
     case "list":
@@ -42,10 +41,10 @@ export async function projectCall(
     case "documents":
       return backend.call("GET", `/projects/${id(call.id)}/documents`);
     case "uploadDocument": {
-      const path = await pickFile();
-      if (!path) return null;
+      const file = await pickFile();
+      if (!file) return null;
       const form = new FormData();
-      form.set("file", new Blob([new Uint8Array(await readFile(path))]), basename(path));
+      form.set("file", file.data, file.name);
       return backend.upload(`/projects/${id(call.id)}/documents`, form);
     }
     case "addLink":

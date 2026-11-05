@@ -439,6 +439,14 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - Meetings (summary, decisions, action items, transcript) and Search are read-only; editing stays on the desktop.
 - Look: the same dark slate and indigo style as the desktop overlay, a large round record button, icon tab bar (Record, Meetings, Search, Settings). Builds as an Android APK (`pnpm -C apps/mobile build:apk`, also attached to tagged releases) signed with the debug key for testers; store builds need your own signing keys. iOS builds run on a macOS runner (`.github/workflows/ios.yml`): a Simulator build and an unsigned IPA always, a signed ad-hoc IPA with Apple signing secrets.
 
+### Web app
+
+- `apps/web` runs the desktop screens in a browser, with a browser bridge in place of Electron's main process (same backend client, sign-in, live connection and project/integration calls). Static hosting (Vercel); the backend is hosted separately and allows the site's origin with `COPILOT_WEB_ORIGINS` (CORS is off unless set).
+- Audio: the microphone (channel 0) and the meeting's audio from a shared tab or screen (channel 1, Chrome and Edge; "Share tab audio" must be ticked). Without a share, captions come from the mic only and the overlay says it isn't hearing the meeting. Same 16 kHz PCM16 20 ms frames as the desktop.
+- The overlay is a floating panel while recording, with the same recording indicator; "Pop out" opens it in an always-on-top Picture-in-Picture window where the browser supports it.
+- Nothing is saved in the browser except settings and the short-lived backend token (localStorage); meetings are read from the backend. Local-only mode in a browser keeps nothing (use the desktop app to record to your computer). Exports download as files.
+- With no backend configured the site is a clearly labeled demo with sample meetings and a simulated meeting; nothing is recorded.
+
 ### Overlay behavior
 
 - **Compact** (default, about 360 × 120 px): recording dot and timer, the last caption line, the newest card's first bullet, and the three action buttons.

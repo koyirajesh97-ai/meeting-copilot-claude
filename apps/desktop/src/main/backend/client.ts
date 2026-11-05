@@ -47,7 +47,8 @@ export class BackendClient {
   constructor(
     private readonly baseUrl: () => string,
     private readonly token: () => Promise<string | null>,
-    private readonly fetchImpl: typeof fetch = fetch,
+    // Wrapped: browsers reject fetch called as a method of another object ("Illegal invocation").
+    private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
   /** Called with each request's span (the trace context is sent as `traceparent`). */

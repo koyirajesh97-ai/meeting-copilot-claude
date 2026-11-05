@@ -77,3 +77,10 @@ Follow-ups that were out of scope for the prompt that found them.
 - Word error rate with real providers needs your own consented recordings with reference
   transcripts; the CI eval measures our pipeline (no lost or duplicated captions), not the model.
 - App icons for the installers (build/icon.ico, build/icon.icns) before the first public release.
+- Web app: host the backend somewhere with WebSockets (Render, Fly.io, Railway), set
+  `COPILOT_WEB_ORIGINS` and the Vercel `VITE_*` variables, then record a real Meet/Teams-in-browser
+  meeting with tab audio. Safari and Firefox can't share tab audio (mic only); check both.
+- Web app: calendar nudges and browser notifications (the desktop's 1-minute nudge isn't wired
+  in the browser yet), and code-splitting the 650 kB bundle.
+- Web app: the backend token sits in localStorage (short-lived, no provider keys); consider an
+  httpOnly cookie session if the site is shared widely.
