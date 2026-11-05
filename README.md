@@ -177,6 +177,17 @@ The APK lands in `apps/mobile/android/app/build/outputs/apk/release/app-release.
 with the debug key, so it installs on test phones (allow "install unknown apps") but isn't for
 the Play Store. Tagged releases also build it and attach it to the GitHub Release.
 
+iOS apps can only be built on a Mac, so `.github/workflows/ios.yml` builds them on GitHub's
+macOS runners (run it from the Actions tab, or push a `v*` tag). Each run produces:
+
+- `MeetingCopilot-simulator.zip`: unzip and drag the app onto an iOS Simulator (Xcode).
+- `MeetingCopilot-unsigned.ipa`: install on your own iPhone with a sideloading tool such as
+  AltStore or Sideloadly, which signs it with your Apple ID (free accounts: 7 days per install).
+- `MeetingCopilot-signed.ipa`, only once you add the Apple signing secrets
+  (`IOS_CERTIFICATE_P12_BASE64`, `IOS_CERTIFICATE_PASSWORD`, `IOS_PROVISIONING_PROFILE_BASE64`,
+  `APPLE_TEAM_ID`) from the Apple Developer Program: installs on the devices in that profile.
+  TestFlight and the App Store need the same membership.
+
 ### Check your AI keys
 
 ```bash
