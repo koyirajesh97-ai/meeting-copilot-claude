@@ -1,0 +1,115 @@
+name: iOS app
+# Builds the phone companion for iOS on a macOS runner (iOS apps need Xcode).
+# Always: a Simulator build (zip of the .app) and an unsigned device IPA (sideloading tools such
+# as AltStore or Sideloadly sign it with your own Apple ID). With the Apple signing secrets below
+# set, also a signed ad-hoc IPA that installs on registered devices:
+#   IOS_CERTIFICATE_P12_BASE64, IOS_CERTIFICATE_PASSWORD, IOS_PROVISIONING_PROFILE_BASE64, APPLE_TEAM_ID
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    env:
+      APP: MeetingCopilot
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Use the newest Xcode on the runner
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+      - run: pnpm install --frozen-lockfile
+      - name: Generate the iOS project (Expo prebuild)
+        working-directory: apps/mobile
+        run: npx expo prebuild --platform ios --no-install
+      - name: Install pods
+        working-directory: apps/mobile/ios
+        run: pod install
+      - name: Build for the iOS Simulator
+        working-directory: apps/mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace $APP.xcworkspace -scheme $APP -configuration Release \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO | tail -40
+          cd build/sim/Build/Products/Release-iphonesimulator
+          ditto -c -k --keepParent $APP.app "$GITHUB_WORKSPACE/MeetingCopilot-simulator.zip"
+      - name: Build an unsigned device IPA
+        working-directory: apps/mobile/ios
+        run: |
+          set -o pipefail
+          xcodebuild -workspace $APP.xcworkspace -scheme $APP -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/device \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" | tail -40
+          rm -rf Payload && mkdir Payload
+          cp -R build/device/Build/Products/Release-iphoneos/$APP.app Payload/
+          zip -qry "$GITHUB_WORKSPACE/MeetingCopilot-unsigned.ipa" Payload
+      - name: Build a signed IPA (only with Apple signing secrets)
+        env:
+          P12: ${{ secrets.IOS_CERTIFICATE_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+          PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE_BASE64 }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+        working-directory: apps/mobile/ios
+        run: |
+          if [ -z "$P12" ] || [ -z "$PROFILE" ] || [ -z "$TEAM" ]; then
+            echo "No Apple signing secrets: skipping the signed IPA."; exit 0
+          fi
+          kc="$RUNNER_TEMP/build.keychain"; pw=$(uuidgen)
+          security create-keychain -p "$pw" "$kc"
+          security set-keychain-settings -lut 21600 "$kc"
+          security unlock-keychain -p "$pw" "$kc"
+          echo "$P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASSWORD" -A -t cert -f pkcs12 -k "$kc"
+          security list-keychains -d user -s "$kc"
+          security set-key-partition-list -S apple-tool:,apple: -k "$pw" "$kc" >/dev/null
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          echo "$PROFILE" | base64 --decode > "$RUNNER_TEMP/app.mobileprovision"
+          uuid=$(security cms -D -i "$RUNNER_TEMP/app.mobileprovision" | plutil -extract UUID raw -)
+          cp "$RUNNER_TEMP/app.mobileprovision" ~/Library/MobileDevice/Provisioning\ Profiles/$uuid.mobileprovision
+          cat > "$RUNNER_TEMP/export.plist" <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>release-testing</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key><dict><key>dev.meetingcopilot.app</key><string>$uuid</string></dict>
+          </dict></plist>
+          EOF
+          xcodebuild -workspace $APP.xcworkspace -scheme $APP -configuration Release -sdk iphoneos \
+            -archivePath build/$APP.xcarchive archive DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$uuid" CODE_SIGN_IDENTITY="Apple Distribution" | tail -40
+          xcodebuild -exportArchive -archivePath build/$APP.xcarchive -exportPath build/export \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist"
+          cp build/export/*.ipa "$GITHUB_WORKSPACE/MeetingCopilot-signed.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meeting-copilot-ios
+          path: |
+            MeetingCopilot-simulator.zip
+            MeetingCopilot-unsigned.ipa
+            MeetingCopilot-signed.ipa
+          if-no-files-found: warn
+      - name: Attach to the GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" --title "$tag" --notes "Meeting Copilot $tag" || true
+          for f in MeetingCopilot-simulator.zip MeetingCopilot-unsigned.ipa MeetingCopilot-signed.ipa; do
+            [ -f "$f" ] && cp "$f" "${f%.*}-${tag}.${f##*.}" && gh release upload "$tag" "${f%.*}-${tag}.${f##*.}" --clobber
+          done

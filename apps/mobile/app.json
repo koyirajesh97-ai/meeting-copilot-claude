@@ -9,18 +9,37 @@
       "bundleIdentifier": "dev.meetingcopilot.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "Meeting Copilot records the meeting you're in to transcribe it and help you live. A red indicator shows whenever it records.",
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
       "package": "dev.meetingcopilot.app",
-      "permissions": ["RECORD_AUDIO", "FOREGROUND_SERVICE", "FOREGROUND_SERVICE_MICROPHONE", "POST_NOTIFICATIONS", "WAKE_LOCK"]
+      "permissions": [
+        "RECORD_AUDIO",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_MICROPHONE",
+        "POST_NOTIFICATIONS",
+        "WAKE_LOCK"
+      ]
     },
     "plugins": [
       "expo-secure-store",
       [
         "@siteed/audio-studio",
-        { "enableBackgroundAudio": true, "enableNotifications": true, "enablePhoneStateHandling": true }
+        {
+          "enableBackgroundAudio": true,
+          "enableNotifications": true,
+          "enablePhoneStateHandling": true,
+          "iosBackgroundModes": {
+            "useAudio": true
+          },
+          "iosConfig": {
+            "microphoneUsageDescription": "Meeting Copilot records the meeting you're in to transcribe it and help you live. A red indicator shows whenever it records.",
+            "notificationUsageDescription": "Meeting Copilot shows a notification while it records, so you always know the microphone is on."
+          }
+        }
       ]
     ],
     "extra": {
