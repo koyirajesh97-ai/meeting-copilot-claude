@@ -70,7 +70,7 @@ export function createOverlayWindow(opts: {
     focusable: false,
     alwaysOnTop: true,
     hasShadow: true,
-    backgroundColor: "#111827",
+    backgroundColor: "#0b1020",
     webPreferences: secureWebPreferences,
   });
   // "screen-saver" is the highest level; it keeps the overlay above full-screen windows.

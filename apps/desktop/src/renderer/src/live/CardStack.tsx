@@ -1,3 +1,4 @@
+import { Sparkles, Star, ThumbsDown, ThumbsUp, X } from "lucide-react";
 import { useEffect, useReducer, useState } from "react";
 import type { MeetingEvent } from "@meeting-copilot/shared";
 import { meetingRoute } from "../../../shared/ipc";
@@ -42,34 +43,37 @@ export function CardStack({ state, dispatch }: { state: CardState; dispatch: (a:
             data-testid="card"
             data-kind={c.kind}
             data-collapsed={c.collapsed}
-            className={`rounded border p-2 text-xs ${c.kind === "answer" ? "border-sky-500/60 bg-sky-950/60" : "border-white/10 bg-white/5"}`}
+            className={`rounded-xl p-2.5 text-xs shadow-lg shadow-black/20 ring-1 ${c.kind === "answer" ? "bg-gradient-to-br from-indigo-500/20 to-violet-500/10 ring-indigo-400/40" : "bg-white/[0.05] ring-white/10"}`}
           >
             <header className="mb-1 flex items-center justify-between gap-2">
-              <span className="font-semibold text-sky-200">{KIND_LABEL[c.kind] ?? c.kind}</span>
+              <span className="flex items-center gap-1.5 font-semibold text-indigo-200">
+                <Sparkles size={12} className="text-indigo-300" aria-hidden />
+                {KIND_LABEL[c.kind] ?? c.kind}
+              </span>
               <span className="flex items-center gap-1">
-                <span className="max-w-24 truncate rounded bg-white/10 px-1 text-[10px] text-gray-300" title="Provider" data-testid="card-provider">
+                <span className="max-w-24 truncate rounded-full bg-white/[0.06] px-1.5 text-[10px] text-slate-400" title="Provider" data-testid="card-provider">
                   {c.provider}
                 </span>
-                <button type="button" className="px-1 text-gray-300 hover:text-white" title={c.pinned ? "Unpin" : "Pin"} aria-label={c.pinned ? "Unpin card" : "Pin card"} onClick={() => dispatch({ type: "pin", id: c.id })}>
-                  {c.pinned ? "★" : "☆"}
+                <button type="button" className="grid h-5 w-5 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white" title={c.pinned ? "Unpin" : "Pin"} aria-label={c.pinned ? "Unpin card" : "Pin card"} onClick={() => dispatch({ type: "pin", id: c.id })}>
+                  <Star size={12} fill={c.pinned ? "currentColor" : "none"} aria-hidden />
                 </button>
-                <button type="button" className="px-1 text-gray-300 hover:text-white" aria-label="Dismiss card" onClick={() => dispatch({ type: "dismiss", id: c.id })}>
-                  ×
+                <button type="button" className="grid h-5 w-5 place-items-center rounded text-slate-400 hover:bg-white/10 hover:text-white" aria-label="Dismiss card" onClick={() => dispatch({ type: "dismiss", id: c.id })}>
+                  <X size={12} aria-hidden />
                 </button>
               </span>
             </header>
             {c.collapsed ? (
-              <p className="truncate text-gray-300">{c.text.split("\n")[0]}</p>
+              <p className="truncate text-slate-300">{c.text.split("\n")[0]}</p>
             ) : (
               <>
-                <p className="whitespace-pre-line text-gray-100" data-testid="card-text">{c.text}</p>
+                <p className="whitespace-pre-line leading-relaxed text-slate-100" data-testid="card-text">{c.text}</p>
                 {c.sources.length > 0 && (
                   <p className="mt-1 flex flex-wrap gap-1" data-testid="card-sources">
                     {c.sources.map((s, i) => (
                       <button
                         key={i}
                         type="button"
-                        className="rounded bg-white/10 px-1 text-[10px] text-gray-300 hover:bg-white/20"
+                        className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-slate-300 ring-1 ring-white/10 hover:bg-white/[0.12]"
                         disabled={s.type !== "meeting"}
                         onClick={() => void window.copilot.openMain(meetingRoute(s.id, s.at_ms))}
                       >
@@ -78,17 +82,19 @@ export function CardStack({ state, dispatch }: { state: CardState; dispatch: (a:
                     ))}
                   </p>
                 )}
-                <footer className="mt-1.5 flex gap-1">
+                <footer className="mt-2 flex gap-1.5">
                   {noAnswer ? (
-                    <button type="button" className="rounded bg-amber-700 px-2 py-0.5 text-white" onClick={() => void window.copilot.overlay.action("follow_up")}>
+                    <button type="button" className="rounded-full bg-amber-500/90 px-2.5 py-0.5 font-medium text-amber-950" onClick={() => void window.copilot.overlay.action("follow_up")}>
                       I'll follow up
                     </button>
                   ) : (
                     <>
-                      <button type="button" aria-pressed={c.feedback === true} className={`rounded px-2 py-0.5 ${c.feedback === true ? "bg-green-700 text-white" : "bg-white/10"}`} onClick={() => feedback(c.id, true)}>
+                      <button type="button" aria-pressed={c.feedback === true} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 ring-1 ${c.feedback === true ? "bg-emerald-500/20 text-emerald-200 ring-emerald-400/40" : "bg-white/[0.06] text-slate-300 ring-white/10 hover:bg-white/[0.12]"}`} onClick={() => feedback(c.id, true)}>
+                        <ThumbsUp size={11} aria-hidden />
                         Used
                       </button>
-                      <button type="button" aria-pressed={c.feedback === false} className={`rounded px-2 py-0.5 ${c.feedback === false ? "bg-gray-600 text-white" : "bg-white/10"}`} onClick={() => feedback(c.id, false)}>
+                      <button type="button" aria-pressed={c.feedback === false} className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 ring-1 ${c.feedback === false ? "bg-slate-500/30 text-white ring-slate-400/40" : "bg-white/[0.06] text-slate-300 ring-white/10 hover:bg-white/[0.12]"}`} onClick={() => feedback(c.id, false)}>
+                        <ThumbsDown size={11} aria-hidden />
                         Not useful
                       </button>
                     </>
@@ -99,7 +105,7 @@ export function CardStack({ state, dispatch }: { state: CardState; dispatch: (a:
           </article>
         );
       })}
-      {queued > 0 && <p className="text-[10px] text-gray-400">{queued} more card{queued > 1 ? "s" : ""} waiting</p>}
+      {queued > 0 && <p className="text-[10px] text-slate-500">{queued} more card{queued > 1 ? "s" : ""} waiting</p>}
     </div>
   );
 }

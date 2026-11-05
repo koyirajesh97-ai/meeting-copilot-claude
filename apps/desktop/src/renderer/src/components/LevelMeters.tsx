@@ -5,9 +5,9 @@ function Bar({ label, value, state }: { label: string; value: number; state: Cha
   const off = state.state !== "live" && state.state !== "silent";
   return (
     <div className="flex items-center gap-1" title={`${label}: ${state.state}${state.message ? ` — ${state.message}` : ""}`}>
-      <span className="w-6 text-[10px] text-gray-400">{label}</span>
+      <span className="w-6 text-[10px] text-slate-500">{label}</span>
       <div
-        className="h-1.5 w-14 overflow-hidden rounded bg-white/10"
+        className="h-1 w-12 overflow-hidden rounded-full bg-white/10"
         role="meter"
         aria-label={`${label} level`}
         aria-valuemin={0}
@@ -16,7 +16,7 @@ function Bar({ label, value, state }: { label: string; value: number; state: Cha
         data-testid={`meter-${label.toLowerCase()}`}
         data-state={state.state}
       >
-        <div className={`h-full ${off ? "bg-gray-500" : "bg-green-500"} transition-[width] duration-75`} style={{ width: `${Math.round(value * 100)}%` }} />
+        <div className={`h-full rounded-full ${off ? "bg-slate-600" : "bg-gradient-to-r from-emerald-400 to-teal-300"} transition-[width] duration-75`} style={{ width: `${Math.round(value * 100)}%` }} />
       </div>
     </div>
   );

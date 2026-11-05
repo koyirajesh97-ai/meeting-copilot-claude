@@ -437,6 +437,7 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - Live: captions, cards (Used / Not useful / Dismiss), Catch me up (hold for 5 minutes), Clarify, I'll follow up, Stop.
 - Recording continues with the screen locked where the OS allows: iOS background audio mode, an Android foreground service with a persistent "Meeting Copilot is recording" notification.
 - Meetings (summary, decisions, action items, transcript) and Search are read-only; editing stays on the desktop.
+- Look: the same dark slate and indigo style as the desktop overlay, a large round record button, icon tab bar (Record, Meetings, Search, Settings). Builds as an Android APK (`pnpm -C apps/mobile build:apk`, also attached to tagged releases) signed with the debug key for testers; store builds need your own signing keys.
 
 ### Overlay behavior
 

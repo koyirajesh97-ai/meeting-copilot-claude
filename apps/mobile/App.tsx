@@ -1,11 +1,12 @@
 // Meeting Copilot on the phone: record a meeting with the phone mic, see live captions and
 // cards, and read summaries and search. Summaries and transcripts are read-only here.
 
+import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
-import { RecordingIndicator } from "./src/components";
+import { RecordingIndicator, type IconName } from "./src/components";
 import { IDLE, PhoneMeeting, type MeetingView } from "./src/core/meeting";
 import { MeetingsScreen } from "./src/screens/MeetingsScreen";
 import { RecordScreen } from "./src/screens/RecordScreen";
@@ -17,11 +18,11 @@ import { colors, ui } from "./src/theme";
 import { useRecorder } from "./src/useRecorder";
 
 type Tab = "record" | "meetings" | "search" | "settings";
-const TABS: { id: Tab; label: string }[] = [
-  { id: "record", label: "Record" },
-  { id: "meetings", label: "Meetings" },
-  { id: "search", label: "Search" },
-  { id: "settings", label: "Settings" },
+const TABS: { id: Tab; label: string; icon: IconName; iconOn: IconName }[] = [
+  { id: "record", label: "Record", icon: "mic-outline", iconOn: "mic" },
+  { id: "meetings", label: "Meetings", icon: "albums-outline", iconOn: "albums" },
+  { id: "search", label: "Search", icon: "search-outline", iconOn: "search" },
+  { id: "settings", label: "Settings", icon: "settings-outline", iconOn: "settings" },
 ];
 
 export default function App() {
@@ -76,10 +77,11 @@ export default function App() {
             />
           )}
         </View>
-        <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border }}>
+        <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: "#0e1426" }}>
           {TABS.map((t) => (
-            <Pressable key={t.id} accessibilityRole="tab" accessibilityState={{ selected: tab === t.id }} style={{ flex: 1, paddingVertical: 12, alignItems: "center" }} onPress={() => (setOpenMeeting(null), setTab(t.id))}>
-              <Text style={{ color: tab === t.id ? colors.accent : colors.muted, fontWeight: "600" }}>{t.label}</Text>
+            <Pressable key={t.id} accessibilityRole="tab" accessibilityLabel={t.label} accessibilityState={{ selected: tab === t.id }} style={{ flex: 1, paddingVertical: 9, alignItems: "center", gap: 3 }} onPress={() => (setOpenMeeting(null), setTab(t.id))}>
+              <Ionicons name={tab === t.id ? t.iconOn : t.icon} size={22} color={tab === t.id ? "#a5b4fc" : colors.muted} />
+              <Text style={{ color: tab === t.id ? "#a5b4fc" : colors.muted, fontSize: 11, fontWeight: "600" }}>{t.label}</Text>
             </Pressable>
           ))}
         </View>

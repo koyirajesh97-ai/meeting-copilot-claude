@@ -16,7 +16,8 @@ body {
 }
 
 body.overlay {
-  @apply bg-gray-900 text-gray-100 select-none overflow-hidden;
+  @apply text-slate-100 select-none overflow-hidden;
+  background: radial-gradient(120% 80% at 0% 0%, rgb(49 46 129 / 0.55), transparent 60%), linear-gradient(180deg, #0b1020, #0a0f1d);
 }
 
 .drag {

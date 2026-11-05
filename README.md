@@ -166,6 +166,17 @@ the phone can reach (your computer's LAN IP, e.g. `http://192.168.1.20:8000`, wi
 started with `--host 0.0.0.0`) and the Supabase URL and anon key. Then sign in with the same
 account as the desktop.
 
+To build an installable Android app (APK) for testers instead (needs JDK 17 and the Android SDK
+with `ANDROID_HOME` set):
+
+```bash
+pnpm -C apps/mobile build:apk
+```
+
+The APK lands in `apps/mobile/android/app/build/outputs/apk/release/app-release.apk`. It's signed
+with the debug key, so it installs on test phones (allow "install unknown apps") but isn't for
+the Play Store. Tagged releases also build it and attach it to the GitHub Release.
+
 ### Check your AI keys
 
 ```bash

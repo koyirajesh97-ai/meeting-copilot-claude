@@ -9,9 +9,11 @@
     "ios": "expo run:ios",
     "lint": "eslint src index.ts App.tsx && tsc --noEmit",
     "test": "vitest run",
-    "build": "expo export --platform android --output-dir dist"
+    "build": "expo export --platform android --output-dir dist",
+    "build:apk": "expo prebuild --platform android --no-install && cd android && ./gradlew assembleRelease"
   },
   "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
     "@meeting-copilot/shared": "workspace:*",
     "@siteed/audio-studio": "3.2.1",
     "@supabase/supabase-js": "^2.118.0",

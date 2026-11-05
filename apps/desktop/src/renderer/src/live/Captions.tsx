@@ -28,14 +28,14 @@ export function Captions({ lines, fontSize }: { lines: CaptionLine[]; fontSize: 
         onScroll={onScroll}
         data-testid="captions"
         data-pinned={pinned}
-        className="no-drag h-full space-y-1 overflow-y-auto pr-1"
+        className="no-drag h-full space-y-2 overflow-y-auto pr-1 leading-relaxed"
         style={{ fontSize: `${fontSize}px` }}
         aria-live="polite"
       >
-        {lines.length === 0 && <p className="text-gray-400">Captions appear here while recording.</p>}
+        {lines.length === 0 && <p className="text-slate-500">Captions appear here while recording.</p>}
         {lines.map((l) => (
-          <p key={l.key} data-testid={l.final ? "caption-final" : "caption-partial"} className={l.final ? "text-gray-100" : "text-gray-400 italic"}>
-            <span className={`mr-1.5 font-semibold ${l.speakerId === "me" ? "text-sky-300" : "text-amber-200"}`}>{l.speaker}:</span>
+          <p key={l.key} data-testid={l.final ? "caption-final" : "caption-partial"} className={l.final ? "text-slate-100" : "text-slate-400 italic"}>
+            <span className={`mr-1.5 font-semibold ${l.speakerId === "me" ? "text-indigo-300" : "text-amber-200"}`}>{l.speaker}:</span>
             {l.text}
           </p>
         ))}
@@ -43,7 +43,7 @@ export function Captions({ lines, fontSize }: { lines: CaptionLine[]; fontSize: 
       {!pinned && (
         <button
           type="button"
-          className="no-drag absolute right-1 bottom-1 rounded bg-sky-700 px-2 py-0.5 text-[10px] text-white shadow"
+          className="no-drag absolute right-1 bottom-1 rounded-full bg-indigo-600 px-2.5 py-1 text-[10px] font-medium text-white shadow-lg shadow-indigo-900/50"
           onClick={() => {
             setPinned(true);
             const el = box.current;

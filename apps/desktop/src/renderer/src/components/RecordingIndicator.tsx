@@ -22,8 +22,8 @@ export function RecordingIndicator({ state, compact = false }: { state: AppState
   }
   if (state.capturing && state.paused) {
     return (
-      <span data-testid="recording-indicator" data-recording="paused" role="status" aria-label="Recording paused" className="flex items-center gap-1.5 text-xs font-medium text-amber-500">
-        <span className="h-2.5 w-2.5 rounded-sm bg-amber-500" aria-hidden />
+      <span data-testid="recording-indicator" data-recording="paused" role="status" aria-label="Recording paused" className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-amber-500 ring-1 ring-amber-500/30">
+        <span className="h-2 w-2 rounded-sm bg-amber-500" aria-hidden />
         PAUSED
       </span>
     );
@@ -34,9 +34,9 @@ export function RecordingIndicator({ state, compact = false }: { state: AppState
       data-recording="true"
       role="status"
       aria-label="Recording"
-      className="flex items-center gap-1.5 text-xs font-medium text-red-500"
+      className="inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full bg-red-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide tabular-nums text-red-500 ring-1 ring-red-500/30"
     >
-      <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-600" aria-hidden />
+      <span className="h-2 w-2 animate-pulse rounded-full bg-red-500 shadow-[0_0_8px] shadow-red-500" aria-hidden />
       {state.enrolling && !state.capturing ? "REC voice sample" : `REC ${formatElapsed(now - (state.captureStartedAt ?? now))}`}
     </span>
   );

@@ -1,10 +1,13 @@
-import { speakerLabel } from "@meeting-copilot/shared";
+import { Ionicons } from "@expo/vector-icons";
+import { MEETING_TYPES, relativeTime, speakerLabel } from "@meeting-copilot/shared";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { Button, ErrorText, errorText } from "../components";
 import type { MeetingDetail, MeetingSummary } from "../core/api";
 import { api } from "../services";
-import { ui } from "../theme";
+import { colors, ui } from "../theme";
+
+const TYPE_LABEL: Record<string, string> = Object.fromEntries(MEETING_TYPES.map((t) => [t.id, t.label]));
 
 const when = (t: number) => new Date(t * 1000).toLocaleString();
 
@@ -23,17 +26,24 @@ export function MeetingsScreen({ openId }: { openId: string | null }) {
   if (open) return <Detail id={open} back={() => setOpen(null)} />;
   return (
     <ScrollView contentContainerStyle={ui.pad} refreshControl={<RefreshControl refreshing={loading} onRefresh={load} />}>
+      <Text style={ui.eyebrow}>Your meetings</Text>
       <Text style={ui.h1}>Meetings</Text>
       <ErrorText>{error}</ErrorText>
       {list.length === 0 && !error && <Text style={ui.muted}>No meetings yet.</Text>}
       {list.map((m) => (
-        <Pressable key={m.id} accessibilityRole="button" style={ui.card} onPress={() => setOpen(m.id)}>
-          <Text style={ui.text}>{m.title}</Text>
-          <Text style={ui.muted}>
-            {when(m.started_at)}
-            {m.ended_at === null ? " · in progress" : ""}
-            {m.is_mine === false ? " · shared" : ""}
-          </Text>
+        <Pressable key={m.id} accessibilityRole="button" style={({ pressed }) => [ui.card, { flexDirection: "row", alignItems: "center", gap: 12, opacity: pressed ? 0.8 : 1 }]} onPress={() => setOpen(m.id)}>
+          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.accentSoft, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name={m.type === "standup" ? "people-outline" : "mic-outline"} size={19} color={colors.accentText} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[ui.text, { fontWeight: "600" }]} numberOfLines={1}>{m.title}</Text>
+            <Text style={ui.muted}>
+              {TYPE_LABEL[m.type] ?? m.type} · {relativeTime(m.started_at)}
+              {m.ended_at === null ? " · live" : ""}
+              {m.is_mine === false ? " · shared" : ""}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
         </Pressable>
       ))}
     </ScrollView>
