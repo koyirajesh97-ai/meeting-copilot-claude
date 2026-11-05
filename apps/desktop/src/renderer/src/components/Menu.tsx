@@ -14,13 +14,13 @@ export function Menu({ label = "More", children }: { label?: string; children: R
   return (
     <details ref={ref} className="relative">
       <summary
-        className="cursor-pointer list-none rounded-md border border-gray-300 px-3 py-1.5 text-sm hover:bg-gray-50 dark:border-gray-700 dark:hover:bg-gray-900 [&::-webkit-details-marker]:hidden"
+        className="cursor-pointer list-none rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 [&::-webkit-details-marker]:hidden"
         role="button"
         aria-label={label}
       >
         {label} ▾
       </summary>
-      <div className="absolute right-0 z-10 mt-1 w-64 space-y-1 rounded-lg border border-gray-200 bg-white py-1 text-sm shadow-lg dark:border-gray-800 dark:bg-gray-950">
+      <div className="absolute right-0 z-10 mt-2 w-64 space-y-1 rounded-xl border border-slate-200 bg-white p-1 text-sm shadow-xl shadow-slate-900/10 dark:border-slate-800 dark:bg-slate-900">
         {children}
       </div>
     </details>
@@ -35,7 +35,7 @@ export function MenuItem({ onClick, children, danger = false }: { onClick: () =>
         e.currentTarget.closest("details")?.removeAttribute("open"); // picking an item closes the menu
         onClick();
       }}
-      className={`block w-full px-3 py-1.5 text-left hover:bg-gray-100 dark:hover:bg-gray-900 ${danger ? "text-red-600 dark:text-red-400" : ""}`}
+      className={`block w-full rounded-lg px-3 py-2 text-left hover:bg-slate-100 dark:hover:bg-slate-800 ${danger ? "text-red-600 dark:text-red-400" : ""}`}
     >
       {children}
     </button>

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Megaphone, Mic, Square } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
 import type { AppState, Brief, PrivacySettings, UpcomingMeeting } from "../../../shared/ipc";
 import {
@@ -78,8 +79,11 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
       : window.copilot.startMeeting({ title, type, mode, visibility: projectId ? visibility : "private", agenda, project_id: projectId || null, calendar_event_id: event?.id ?? null }));
 
   return (
-    <section className="mx-auto max-w-lg pt-6">
-      <h1 className="text-2xl font-semibold">Start meeting</h1>
+    <section className="mx-auto max-w-lg pt-10">
+      <span className="mb-5 grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg shadow-indigo-500/30" aria-hidden>
+        <Mic size={22} />
+      </span>
+      <h1 className="text-3xl font-semibold tracking-tight">Start meeting</h1>
       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400" data-testid={event ? "from-calendar" : undefined}>
         {event ? `From your calendar: ${event.title}` : "Give it a name, press Start, and join your call as usual."}
       </p>
@@ -89,17 +93,19 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
           <span className="sr-only">Title</span>
           <input
             aria-label="Title"
-            className={`${inputClass} py-2.5 text-base`}
+            className={`${inputClass} rounded-xl py-3 text-base`}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder="Meeting name (optional)"
           />
         </label>
         <div className="flex gap-2">
-          <button type="button" className={`${buttonClass} flex-1 py-2.5 text-base`} onClick={start}>
+          <button type="button" className={`${buttonClass} flex-1 py-3 text-base`} onClick={start}>
+            {state?.capturing ? <Square size={16} aria-hidden /> : <Mic size={17} aria-hidden />}
             {state?.capturing ? "Stop recording" : "Start recording"}
           </button>
-          <button type="button" className={secondaryButtonClass} title="Copy a short message for the meeting chat so everyone knows you're recording" onClick={() => void announce()}>
+          <button type="button" className={`${secondaryButtonClass} py-3`} title="Copy a short message for the meeting chat so everyone knows you're recording" onClick={() => void announce()}>
+            <Megaphone size={16} aria-hidden />
             {copied ?? "Announce"}
           </button>
         </div>
@@ -109,12 +115,12 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
           </p>
         )}
         {type === "standup" && (
-          <Link to="/standup" className="block text-sm text-blue-600 underline dark:text-blue-400">
+          <Link to="/standup" className="block text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400">
             Prep my standup update first
           </Link>
         )}
 
-        <details className="group rounded-lg border border-gray-200 text-sm dark:border-gray-800" open={!!eventId}>
+        <details className="group rounded-xl border border-slate-200 bg-slate-50/50 text-sm dark:border-slate-800 dark:bg-slate-900/40" open={!!eventId}>
           <summary className="cursor-pointer select-none px-3 py-2 text-gray-600 dark:text-gray-300">More options</summary>
           <div className="space-y-4 border-t border-gray-200 p-3 dark:border-gray-800">
             <div className="grid grid-cols-2 gap-3">

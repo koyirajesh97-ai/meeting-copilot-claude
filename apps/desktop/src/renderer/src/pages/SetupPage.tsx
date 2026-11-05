@@ -45,7 +45,7 @@ export function SetupPage() {
       <ol className="mt-5 flex gap-2" aria-label="Setup steps">
         {steps.map((s, i) => (
           <li key={s} className="flex-1">
-            <div className={`h-1.5 rounded-full ${i <= index ? "bg-blue-600" : "bg-gray-200 dark:bg-gray-800"}`} />
+            <div className={`h-1.5 rounded-full ${i <= index ? "bg-indigo-600" : "bg-gray-200 dark:bg-gray-800"}`} />
             <span className={`mt-1 block text-xs ${i === index ? "font-medium" : "text-gray-500"}`} aria-current={i === index ? "step" : undefined}>
               {LABEL[s]}
             </span>

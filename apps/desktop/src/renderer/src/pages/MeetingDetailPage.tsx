@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { speakerLabel, type CachedMeetingDetail, type IntegrationInfo } from "../../../shared/ipc";
-import { buttonClass, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
+import { ChevronDown, ChevronLeft, FileText } from "lucide-react";
+import { buttonClass, cardClass, EmptyState, inputClass, PageHeader, secondaryButtonClass } from "../components/EmptyState";
+import { TypeTile } from "../components/meetingTypes";
 import { MenuItem } from "../components/Menu";
 import { ShareControl } from "../projects/ShareControl";
 import { SummaryPanel } from "../summary/SummaryPanel";
@@ -95,14 +97,21 @@ export function MeetingDetailPage() {
   );
   return (
     <section className="max-w-3xl">
-      <header className="mb-6">
+      <header className="mb-8">
+        <Link to="/" className="mb-4 inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200">
+          <ChevronLeft size={16} aria-hidden />
+          Meetings
+        </Link>
         <div className="flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-semibold">{meeting.title}</h1>
+          <div className="flex items-center gap-4">
+            <TypeTile type={meeting.type} size="lg" />
+            <h1 className="text-2xl font-semibold tracking-tight">{meeting.title}</h1>
+          </div>
           {!meeting.is_mine && meeting.ended_at === null && (
             <Link to={`/meetings/${meeting.id}/live`} className={buttonClass}>Watch live</Link>
           )}
         </div>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 pl-16 text-sm text-slate-500 dark:text-slate-400">
           {formatWhen(meeting.started_at)}
           {meeting.ended_at ? ` – ${new Date(meeting.ended_at * 1000).toLocaleTimeString(undefined, { timeStyle: "short" })}` : " · in progress"}
           {!meeting.is_mine && " · shared with you (read-only)"}
@@ -111,9 +120,11 @@ export function MeetingDetailPage() {
       {deleting && <DeleteMeeting id={meeting.id} onCancel={() => setDeleting(false)} />}
       <SummaryPanel meeting={meeting} extra={menu} />
       {postTo && <PostSummary meetingId={meeting.id} target={postTo} onDone={() => setPostTo(null)} />}
-      <section aria-label="Transcript" className="border-t border-gray-200 pt-4 dark:border-gray-800">
-        <button type="button" className="text-sm font-medium" aria-expanded={showTranscript} onClick={() => setShowTranscript(!showTranscript)}>
-          {showTranscript ? "▾" : "▸"} Transcript ({meeting.transcript.length} lines)
+      <section aria-label="Transcript" className={`${cardClass} mt-6 p-5`}>
+        <button type="button" className="flex w-full items-center gap-2 text-sm font-medium" aria-expanded={showTranscript} onClick={() => setShowTranscript(!showTranscript)}>
+          <FileText size={16} className="text-slate-400" aria-hidden />
+          Transcript ({meeting.transcript.length} lines)
+          <ChevronDown size={16} className={`ml-auto text-slate-400 transition ${showTranscript ? "rotate-180" : ""}`} aria-hidden />
         </button>
         {showTranscript &&
           (meeting.transcript.length === 0 ? (

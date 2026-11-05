@@ -10,8 +10,9 @@ body,
 }
 
 body {
-  @apply bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100;
-  font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  @apply bg-slate-100 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
+  font-family: "Inter", "Segoe UI Variable Text", "Segoe UI", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-feature-settings: "cv11", "ss01";
 }
 
 body.overlay {
@@ -26,5 +27,5 @@ body.overlay {
 }
 
 :focus-visible {
-  @apply outline-2 outline-offset-2 outline-blue-500;
+  @apply outline-2 outline-offset-2 outline-indigo-500;
 }

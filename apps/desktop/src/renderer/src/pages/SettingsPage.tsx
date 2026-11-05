@@ -41,7 +41,7 @@ export function SettingsPage() {
             type="button"
             role="tab"
             aria-selected={tab === t.id}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === t.id ? "border-blue-600 font-medium text-blue-700 dark:text-blue-300" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"}`}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm ${tab === t.id ? "border-indigo-600 font-medium text-indigo-700 dark:text-indigo-300" : "border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200"}`}
             onClick={() => setParams({ tab: t.id }, { replace: true })}
           >
             {t.label}

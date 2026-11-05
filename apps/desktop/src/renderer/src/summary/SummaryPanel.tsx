@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { Copy, Sparkles } from "lucide-react";
 import { Menu, MenuItem } from "../components/Menu";
 import type { CachedMeetingDetail } from "../../../shared/ipc";
 import { MEETING_TYPES } from "../../../shared/meetings";
@@ -56,6 +57,7 @@ export function SummaryPanel({ meeting, extra }: { meeting: CachedMeetingDetail;
         <button type="button" className={buttonClass} disabled={busy} onClick={() => void act(async () => {
           await navigator.clipboard.writeText(await window.copilot.meetings.markdown(meeting.id, false));
         }, "Copied. Paste it into an email, Teams or Slack.")}>
+          <Copy size={15} aria-hidden />
           Copy summary
         </button>
       )}
@@ -138,7 +140,7 @@ export function SummaryPanel({ meeting, extra }: { meeting: CachedMeetingDetail;
           <List key={s.key} title={s.title} items={s.items} />
         ))}
         {d.per_person.map((p) => (
-          <div key={p.person} className="rounded-lg bg-gray-50 p-3 dark:bg-gray-900">
+          <div key={p.person} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-100 dark:bg-slate-800/50 dark:ring-slate-800">
             <h3 className="mb-2 font-medium">{p.person}</h3>
             <div className="grid gap-3 sm:grid-cols-3">
               <List title="Done" items={p.done} />
@@ -177,9 +179,12 @@ export function SummaryPanel({ meeting, extra }: { meeting: CachedMeetingDetail;
   }
 
   return (
-    <section className="mb-8 space-y-3" aria-label="Summary">
+    <section className="space-y-4 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900" aria-label="Summary">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-medium">Summary</h2>
+        <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+          <Sparkles size={18} className="text-indigo-500" aria-hidden />
+          Summary
+        </h2>
         {toolbar}
       </div>
       {note && <p className="text-xs text-gray-500 dark:text-gray-400" role="status">{note}</p>}

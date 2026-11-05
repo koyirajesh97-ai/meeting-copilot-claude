@@ -57,7 +57,7 @@ export function AskPage() {
                   <ul className="mt-3 space-y-1.5" aria-label="Sources">
                     {t.answer.citations.map((c) => (
                       <li key={c.id}>
-                        <Link to={meetingRoute(c.meeting_id, c.start_ms)} className="text-blue-700 underline dark:text-blue-300" data-testid="citation">
+                        <Link to={meetingRoute(c.meeting_id, c.start_ms)} className="text-indigo-700 underline dark:text-indigo-300" data-testid="citation">
                           [{c.id}] {c.title}
                           {c.start_ms !== null ? ` at ${clock(c.start_ms)}` : " (summary)"}
                         </Link>
