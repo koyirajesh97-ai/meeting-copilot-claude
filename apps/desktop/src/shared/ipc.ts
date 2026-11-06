@@ -1,5 +1,6 @@
 // Contract between the main process and the renderers. Imported by main, preload and renderer.
 import type { MeetingEvent } from "@meeting-copilot/shared";
+import { HOSTED_SUPABASE } from "@meeting-copilot/shared/hosted";
 
 export const IPC = {
   getState: "app:get-state",
@@ -438,8 +439,8 @@ export const DEFAULT_SETTINGS: Settings = {
   backendUrl: "http://127.0.0.1:8000",
   micDeviceId: null,
   systemAudioApp: null,
-  supabaseUrl: "http://127.0.0.1:54321",
-  supabaseAnonKey: "",
+  supabaseUrl: HOSTED_SUPABASE.url,
+  supabaseAnonKey: HOSTED_SUPABASE.publishableKey,
   autoUpdate: true,
   diagnostics: false,
   setupDone: false,

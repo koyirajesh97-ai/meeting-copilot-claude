@@ -258,8 +258,13 @@ describe("auth", () => {
   });
 
   it("asks for Supabase settings before sending a code", async () => {
-    const auth = new AuthManager({} as BackendClient, () => DEFAULT_SETTINGS, new MemorySecrets());
+    const auth = new AuthManager({} as BackendClient, () => ({ ...DEFAULT_SETTINGS, supabaseAnonKey: "" }), new MemorySecrets());
     await expect(auth.sendCode("a@b.c")).rejects.toThrow(/anon key/);
+  });
+
+  it("signs in with the hosted project by default", () => {
+    expect(DEFAULT_SETTINGS.supabaseUrl).toMatch(/^https:\/\/\w+\.supabase\.co$/);
+    expect(DEFAULT_SETTINGS.supabaseAnonKey).toMatch(/^sb_publishable_/);
   });
 });
 

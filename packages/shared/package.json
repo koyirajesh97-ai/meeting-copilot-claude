@@ -15,6 +15,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
-    "./meetings": "./src/meetings.ts"
+    "./meetings": "./src/meetings.ts",
+    "./hosted": "./src/hosted.ts"
   }
 }

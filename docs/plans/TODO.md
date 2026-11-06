@@ -84,3 +84,8 @@ Follow-ups that were out of scope for the prompt that found them.
   in the browser yet), and code-splitting the 650 kB bundle.
 - Web app: the backend token sits in localStorage (short-lived, no provider keys); consider an
   httpOnly cookie session if the site is shared widely.
+- Hosted Supabase project "meeting-copilot": in the dashboard, add `{{ .Token }}` to
+  Authentication → Email templates → Magic Link (the apps sign in with the code), and set up
+  custom SMTP before inviting people (the built-in sender is rate-limited). The `vector`
+  extension sits in the public schema (security advisor warning); moving it means recreating
+  the `chunks` embedding column, so it's left for a maintenance window.

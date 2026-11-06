@@ -97,8 +97,14 @@ into `.env`: `API URL` → `SUPABASE_URL`, `anon key` → `SUPABASE_ANON_KEY`, `
 
 ### Signing in
 
-The desktop app signs in with an emailed one-time code (Settings → Account). Put the Supabase URL
-and anon key in Settings → Account → Supabase project. With local Supabase, the email lands in its
+The apps sign in with an emailed one-time code (Settings → Account) through the hosted Supabase
+project **meeting-copilot** (`https://qxzeghownilplbryvvzl.supabase.co`). Its URL and public
+publishable key are built in (`packages/shared/src/hosted.ts`); its database already has every
+migration in `supabase/migrations`. For the backend, set `SUPABASE_URL` to that address and
+`DATABASE_URL` to the project's "Session pooler" connection string (dashboard → Connect).
+
+To use a local stack instead, put its URL and anon key in Settings → Account → Supabase project.
+With local Supabase, the email lands in its
 test inbox at http://127.0.0.1:54324. The default Magic Link email template must show the code:
 in Supabase Studio (http://127.0.0.1:54323) → Authentication → Email templates → Magic Link, add
 `{{ .Token }}` (hosted Supabase: same place in the dashboard).
