@@ -223,6 +223,24 @@ Deploying to Vercel (static hosting; the backend runs elsewhere because it needs
 3. Deploy. Without `VITE_BACKEND_URL` the site opens on "Connect to your Meeting Copilot
    server", where each visitor enters their own server.
 
+### Hosting the backend (Render, free)
+
+`render.yaml` deploys the backend as a Docker web service on Render's free plan (512 MB; it
+sleeps after 15 minutes idle and takes about a minute to wake on the next request).
+
+1. Open https://render.com/deploy?repo=https://github.com/koyirajesh97-ai/meeting-copilot-claude
+   and sign in (GitHub works; no card for the free plan).
+2. Render generates `BACKEND_SECRET`, `VOICEPRINT_KEY` and `INTEGRATIONS_KEY`, and asks for:
+   `DATABASE_URL` (Supabase dashboard → Connect → "Session pooler"), the free AI keys
+   `GROQ_API_KEY`, `MISTRAL_API_KEY`, `DEEPGRAM_API_KEY`, and `COPILOT_WEB_ORIGINS` (your web
+   app's address, or leave it empty for now). `SUPABASE_SERVICE_ROLE_KEY` is optional (email
+   invites and document uploads).
+3. Click **Apply**. The server's address (`https://meeting-copilot-api-….onrender.com`) goes into
+   the apps' Settings → server, and into Vercel as `VITE_BACKEND_URL`.
+
+To run the same image elsewhere: `docker build -f services/backend/Dockerfile -t meeting-copilot-backend .`
+then `docker run -p 8000:8000 --env-file .env meeting-copilot-backend`.
+
 ### Check your AI keys
 
 ```bash

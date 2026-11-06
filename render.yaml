@@ -1,0 +1,43 @@
+# Render Blueprint for the Meeting Copilot backend (free plan: 512 MB, sleeps after 15 minutes
+# idle and takes about a minute to wake). Deploy: https://render.com/deploy?repo=<this repo's URL>
+# Render generates the three secrets below; it asks you for the ones marked sync: false.
+services:
+  - type: web
+    name: meeting-copilot-api
+    runtime: docker
+    plan: free
+    region: ohio # next to the Supabase project (us-east-2)
+    dockerfilePath: ./services/backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    buildFilter:
+      paths:
+        - services/backend/**
+        - config/**
+        - render.yaml
+    envVars:
+      - key: BACKEND_SECRET
+        generateValue: true
+      - key: VOICEPRINT_KEY
+        generateValue: true
+      - key: INTEGRATIONS_KEY
+        generateValue: true
+      - key: SUPABASE_URL
+        value: https://qxzeghownilplbryvvzl.supabase.co
+      # Supabase dashboard → Connect → "Session pooler" connection string.
+      - key: DATABASE_URL
+        sync: false
+      # Where the web app is served from, comma-separated (e.g. https://your-site.vercel.app).
+      - key: COPILOT_WEB_ORIGINS
+        sync: false
+      # Free AI keys (no card): console.groq.com, console.mistral.ai, console.deepgram.com.
+      - key: GROQ_API_KEY
+        sync: false
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: DEEPGRAM_API_KEY
+        sync: false
+      # Optional: project invites by email and document uploads to Supabase Storage.
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

@@ -19,7 +19,9 @@ log = logging.getLogger("app.integrations")
 def _fernet() -> Fernet:
     key = os.environ.get("INTEGRATIONS_KEY")
     if key:
-        return Fernet(key.encode())
+        from app.secrets import fernet_from_secret
+
+        return fernet_from_secret(key, "integrations")
     log.warning("INTEGRATIONS_KEY is not set; deriving a development key from BACKEND_SECRET")
     from app.auth import backend_secret
 

@@ -19,7 +19,9 @@ log = logging.getLogger("app.voiceprints")
 def _fernet() -> Fernet:
     key = os.environ.get("VOICEPRINT_KEY")
     if key:
-        return Fernet(key.encode())
+        from app.secrets import fernet_from_secret
+
+        return fernet_from_secret(key, "voiceprint")
     # Development only: derive a key so enrollment works locally. Set VOICEPRINT_KEY in production
     # (python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())").
     log.warning("VOICEPRINT_KEY is not set; deriving a development key from BACKEND_SECRET")

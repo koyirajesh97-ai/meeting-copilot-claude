@@ -1,0 +1,11 @@
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+**/out
+.git
+apps
+evals
+.env
+.env.*
+!.env.example
