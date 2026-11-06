@@ -201,6 +201,12 @@ pnpm -C apps/web dev          # http://localhost:5190
 pnpm -C apps/web build        # static site in apps/web/dist
 ```
 
+GitHub Pages: turn on Pages (Settings → Pages → Source: GitHub Actions), then run the
+"Web app (GitHub Pages)" workflow; the site appears at `https://<owner>.github.io/<repo>/`. Set
+the repository variables `BACKEND_URL`, `SUPABASE_URL` and `SUPABASE_ANON_KEY` to make it the
+real app instead of the demo, and add the Pages origin (e.g. `https://koyirajesh97-ai.github.io`)
+to the backend's `COPILOT_WEB_ORIGINS`.
+
 Deploying to Vercel (static hosting; the backend runs elsewhere because it needs WebSockets):
 
 1. Host the backend (Render, Fly.io, Railway or your own server) and set

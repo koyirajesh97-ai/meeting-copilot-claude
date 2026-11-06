@@ -8,6 +8,8 @@ import { defineConfig } from "vite";
 // place of Electron's. VITE_BACKEND_URL and the Supabase settings are read at build time.
 export default defineConfig({
   root: import.meta.dirname,
+  // GitHub Pages serves the site under /<repo>/; Vercel and local dev serve it at /.
+  base: process.env.WEB_BASE || "/",
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
