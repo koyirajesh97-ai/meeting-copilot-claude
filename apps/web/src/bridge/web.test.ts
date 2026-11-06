@@ -27,7 +27,7 @@ class MemoryStorage {
 const store = () => new MemoryStorage() as unknown as Storage;
 
 describe("web settings", () => {
-  it("starts from the desktop defaults with no server (demo mode)", () => {
+  it("starts from the desktop defaults with no server (the site asks for one)", () => {
     const s = loadSettings(store());
     expect(s.backendUrl).toBe("");
     expect(s.captionFontSize).toBe(DEFAULT_SETTINGS.captionFontSize);

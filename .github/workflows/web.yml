@@ -1,6 +1,6 @@
 name: Web app (GitHub Pages)
 # Builds apps/web and publishes it to GitHub Pages when run (Actions → Run workflow). Without the
-# BACKEND_URL repository variable the site is the demo (sample meetings, nothing recorded).
+# BACKEND_URL repository variable, visitors enter their own server address on first visit.
 # Optional repository variables: BACKEND_URL, SUPABASE_URL, SUPABASE_ANON_KEY (public anon key).
 on:
   # Manual: enable Pages first (Settings → Pages → Source: GitHub Actions), then run it.

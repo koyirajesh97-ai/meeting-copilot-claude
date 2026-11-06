@@ -445,7 +445,7 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - Audio: the microphone (channel 0) and the meeting's audio from a shared tab or screen (channel 1, Chrome and Edge; "Share tab audio" must be ticked). Without a share, captions come from the mic only and the overlay says it isn't hearing the meeting. Same 16 kHz PCM16 20 ms frames as the desktop.
 - The overlay is a floating panel while recording, with the same recording indicator; "Pop out" opens it in an always-on-top Picture-in-Picture window where the browser supports it.
 - Nothing is saved in the browser except settings and the short-lived backend token (localStorage); meetings are read from the backend. Local-only mode in a browser keeps nothing (use the desktop app to record to your computer). Exports download as files.
-- With no backend configured the site is a clearly labeled demo with sample meetings and a simulated meeting; nothing is recorded.
+- With no backend built in, the site opens on a "Connect to your server" screen: the address is checked against the server's `/health` before it's saved. There is no sample or demo data.
 
 ### Overlay behavior
 

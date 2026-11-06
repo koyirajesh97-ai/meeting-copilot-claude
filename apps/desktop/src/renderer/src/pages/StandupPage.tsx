@@ -59,7 +59,7 @@ export function StandupPage() {
         <textarea
           className={`${inputClass} mt-1`}
           rows={5}
-          placeholder={"finished OPS-142 cert renewal\ntoday: prod deploy\nblocked on VPN access"}
+          placeholder={"yesterday: what you finished\ntoday: what you're working on\nblocked on: anything stopping you"}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           aria-label="Standup notes"

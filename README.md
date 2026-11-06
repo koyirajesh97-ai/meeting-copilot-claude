@@ -193,8 +193,8 @@ macOS runners (run it from the Actions tab, or push a `v*` tag). Each run produc
 `apps/web` is the desktop app's screens running in a browser (Chrome or Edge for meeting audio).
 It records your microphone plus the meeting's audio from a shared tab ("Share tab audio") and
 shows the overlay as a floating panel; **Pop out** keeps it on top of the meeting tab. Nothing
-is saved in the browser: meetings live on your backend. With no backend configured it runs as a
-demo with sample meetings and records nothing.
+is saved in the browser: meetings live on your backend. With no backend built in, the site asks
+for your server's address (and checks it answers) before anything else; there's no sample data.
 
 ```bash
 pnpm -C apps/web dev          # http://localhost:5190
@@ -204,7 +204,7 @@ pnpm -C apps/web build        # static site in apps/web/dist
 GitHub Pages: turn on Pages (Settings → Pages → Source: GitHub Actions), then run the
 "Web app (GitHub Pages)" workflow; the site appears at `https://<owner>.github.io/<repo>/`. Set
 the repository variables `BACKEND_URL`, `SUPABASE_URL` and `SUPABASE_ANON_KEY` to make it the
-real app instead of the demo, and add the Pages origin (e.g. `https://koyirajesh97-ai.github.io`)
+server built in (otherwise visitors enter it themselves), and add the Pages origin (e.g. `https://koyirajesh97-ai.github.io`)
 to the backend's `COPILOT_WEB_ORIGINS`.
 
 Deploying to Vercel (static hosting; the backend runs elsewhere because it needs WebSockets):
@@ -214,8 +214,8 @@ Deploying to Vercel (static hosting; the backend runs elsewhere because it needs
 2. In Vercel, import the repo with **Root Directory** `apps/web` (`apps/web/vercel.json` does the
    install and build) and set `VITE_BACKEND_URL`, `VITE_SUPABASE_URL` and
    `VITE_SUPABASE_ANON_KEY` (the public anon key; never a provider API key).
-3. Deploy. Without `VITE_BACKEND_URL` the site is the demo; anyone can still enter a server URL
-   in Settings.
+3. Deploy. Without `VITE_BACKEND_URL` the site opens on "Connect to your Meeting Copilot
+   server", where each visitor enters their own server.
 
 ### Check your AI keys
 

@@ -24,7 +24,7 @@ function copyStyles(to: Window): void {
   to.document.title = "Meeting Copilot";
 }
 
-export function WebOverlay({ raised = false }: { raised?: boolean }) {
+export function WebOverlay() {
   const state = useAppState();
   const [popout, setPopout] = useState<Window | null>(null);
   const [hidden, setHidden] = useState(false);
@@ -43,7 +43,7 @@ export function WebOverlay({ raised = false }: { raised?: boolean }) {
   }, [popout, size.width, size.height]);
 
   if (!capturing) return null;
-  const corner = raised ? "bottom-12 right-4" : "bottom-4 right-4";
+  const corner = "bottom-4 right-4";
 
   const popOut = async () => {
     const api = pip();
