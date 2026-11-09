@@ -216,6 +216,14 @@ describe("start options", () => {
     // Tool switches: only the known ones, as booleans (missing means on).
     expect(sanitizeStartOptions({ tools: { answers: false, topics: "no", evil: true } }, now).tools).toEqual({ answers: false, topics: true });
     expect(sanitizeStartOptions({ type: "party", mode: "evil" }, now)).toEqual(defaultStartOptions(now));
+    // Web audio sources: known kinds only; a device needs an id; anything else means sharing.
+    const audio = (a: unknown) => sanitizeStartOptions({ audio: a }, now).audio;
+    expect(audio({ kind: "room", deviceId: "x" })).toEqual({ kind: "room" });
+    expect(audio({ kind: "device", deviceId: "abc" })).toEqual({ kind: "device", deviceId: "abc", withMic: true });
+    expect(audio({ kind: "device", deviceId: "abc", withMic: false })).toEqual({ kind: "device", deviceId: "abc", withMic: false });
+    expect(audio({ kind: "device" })).toEqual({ kind: "share" });
+    expect(audio("bluetooth")).toEqual({ kind: "share" });
+    expect(sanitizeStartOptions({}, now).audio).toBeUndefined(); // the desktop app sends none
     expect(sanitizeStartOptions("junk", now).title).toContain("Meeting");
   });
 });

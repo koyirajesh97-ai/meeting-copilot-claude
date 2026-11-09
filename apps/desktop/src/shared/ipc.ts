@@ -335,6 +335,13 @@ export type { LiveState, SessionTools } from "@meeting-copilot/shared";
 import type { SessionTools } from "@meeting-copilot/shared";
 import type { LiveState } from "@meeting-copilot/shared";
 
+/**
+ * Where a browser session's meeting audio comes from (web app; the desktop app captures system
+ * audio itself). share: the meeting's tab or window. room: the mic hears the room or another
+ * device on speaker. device: an audio input carrying the meeting (mixer, interface, virtual cable).
+ */
+export type MeetingAudioSource = { kind: "share" } | { kind: "room" } | { kind: "device"; deviceId: string; withMic?: boolean };
+
 export interface StartOptions {
   title: string;
   type: string;
@@ -347,6 +354,8 @@ export interface StartOptions {
   calendar_event_id?: string | null;
   /** The session's adaptive tools (Start screen switches); missing means on. Sent over the live socket. */
   tools?: SessionTools;
+  /** Web app: where the meeting audio comes from (default: share a tab or window). */
+  audio?: MeetingAudioSource;
 }
 
 export interface CachedSegment {
@@ -490,6 +499,8 @@ export interface CopilotApi {
   onState(listener: (state: AppState) => void): () => void;
   toggleCapture(): Promise<AppState>;
   startMeeting(opts: StartOptions): Promise<AppState>;
+  /** Web app only: audio inputs for "External audio input" (absent in the desktop app). */
+  audioInputs?(): Promise<{ deviceId: string; label: string }[]>;
   /** Live meeting events from the backend (captions, provider switches, errors). */
   onLive(listener: (event: MeetingEvent) => void): () => void;
   auth: {

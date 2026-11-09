@@ -33,7 +33,7 @@ import {
   type StartOptions,
   type SummaryInfo,
 } from "@desktop/shared/ipc";
-import { recordMicSamples, WebRecorder, wavFromFloat } from "./recorder";
+import { listAudioInputs, recordMicSamples, WebRecorder, wavFromFloat } from "./recorder";
 
 /** Values baked in at build time (Vercel environment variables). */
 export const BUILD = {
@@ -269,7 +269,7 @@ export function createWebApi(): CopilotApi {
         // The indicator turns on before any audio is read.
         Object.assign(state, { capturing: true, paused: false, meetingMode: opts.mode, captureStartedAt: Date.now() });
         broadcast();
-        await recorder.start({ micDeviceId: settings.micDeviceId, meetingAudio: true });
+        await recorder.start({ micDeviceId: settings.micDeviceId, source: opts.audio });
         const allowed = liveConnectionAllowed(opts.mode, settings.backendUrl);
         if (!allowed.ok) {
           // The browser keeps no recording, so a local-only meeting here only shows the meters.
@@ -319,7 +319,7 @@ export function createWebApi(): CopilotApi {
     broadcast();
     try {
       recorder.sendEnabled = false; // the check's audio is never sent anywhere
-      await recorder.start({ micDeviceId: settings.micDeviceId, meetingAudio: true });
+      await recorder.start({ micDeviceId: settings.micDeviceId, source: { kind: "share" } });
       await new Promise((r) => setTimeout(r, AUDIO_CHECK_MS));
       const s = recorder.currentStatus;
       return { mic: { ...s.mic, peak: peak.mic }, system: { ...s.system, peak: peak.system } };
@@ -363,6 +363,7 @@ export function createWebApi(): CopilotApi {
     getState: async () => (await oauthDone, { ...state }),
     onState: (l) => sub("state", l),
     toggleCapture: () => setCapturing(!state.capturing),
+    audioInputs: () => listAudioInputs(),
     startMeeting: (opts) => setCapturing(true, opts),
     onLive: (l) => sub("live", l),
     auth: {

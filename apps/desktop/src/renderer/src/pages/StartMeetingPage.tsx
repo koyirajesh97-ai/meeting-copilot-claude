@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Check, Cloud, HardDrive, Megaphone, Mic, Radio, Sparkles, Square, Zap } from "lucide-react";
+import { Cable, Check, Cloud, HardDrive, Megaphone, Mic, MonitorUp, Radio, Sparkles, Speaker, Square, Zap } from "lucide-react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { AppState, Brief, PrivacySettings, SessionTools, UpcomingMeeting } from "../../../shared/ipc";
+import type { AppState, Brief, MeetingAudioSource, PrivacySettings, SessionTools, UpcomingMeeting } from "../../../shared/ipc";
 import {
   DEFAULT_CONSENT_MESSAGE,
   MEETING_MODES,
@@ -31,6 +31,98 @@ function Section({ step, title, children }: { step: number; title: string; child
       </h2>
       {children}
     </section>
+  );
+}
+
+const AUDIO_KEY = "meeting-copilot.audio-source";
+
+/** The last audio source chosen in this browser (a convenience; sharing when unknown). */
+function loadAudioChoice(): MeetingAudioSource {
+  try {
+    const v = JSON.parse(localStorage.getItem(AUDIO_KEY) ?? "null") as MeetingAudioSource | null;
+    if (v && (v.kind === "share" || v.kind === "room" || (v.kind === "device" && typeof v.deviceId === "string"))) return v;
+  } catch {
+    /* no storage */
+  }
+  return { kind: "share" };
+}
+function saveAudioChoice(v: MeetingAudioSource): void {
+  try {
+    localStorage.setItem(AUDIO_KEY, JSON.stringify(v));
+  } catch {
+    /* no storage */
+  }
+}
+
+const AUDIO_OPTIONS: { kind: MeetingAudioSource["kind"]; label: string; hint: string; icon: typeof Cloud }[] = [
+  { kind: "share", label: "This computer", hint: "Share the meeting's tab or window (Chrome, Edge). Your mic is added.", icon: MonitorUp },
+  { kind: "room", label: "Another device or the room", hint: "No sharing. Your mic listens to the room, or a phone or laptop on speaker.", icon: Speaker },
+  { kind: "device", label: "External audio input", hint: "A mixer, audio interface or virtual cable (BlackHole, VB-Cable, Loopback).", icon: Cable },
+];
+
+/** Web app: where the meeting audio comes from. */
+function AudioSourcePicker({ value, onChange }: { value: MeetingAudioSource; onChange: (v: MeetingAudioSource) => void }) {
+  const [inputs, setInputs] = useState<{ deviceId: string; label: string }[] | null>(null);
+  useEffect(() => {
+    if (value.kind === "device" && inputs === null) void window.copilot.audioInputs?.().then(setInputs, () => setInputs([]));
+  }, [value.kind, inputs]);
+  const pick = (kind: MeetingAudioSource["kind"]) => {
+    if (kind === "device") {
+      const first = value.kind === "device" ? value.deviceId : (inputs?.[0]?.deviceId ?? "");
+      onChange({ kind: "device", deviceId: first, withMic: true });
+    } else onChange({ kind });
+  };
+  return (
+    <div className="space-y-3">
+      <div role="radiogroup" aria-label="Meeting audio" className="grid gap-3 sm:grid-cols-3">
+        {AUDIO_OPTIONS.map((o) => {
+          const on = value.kind === o.kind;
+          const Icon = o.icon;
+          return (
+            <label
+              key={o.kind}
+              className={`relative flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-sm transition focus-within:ring-2 focus-within:ring-indigo-500/40 ${
+                on ? "border-cyan-500/60 bg-cyan-50 dark:border-cyan-400/50 dark:bg-cyan-400/10" : "border-slate-200 hover:border-cyan-300 dark:border-white/[0.08] dark:hover:border-cyan-400/40"
+              }`}
+            >
+              <input type="radio" name="audio" checked={on} onChange={() => pick(o.kind)} className="absolute inset-0 cursor-pointer opacity-0" aria-label={`${o.label} — ${o.hint}`} />
+              <Icon size={18} className={`mt-0.5 shrink-0 ${on ? "text-cyan-600 dark:text-cyan-300" : "text-slate-400"}`} aria-hidden />
+              <span>
+                <span className="block font-medium">{o.label}</span>
+                <span className="block text-xs text-slate-500 dark:text-slate-400">{o.hint}</span>
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      {value.kind === "device" && (
+        <div className="flex flex-wrap items-center gap-3 text-sm">
+          <select
+            aria-label="Audio input"
+            className={`${inputClass} max-w-sm`}
+            value={value.deviceId}
+            onChange={(e) => onChange({ ...value, deviceId: e.target.value })}
+          >
+            {inputs === null && <option value="">Finding audio inputs…</option>}
+            {inputs?.length === 0 && <option value="">No audio inputs found</option>}
+            {inputs?.map((d) => (
+              <option key={d.deviceId} value={d.deviceId}>
+                {d.label}
+              </option>
+            ))}
+          </select>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={value.withMic !== false} onChange={(e) => onChange({ ...value, withMic: e.target.checked })} />
+            Also record my microphone
+          </label>
+        </div>
+      )}
+      {value.kind === "room" && (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          Everything your mic hears counts as the meeting, so voices are told apart (Speaker 1, Speaker 2…). Put the other device on speaker, close to this one.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -64,6 +156,13 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   const [agenda, setAgenda] = useState("");
   const [brief, setBrief] = useState<Brief | null>(null);
   const [tools, setTools] = useState<Required<SessionTools>>({ answers: true, topics: true });
+  // Browser sessions choose where the meeting audio comes from; the desktop app captures it itself.
+  const pickAudio = typeof window.copilot.audioInputs === "function";
+  const [audio, setAudioState] = useState<MeetingAudioSource>(loadAudioChoice);
+  const setAudio = (v: MeetingAudioSource) => {
+    setAudioState(v);
+    saveAudioChoice(v);
+  };
   const { projects } = useProjects();
   const [projectId, setProjectId] = useState("");
   // Started from a calendar event (Upcoming, or the 1-minute nudge): fill in what it tells us.
@@ -123,6 +222,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
           project_id: projectId || null,
           calendar_event_id: event?.id ?? null,
           tools,
+          ...(pickAudio ? { audio: audio.kind === "device" && !audio.deviceId ? { kind: "room" as const } : audio } : {}),
         }));
 
   const info = MODE_INFO[type] ?? MODE_INFO.custom;
@@ -176,7 +276,13 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             </div>
           </Section>
 
-          <Section step={2} title="Give your copilot context">
+          {pickAudio && (
+            <Section step={2} title="Where's the meeting audio?">
+              <AudioSourcePicker value={audio} onChange={setAudio} />
+            </Section>
+          )}
+
+          <Section step={pickAudio ? 3 : 2} title="Give your copilot context">
             <div className="grid gap-3 sm:grid-cols-[1fr_200px]">
               <input aria-label="Title" className={`${inputClass} py-2.5`} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Meeting name (optional)" />
               <select aria-label="Project" className={`${inputClass} py-2.5`} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
@@ -204,7 +310,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             )}
           </Section>
 
-          <Section step={3} title="Adaptive tools">
+          <Section step={pickAudio ? 4 : 3} title="Adaptive tools">
             <ul className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white dark:divide-white/[0.06] dark:border-white/[0.08] dark:bg-white/[0.03]">
               {TOOLS.map((t) => (
                 <li key={t.key} className="flex items-center gap-4 p-4">
@@ -224,7 +330,7 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
             </ul>
           </Section>
 
-          <Section step={4} title="Privacy">
+          <Section step={pickAudio ? 5 : 4} title="Privacy">
             <div role="radiogroup" aria-label="Privacy" className="grid gap-3 sm:grid-cols-3">
               {MEETING_MODES.map((m) => {
                 const Icon = PRIVACY_ICON[m.id];

@@ -7,7 +7,7 @@ import { AudioChannel, encodeFrame, type OutboundAudio } from "@meeting-copilot/
 import { Framer } from "@desktop/main/audio/framer";
 import { floatToPcm16, Resampler } from "@desktop/main/audio/resample";
 import workletUrl from "@desktop/renderer/src/captureWorklet.ts?worker&url";
-import type { AudioLevels, ChannelState, ChannelStatus } from "@desktop/shared/ipc";
+import type { AudioLevels, ChannelState, ChannelStatus, MeetingAudioSource } from "@desktop/shared/ipc";
 
 type Channel = "mic" | "system";
 
@@ -45,18 +45,38 @@ export class WebRecorder {
     this.on.status(this.status);
   }
 
-  /** The share picker first (it needs the click that started the meeting), then the mic. */
-  async start(opts: { micDeviceId: string | null; meetingAudio: boolean }): Promise<ChannelStatus> {
+  /**
+   * Where the meeting audio comes from (`source`):
+   * - share: the meeting's tab or window (share picker first: it needs the click that started
+   *   the meeting), plus your mic;
+   * - room: no sharing; the mic hears the room (or another device on speaker) and is sent as the
+   *   meeting channel, so voices are told apart instead of all counting as you;
+   * - device: an audio input carrying the meeting (mixer, interface, virtual cable), plus your
+   *   mic unless `withMic` is false.
+   */
+  async start(opts: { micDeviceId: string | null; source?: MeetingAudioSource }): Promise<ChannelStatus> {
+    const source: MeetingAudioSource = opts.source ?? { kind: "share" };
     await this.stop();
     this.paused = false;
     this.levelTimer = setInterval(() => {
       this.on.levels(this.peaks);
       this.peaks = { mic: 0, system: 0 };
     }, 100);
-    this.set("mic", { state: "starting" });
-    this.set("system", opts.meetingAudio ? { state: "starting" } : { state: "off" });
-    if (opts.meetingAudio) {
-      await this.open("system", async () => {
+    const mic = (deviceId: string | null, voice: boolean) => () =>
+      navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          channelCount: 1,
+          echoCancellation: voice,
+          noiseSuppression: voice,
+          autoGainControl: voice,
+        },
+      });
+    const withMic = source.kind === "share" || (source.kind === "device" && source.withMic !== false);
+    this.set("system", { state: "starting" });
+    this.set("mic", withMic ? { state: "starting" } : { state: "off" });
+    if (source.kind === "share") {
+      await this.open("system", "shared tab or screen", async () => {
         if (!navigator.mediaDevices.getDisplayMedia) throw new DOMException("This browser can't share audio", "NotSupportedError");
         // Chrome needs video to show the picker; pick the meeting's tab and tick "Share tab audio".
         const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -73,33 +93,32 @@ export class WebRecorder {
         }
         return stream;
       });
+    } else if (source.kind === "room") {
+      await this.open("system", "room microphone", mic(opts.micDeviceId, true));
+    } else {
+      // The meeting's own audio: keep it untouched (no echo cancelling or noise gating).
+      await this.open("system", "audio input", mic(source.deviceId, false));
     }
-    await this.open("mic", () =>
-      navigator.mediaDevices.getUserMedia({
-        audio: {
-          deviceId: opts.micDeviceId ? { exact: opts.micDeviceId } : undefined,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      }),
-    );
+    if (withMic) await this.open("mic", "browser mic", mic(opts.micDeviceId, true));
     return this.status;
   }
 
-  private async open(channel: Channel, get: () => Promise<MediaStream>): Promise<void> {
+  private async open(channel: Channel, label: string, get: () => Promise<MediaStream>): Promise<void> {
     let stream: MediaStream;
     try {
       stream = await get();
     } catch (err) {
       const e = err as DOMException;
       const message =
-        channel === "system"
-          ? e.name === "NotAllowedError"
-            ? "Meeting audio wasn't shared. Captions come from your microphone only."
-            : `Meeting audio isn't available here (${e.message || e.name}).`
-          : `Microphone: ${e.message || e.name}`;
+        channel === "mic"
+          ? `Microphone: ${e.message || e.name}`
+          : label === "shared tab or screen"
+            ? e.name === "NotAllowedError"
+              ? "Meeting audio wasn't shared. Captions come from your microphone only."
+              : `Meeting audio isn't available here (${e.message || e.name}).`
+            : e.name === "NotAllowedError"
+              ? "Microphone access was blocked: allow it in the browser's address bar."
+              : `That audio input isn't available (${e.message || e.name}).`;
       this.set(channel, { state: e.name === "NotAllowedError" ? "unavailable" : "error", message });
       return;
     }
@@ -129,10 +148,12 @@ export class WebRecorder {
     source.connect(tap).connect(mute).connect(ctx.destination);
     await ctx.resume();
     for (const t of stream.getAudioTracks()) {
-      t.addEventListener("ended", () => this.set(channel, { state: "error", message: channel === "system" ? "Sharing stopped." : "Microphone disconnected." }));
+      t.addEventListener("ended", () =>
+        this.set(channel, { state: "error", message: label === "shared tab or screen" ? "Sharing stopped." : channel === "mic" ? "Microphone disconnected." : "The audio input was disconnected." }),
+      );
     }
     this.running.set(channel, { stream, ctx });
-    this.set(channel, { state: "live", source: channel === "mic" ? "browser mic" : "shared tab or screen" });
+    this.set(channel, { state: "live", source: label });
   }
 
   async stop(): Promise<void> {
@@ -222,4 +243,22 @@ export async function recordMicSamples(
     stream.getTracks().forEach((t) => t.stop());
     await ctx.close().catch(() => undefined);
   }
+}
+
+/** Audio inputs for "External audio input"; labels appear once the browser has mic permission. */
+export async function listAudioInputs(): Promise<{ deviceId: string; label: string }[]> {
+  if (!navigator.mediaDevices?.enumerateDevices) return [];
+  let devices = await navigator.mediaDevices.enumerateDevices();
+  if (devices.some((d) => d.kind === "audioinput" && !d.label)) {
+    try {
+      const s = await navigator.mediaDevices.getUserMedia({ audio: true });
+      s.getTracks().forEach((t) => t.stop());
+      devices = await navigator.mediaDevices.enumerateDevices();
+    } catch {
+      /* no permission: unnamed devices */
+    }
+  }
+  return devices
+    .filter((d) => d.kind === "audioinput" && d.deviceId !== "default" && d.deviceId !== "communications")
+    .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Audio input ${i + 1}` }));
 }

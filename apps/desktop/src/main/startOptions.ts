@@ -1,4 +1,4 @@
-import type { SessionTools, StartOptions } from "../shared/ipc";
+import type { MeetingAudioSource, SessionTools, StartOptions } from "../shared/ipc";
 import { MEETING_TYPES } from "../shared/meetings";
 
 const TYPES = new Set<string>(MEETING_TYPES.map((t) => t.id));
@@ -26,6 +26,7 @@ export function sanitizeStartOptions(raw: unknown, now = new Date()): StartOptio
     project_id,
     calendar_event_id: typeof r.calendar_event_id === "string" && r.calendar_event_id.length <= 1024 ? r.calendar_event_id : null,
     tools: sanitizeTools(r.tools),
+    ...(r.audio !== undefined ? { audio: sanitizeAudio(r.audio) } : {}),
   };
 }
 
@@ -57,4 +58,14 @@ export function sanitizeTools(raw: unknown): SessionTools {
     answers: t.answers !== false,
     topics: t.topics !== false,
   };
+}
+
+/** A known audio source, or sharing (the default) when it's anything else. */
+export function sanitizeAudio(raw: unknown): MeetingAudioSource {
+  const a = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  if (a.kind === "room") return { kind: "room" };
+  if (a.kind === "device" && typeof a.deviceId === "string" && a.deviceId.length > 0 && a.deviceId.length <= 256) {
+    return { kind: "device", deviceId: a.deviceId, withMic: a.withMic !== false };
+  }
+  return { kind: "share" };
 }
