@@ -173,7 +173,7 @@ test("record a meeting with live captions, then find its transcript after a rest
   await upcoming.getByRole("link", { name: "Start" }).click();
   await expect(main.getByTestId("from-calendar")).toContainText("Payments daily standup");
   await expect(main.getByLabel("Title")).toHaveValue("Payments daily standup");
-  await expect(main.getByLabel("Meeting type")).toHaveValue("standup");
+  await expect(main.getByRole("radio", { name: "Standup" })).toHaveAttribute("aria-checked", "true");
 
   // Start it, in the project and shared with it.
   await main.getByLabel("Title").fill("E2E standup");

@@ -109,6 +109,8 @@ let backend: BackendClient | null = null;
 let auth: AuthManager | null = null;
 let live: LiveConnection | null = null;
 let liveMode: StartOptions["mode"] = "cloud";
+/** This session's adaptive tools; sent each time the live socket (re)connects. */
+let sessionTools: StartOptions["tools"] = undefined;
 const SYNC_EVERY_MS = 5 * 60_000;
 
 function sendToWindows(channel: string, payload: unknown): void {
@@ -138,6 +140,7 @@ function setupBackend(): void {
   l.on("state", (s) => {
     state.live = s;
     broadcast();
+    if (s.status === "live" && sessionTools) l.send({ type: "control", action: "tools", tools: sessionTools });
   });
   l.on("meeting", (id, opts) => {
     liveMode = opts.mode;
@@ -236,6 +239,7 @@ function setCapturing(on: boolean, options?: StartOptions): Promise<AppState> {
     // The indicator turns on before any audio is read and off only after capture stops.
     if (on) {
       const opts = options ?? sanitizeStartOptions(undefined);
+      sessionTools = opts.tools;
       state.capturing = true;
       state.paused = false;
       state.meetingMode = opts.mode;
@@ -684,6 +688,18 @@ function registerIpc(): void {
     return overlayAction(action, typeof minutes === "number" ? minutes : undefined);
   });
   handle(IPC.openMain, (route) => openMain(typeof route === "string" ? route : undefined));
+  handle(IPC.overlayTyping, (on) => {
+    const win = overlayWindow;
+    if (!win || win.isDestroyed()) return;
+    // Only while the Ask box is in use; then back to never stealing focus from the meeting app.
+    win.setFocusable(on === true);
+    if (on === true) win.focus();
+  });
+  handle(IPC.overlayAsk, (question) => {
+    const text = String(question ?? "").trim().slice(0, 500);
+    if (!text) throw new Error("Type a question first.");
+    return { sent: live?.send({ type: "control", action: "ask", text }) ?? false };
+  });
   handle(IPC.secretSet, (name, value) => setSecret(name, value));
   handle(IPC.secretHas, (name) => hasSecret(name));
   handle(IPC.secretDelete, (name) => deleteSecret(name));

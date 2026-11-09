@@ -10,7 +10,7 @@ export type CardKind = "answer" | "topic" | "clarify" | "catch_up" | "standup" |
 
 export type SourceType = "meeting" | "document" | "standup" | "transcript";
 
-export type ControlAction = "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback";
+export type ControlAction = "pause" | "resume" | "catch_up" | "clarify" | "follow_up" | "card_feedback" | "ask" | "tools";
 
 /** Fields every event carries. */
 export interface Envelope {
@@ -27,6 +27,14 @@ export interface Source {
   id: string;
   /** Offset into a meeting, for meeting and transcript sources. */
   at_ms?: number;
+}
+
+/** Which automatic help a session wants; a missing field means on. */
+export interface SessionTools {
+  /** Answer cards for questions asked to you. */
+  answers?: boolean;
+  /** Briefing cards when a known project topic comes up. */
+  topics?: boolean;
 }
 
 /** The socket opened and the meeting is live. */
@@ -221,6 +229,10 @@ export interface Control {
   card_id?: string;
   /** card_feedback: Used (true) or Not useful (false). */
   useful?: boolean;
+  /** ask: the question typed to the copilot during the meeting. */
+  text?: string;
+  /** tools: the session's automatic help switches. */
+  tools?: SessionTools;
 }
 
 /** Sent every 15 s so both sides know the socket is alive. */

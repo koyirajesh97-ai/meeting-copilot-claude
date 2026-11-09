@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { MeetingEvent } from "../events";
-import { EMPTY_CAPTIONS, reduceCaptions, visibleLines, type CaptionState } from "./captions";
+import { EMPTY_CAPTIONS, reduceCaptions, talkShare, visibleLines, type CaptionState } from "./captions";
 
 const base = { meeting_id: "m1", ts_ms: 0 };
 let seq = 0;
@@ -51,4 +51,24 @@ describe("captions", () => {
     s = reduceCaptions(s, ev({ type: "transcript.partial", channel: "system", speaker_id: "spk_1", text: "again", start_ms: 5 }));
     expect(visibleLines(s).map((l) => l.speaker)).toEqual(["Priya", "Priya"]);
   });
+
+  it("measures talk-time in words: you versus everyone else", () => {
+    expect(talkShare(EMPTY_CAPTIONS)).toEqual({ you: null, speakers: [] });
+    const fin = (id: string, ch: string, spk: string, text: string, at: number) =>
+      ev({ type: "transcript.final", segment_id: id, channel: ch, speaker_id: spk, text, start_ms: at, end_ms: at + 500 });
+    const s = run([
+      fin("t1", "mic", "me", "I moved the deploy to Thursday", 0),
+      fin("t2", "system", "spk_0", "Great", 1000),
+      fin("t3", "system", "spk_1", "Can we also freeze merges on Wednesday please", 2000),
+      ev({ type: "transcript.partial", channel: "mic", speaker_id: "me", text: "not counted yet", start_ms: 3000 }),
+    ]);
+    const t = talkShare(s);
+    expect(t.you).toBeCloseTo(6 / 15);
+    expect(t.speakers.map((x) => [x.speaker, x.words, x.me])).toEqual([
+      ["Speaker 2", 8, false],
+      ["You", 6, true],
+      ["Speaker 1", 1, false],
+    ]);
+  });
 });
+

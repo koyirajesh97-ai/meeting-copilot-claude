@@ -59,14 +59,17 @@ function Shell() {
       <div className="flex h-full">
         <nav hidden={inSetup} aria-label="Main" className="flex w-60 shrink-0 flex-col px-4 pb-4 pt-5">
           <div className="mb-6 flex items-center gap-2.5 px-2">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-md shadow-indigo-500/30" aria-hidden>
+            <span className="glow grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-indigo-500 via-violet-500 to-cyan-400 text-white" aria-hidden>
               <AudioLines size={18} strokeWidth={2.25} />
             </span>
-            <span className="text-[15px] font-semibold tracking-tight">Meeting Copilot</span>
+            <span className="leading-tight">
+              <span className="block text-[15px] font-semibold tracking-tight">Meeting Copilot</span>
+              <span className="block text-[10px] font-medium uppercase tracking-[0.18em] text-indigo-500 dark:text-cyan-300/80">AI meeting copilot</span>
+            </span>
           </div>
           <NavLink
             to={ROUTES.start}
-            className="mb-6 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-b from-indigo-500 to-indigo-600 px-3 py-2.5 text-sm font-semibold text-white shadow-md shadow-indigo-600/25 transition hover:from-indigo-500 hover:to-indigo-500"
+            className="glow mb-6 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-500 via-violet-500 to-fuchsia-500 px-3 py-2.5 text-sm font-semibold text-white transition hover:brightness-110"
           >
             <Mic size={16} strokeWidth={2.25} aria-hidden />
             Start meeting
@@ -80,8 +83,8 @@ function Shell() {
                   className={({ isActive }) =>
                     `flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors ${
                       isActive
-                        ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-900 dark:text-white dark:ring-slate-800"
-                        : "text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-900 dark:hover:text-white"
+                        ? "bg-white font-medium text-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-transparent dark:bg-gradient-to-r dark:from-indigo-500/20 dark:to-transparent dark:text-white dark:shadow-none dark:ring-indigo-400/20"
+                        : "text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-white/[0.05] dark:hover:text-white"
                     }`
                   }
                 >
@@ -103,7 +106,7 @@ function Shell() {
             )}
           </div>
         </nav>
-        <main className={`flex-1 overflow-y-auto bg-white dark:bg-slate-900/60 ${inSetup ? "" : "my-2 mr-2 rounded-2xl border border-slate-200/80 shadow-sm dark:border-slate-800"}`}>
+        <main className={`flex-1 overflow-y-auto bg-white dark:bg-slate-900/40 ${inSetup ? "" : "my-2 mr-2 rounded-2xl border border-slate-200/80 shadow-sm dark:border-white/[0.06]"}`}>
           <div className="mx-auto max-w-5xl px-10 py-9">
           <Routes>
             <Route path={ROUTES.home} element={<MeetingsHome />} />

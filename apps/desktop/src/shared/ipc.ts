@@ -10,6 +10,8 @@ export const IPC = {
   setSettings: "settings:set",
   overlaySetExpanded: "overlay:set-expanded",
   overlayAction: "overlay:action",
+  overlayAsk: "overlay:ask",
+  overlayTyping: "overlay:typing",
   openMain: "window:open-main",
   secretSet: "secret:set",
   secretHas: "secret:has",
@@ -329,7 +331,8 @@ export interface AuthState {
   kind: "supabase" | "dev" | null;
 }
 
-export type { LiveState } from "@meeting-copilot/shared";
+export type { LiveState, SessionTools } from "@meeting-copilot/shared";
+import type { SessionTools } from "@meeting-copilot/shared";
 import type { LiveState } from "@meeting-copilot/shared";
 
 export interface StartOptions {
@@ -342,6 +345,8 @@ export interface StartOptions {
   project_id?: string | null;
   /** Started from this calendar event (Upcoming, or the 1-minute nudge). */
   calendar_event_id?: string | null;
+  /** The session's adaptive tools (Start screen switches); missing means on. Sent over the live socket. */
+  tools?: SessionTools;
 }
 
 export interface CachedSegment {
@@ -436,7 +441,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: "system",
+  theme: "dark",
   highContrast: false,
   captionFontSize: 15,
   overlayExpanded: false,
@@ -578,6 +583,10 @@ export interface CopilotApi {
     setExpanded(expanded: boolean): Promise<AppState>;
     /** minutes: Catch me up only, 2 (default) or 5 (long press). */
     action(action: OverlayAction, minutes?: number): Promise<AppState>;
+    /** "Ask the copilot": a typed question, answered as a card from the meeting so far and your notes. */
+    ask(question: string): Promise<{ sent: boolean }>;
+    /** Let the overlay take keyboard focus while you type a question (it never does otherwise). */
+    typing(on: boolean): Promise<void>;
   };
   onLevels(listener: (levels: AudioLevels) => void): () => void;
   openMain(route?: string): Promise<void>;

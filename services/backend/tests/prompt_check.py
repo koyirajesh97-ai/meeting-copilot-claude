@@ -23,6 +23,7 @@ TASK = {
     "question_detector": "detect",
     "answer_card": "card",
     "catch_up": "catchup",
+    "ask_live": "catchup",
     "clarify": "clarify",
     "standup_script": "standup",
     "summary_map": "summary",

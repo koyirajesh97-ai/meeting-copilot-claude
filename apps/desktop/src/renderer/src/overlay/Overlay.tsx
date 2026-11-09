@@ -1,9 +1,9 @@
-import { AudioLines, ChevronDown, ChevronUp, CircleHelp, History, Pause, Play, Reply, TriangleAlert, type LucideIcon } from "lucide-react";
+import { AudioLines, ChevronDown, ChevronUp, CircleHelp, History, Pause, Play, Reply, SendHorizontal, Sparkles, TriangleAlert, type LucideIcon } from "lucide-react";
 import { useRef, useState } from "react";
 import type { LiveState, OverlayAction } from "../../../shared/ipc";
 import { LevelMeters } from "../components/LevelMeters";
 import { RecordingIndicator } from "../components/RecordingIndicator";
-import { visibleLines } from "@meeting-copilot/shared";
+import { talkShare, visibleLines, type CaptionState } from "@meeting-copilot/shared";
 import { Captions } from "../live/Captions";
 import { CardStack, useCards } from "../live/CardStack";
 import { visibleCards } from "@meeting-copilot/shared";
@@ -113,6 +113,7 @@ export function Overlay() {
         )}
         {expanded ? (
           <>
+            <TalkMeter captions={captions} />
             <CardStack state={cards} dispatch={dispatchCards} />
             <Captions lines={lines} fontSize={fontSize} />
           </>
@@ -132,6 +133,7 @@ export function Overlay() {
         )}
       </div>
 
+      {expanded && <AskBox />}
       <footer className="no-drag flex gap-1.5 border-t border-white/[0.07] px-2 py-1.5">
         {ACTIONS.map((a) => (
           <ActionButton key={a.action} action={a.action} label={a.label} hotkey={a.key} icon={a.icon} />
@@ -205,5 +207,74 @@ function PauseControl({ paused }: { paused: boolean }) {
         Cancel
       </button>
     </span>
+  );
+}
+
+/** Who's been talking: you versus everyone else, in words, from the final captions. */
+function TalkMeter({ captions }: { captions: CaptionState }) {
+  const t = talkShare(captions);
+  if (t.you === null) return null;
+  const pct = Math.round(t.you * 100);
+  return (
+    <div className="mb-2" data-testid="talk-meter" title={t.speakers.map((s) => `${s.speaker}: ${s.words} words`).join("\n")}>
+      <div className="mb-1 flex justify-between text-[10px] font-medium uppercase tracking-wider text-slate-400">
+        <span>Talk time</span>
+        <span>
+          <span className="text-cyan-300">You {pct}%</span> · Others {100 - pct}%
+        </span>
+      </div>
+      <div className="flex h-1.5 overflow-hidden rounded-full bg-white/[0.06]" role="meter" aria-label="Your share of talk time" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct}>
+        <span className="bg-gradient-to-r from-cyan-400 to-indigo-400" style={{ width: `${pct}%` }} />
+        <span className="flex-1 bg-violet-500/40" />
+      </div>
+    </div>
+  );
+}
+
+/** "Ask the copilot": type a question mid-meeting; the answer arrives as a card. */
+function AskBox() {
+  const [q, setQ] = useState("");
+  const [note, setNote] = useState<string | null>(null);
+  const send = async () => {
+    const text = q.trim();
+    if (!text) return;
+    try {
+      const r = await window.copilot.overlay.ask(text);
+      setNote(r.sent ? "Asked. The answer appears as a card." : "Ask works during a signed-in meeting.");
+      if (r.sent) setQ("");
+    } catch (e) {
+      setNote((e as Error).message);
+    } finally {
+      void window.copilot.overlay.typing(false);
+      setTimeout(() => setNote(null), 4000);
+    }
+  };
+  return (
+    <form
+      className="no-drag border-t border-white/[0.07] px-2 pt-1.5"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void send();
+      }}
+    >
+      <div className="flex items-center gap-1.5 rounded-lg bg-white/[0.05] px-2 ring-1 ring-white/10 focus-within:ring-cyan-400/50">
+        <Sparkles size={13} className="shrink-0 text-cyan-300" aria-hidden />
+        <input
+          aria-label="Ask the copilot"
+          placeholder="Ask the copilot anything about this meeting…"
+          className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-slate-100 outline-none placeholder:text-slate-500"
+          value={q}
+          maxLength={500}
+          onChange={(e) => setQ(e.target.value)}
+          onMouseDown={() => void window.copilot.overlay.typing(true)}
+          onBlur={() => void window.copilot.overlay.typing(false)}
+          onKeyDown={(e) => e.key === "Escape" && (e.currentTarget.blur(), setQ(""))}
+        />
+        <button type="submit" aria-label="Send question" className="grid h-6 w-6 place-items-center rounded-md text-cyan-300 hover:bg-white/10 disabled:opacity-40" disabled={!q.trim()}>
+          <SendHorizontal size={13} aria-hidden />
+        </button>
+      </div>
+      {note && <p className="mt-1 truncate text-[10px] text-slate-400" role="status">{note}</p>}
+    </form>
   );
 }

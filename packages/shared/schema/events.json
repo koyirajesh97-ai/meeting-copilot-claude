@@ -511,8 +511,25 @@
         "catch_up",
         "clarify",
         "follow_up",
-        "card_feedback"
+        "card_feedback",
+        "ask",
+        "tools"
       ]
+    },
+    "SessionTools": {
+      "description": "Which automatic help a session wants; a missing field means on.",
+      "type": "object",
+      "properties": {
+        "answers": {
+          "type": "boolean",
+          "description": "Answer cards for questions asked to you."
+        },
+        "topics": {
+          "type": "boolean",
+          "description": "Briefing cards when a known project topic comes up."
+        }
+      },
+      "additionalProperties": false
     },
     "Control": {
       "description": "A button or hotkey in the overlay. Extra fields depend on the action.",
@@ -537,6 +554,16 @@
         "useful": {
           "type": "boolean",
           "description": "card_feedback: Used (true) or Not useful (false)."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500,
+          "description": "ask: the question typed to the copilot during the meeting."
+        },
+        "tools": {
+          "$ref": "#/$defs/SessionTools",
+          "description": "tools: the session's automatic help switches."
         }
       },
       "required": [

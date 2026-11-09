@@ -191,3 +191,51 @@ def test_live_only_follow_ups_are_not_saved(env) -> None:
         ws.send_text(json.dumps({"type": "control", "action": "follow_up"}))
         collect(ws, lambda e, _o: e["type"] == "card.created" and e["kind"] == "follow_up")
     assert client.portal.call(store.action_items, m["meeting_id"]) == []
+
+
+def test_ask_the_copilot_and_session_tools(env) -> None:
+    """A typed question is answered from the meeting so far; switched-off tools stay quiet."""
+    s, store, client, h = env
+    m = client.post("/meetings", json={"type": "incident", "title": "Ask"}, headers=h).json()
+    with client.websocket_connect(f"/ws/meetings/{m['meeting_id']}?token={m['ws_token']}") as ws:
+        ws.receive_json()
+        # This session: no automatic answer cards, no topic cards.
+        ws.send_text(
+            json.dumps(
+                {"type": "control", "action": "tools", "tools": {"answers": False, "topics": False}}
+            )
+        )
+        for _ in range(len(LIVE) * 50 + 5):
+            ws.send_bytes(b"\x01" + b"\x00" * 640)
+        events = collect(
+            ws, lambda e, out: sum(x["type"] == "transcript.final" for x in out) == len(LIVE)
+        )
+        time.sleep(0.3)
+        ws.send_text(
+            json.dumps({"type": "control", "action": "ask", "text": "When is the payments deploy?"})
+        )
+        got = collect(ws, lambda e, _o: e["type"] == "card.created")
+        events += got
+        card = got[-1]
+        assert (
+            card["kind"] == "answer" and card["text"] == "You asked: When is the payments deploy?"
+        )
+        time.sleep(0.05)
+        saved = {c.id: c for c in client.portal.call(s.cards.for_meeting, m["meeting_id"])}
+        assert "Thursday" in saved[card["card_id"]].text
+        # Something the meeting never covered says so plainly.
+        ws.send_text(
+            json.dumps(
+                {"type": "control", "action": "ask", "text": "What is the budget for Zanzibar?"}
+            )
+        )
+        got = collect(ws, lambda e, _o: e["type"] == "card.created")
+        time.sleep(0.05)
+        saved = {c.id: c for c in client.portal.call(s.cards.for_meeting, m["meeting_id"])}
+        assert "Nothing so far" in saved[got[-1]["card_id"]].text
+        ws.send_text(json.dumps({"type": "control", "action": "ask"}))
+        assert collect(ws, lambda e, _o: e["type"] == "error")[-1]["code"] == "bad_message"
+    # With the tools off, the question to Sai and the ArgoCD mentions produced no cards of their own.
+    kinds = [e["kind"] for e in events if e["type"] == "card.created"]
+    assert kinds == ["answer"] and not any(e["type"] == "question.detected" for e in events)
+    assert metrics.snapshot()["action.ask_ms"]["max"] < 3000

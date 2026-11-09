@@ -177,6 +177,9 @@ class LiveHelp(Plugin):
         self._topics_shown: set[str] = set()
         self._topic_tried: dict[str, float] = {}
         self._tasks: set[asyncio.Task] = set()
+        #: Per-session switches (the Start screen's tools); on unless the client turns them off.
+        self.answers_on = True
+        self.topics_on = True
 
     # ---------- plumbing ----------
 
@@ -241,10 +244,11 @@ class LiveHelp(Plugin):
             return
         # Questions aimed at you come from other people: the meeting's audio.
         if segment.channel == "system" and looks_like_question(segment.text):
-            self._spawn(self.handle_question(segment, time.perf_counter()))
+            if self.answers_on:
+                self._spawn(self.handle_question(segment, time.perf_counter()))
             return
         # Not a question: maybe the discussion touched one of your systems or tickets.
-        term = self._topic_term(segment.text)
+        term = self._topic_term(segment.text) if self.topics_on else None
         if term:
             self._spawn(self.topic_card(term, segment))
 
@@ -669,7 +673,80 @@ class LiveHelp(Plugin):
             q.segment.segment_id,
         )
 
+    async def ask_live(self, question: str, peer: Peer) -> None:
+        """A question you type mid-meeting: answered from the meeting so far and your notes."""
+        t0 = time.perf_counter()
+        question = " ".join(question.split())[:500]
+        m = self.session.meeting
+        ctx = Context()
+        names = {"me": self.profile.name or "Me"}
+        for s in self.session.recent:
+            if s.end_ms >= (self.session.recent[-1].end_ms - 15 * 60_000):
+                ctx.add(
+                    transcript_lines([s], names)[0],
+                    {"type": "transcript", "id": m.id, "at_ms": s.start_ms},
+                )
+        # Then earlier meetings and project documents (and today's standup notes).
+        earlier = self.build_context(await self._retrieve(question))
+        for line, src in zip(earlier.lines, earlier.sources.values(), strict=True):
+            ctx.add(line.split("] ", 1)[-1], src)
+        try:
+            out = await self.complete(
+                "catchup",  # a typed question can wait a few seconds; same budget as Catch me up
+                load("ask_live").render(
+                    name=self.profile.name or "the user", question=question, context=ctx.render()
+                ),
+                CardOut,
+            )
+        except NoProviderAvailable as e:
+            await self.session.emit(
+                Error,
+                code="ask_unavailable",
+                message=str(e)[:300],
+                retryable=True,
+                store=False,
+                only=peer,
+            )
+            return
+        card: CardOut = out.json
+        bullets = [b for b in card.bullets if b.source in ctx.sources][:3]
+        if not bullets or card.confidence < self.cfg.card_min_confidence:
+            texts, sources = (
+                [
+                    f"You asked: {question}",
+                    "- Nothing so far in this meeting or your notes answers that.",
+                ],
+                [[], []],
+            )
+        else:
+            texts = [f"You asked: {question}"] + [f"- {b.text}" for b in bullets]
+            sources = [[]] + [[ctx.sources[b.source]] for b in bullets]
+        await self._send_card(
+            new_card_id(), "answer", texts, sources, card.confidence, out.provider, None
+        )
+        metrics.record("action.ask_ms", (time.perf_counter() - t0) * 1000, out.provider)
+
     async def on_control(self, msg: Control, peer: Peer) -> bool:
+        if msg.action == "tools":
+            if msg.tools is not None:
+                if msg.tools.answers is not None:
+                    self.answers_on = msg.tools.answers
+                if msg.tools.topics is not None:
+                    self.topics_on = msg.tools.topics
+            return True
+        if msg.action == "ask":
+            if not (msg.text or "").strip():
+                await self.session.emit(
+                    Error,
+                    code="bad_message",
+                    message="ask needs text",
+                    retryable=False,
+                    store=False,
+                    only=peer,
+                )
+            else:
+                self._spawn(self.ask_live(msg.text or "", peer))
+            return True
         if msg.action == "catch_up":
             self._spawn(self.catch_up(5 if (msg.minutes or 2) >= 5 else 2, peer))
             return True

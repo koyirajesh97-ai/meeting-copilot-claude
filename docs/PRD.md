@@ -452,6 +452,14 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 
 Checked with a real Groq key (Nov 2026): Whisper captions both channels, catch-up cards and a standup summary with per-person done/blockers, decisions and action items, all through Groq alone; question detection answers in 0.3-0.6 s.
 
+### Sessions: modes, adaptive tools and the live panel
+
+- Starting a meeting is a four-step screen: **copilot mode** (visual cards for the eight meeting types, each saying what the copilot does in it), **context** (title, project, agenda or notes the copilot uses), **adaptive tools** (switches for automatic answer cards and topic briefings) and **privacy** (Cloud, Live-only, Local-only as cards), then one Start button.
+- The tool switches go to the backend over the live socket (`control` action `tools`, resent after reconnects). Off means no automatic cards of that kind; the manual actions stay.
+- **Ask the copilot**: a box in the expanded overlay for a typed question mid-meeting (`control` action `ask`). The answer comes back as an answer card, from the last 15 minutes of this meeting plus earlier meetings and project documents, with sources; "Nothing so far… answers that" when it can't. Prompt `ask_live`, the catch-up time budget. On the desktop the overlay takes keyboard focus only while you type in the box.
+- **Talk-time meter** in the expanded overlay: your share of words spoken versus everyone else's, from final captions.
+- Look: dark by default, with a deep navy palette, glass panels and an indigo/violet/cyan glow (light and system themes remain in Settings).
+
 ### Sign-in
 
 - A sign-in page like other apps: email and password, "Create an account" (the address is confirmed with an emailed 6-digit code), "Forgot password?" (an emailed code, then a new password), "Email me a sign-in code instead", and "Continue with Google" when the Supabase project has Google turned on (the button appears only then). The web app shows this page to anyone signed out; the desktop app has the same form in Setup and Settings → Account, without Google (it needs a browser redirect back into the app). Signed-in people can set or change their password in Settings → Account.

@@ -215,9 +215,12 @@ export function createWebApi(): CopilotApi {
     broadcast();
   });
   const oauthDone = finishOAuthRedirect(auth).finally(broadcast);
+  /** This session's adaptive tools; sent each time the live socket (re)connects. */
+  let sessionTools: StartOptions["tools"] = undefined;
   live.on("state", (s) => {
     state.live = s;
     broadcast();
+    if (s.status === "live" && sessionTools) live.send({ type: "control", action: "tools", tools: sessionTools });
   });
   let pendingAnnounce: number | null = null;
   live.on("meeting", (id) => {
@@ -262,6 +265,7 @@ export function createWebApi(): CopilotApi {
       if (state.capturing === on) return state;
       if (on) {
         const opts = sanitizeStartOptions(options);
+        sessionTools = opts.tools;
         // The indicator turns on before any audio is read.
         Object.assign(state, { capturing: true, paused: false, meetingMode: opts.mode, captureStartedAt: Date.now() });
         broadcast();
@@ -547,6 +551,12 @@ export function createWebApi(): CopilotApi {
         return state;
       },
       action: async (action, minutes) => overlayAction(action, minutes),
+      async ask(question) {
+        const text = String(question ?? "").trim().slice(0, 500);
+        if (!text) throw new Error("Type a question first.");
+        return { sent: live.send({ type: "control", action: "ask", text }) };
+      },
+      typing: async () => undefined, // a browser panel takes focus normally
     },
     onLevels: (l) => sub("levels", l),
     async openMain(route) {

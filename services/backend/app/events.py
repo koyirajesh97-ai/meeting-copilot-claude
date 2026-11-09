@@ -18,7 +18,9 @@ MeetingMode = Literal["cloud", "local", "live-only"]
 Channel = Literal["mic", "system"]
 CardKind = Literal["answer", "topic", "clarify", "catch_up", "standup", "follow_up"]
 SourceType = Literal["meeting", "document", "standup", "transcript"]
-ControlAction = Literal["pause", "resume", "catch_up", "clarify", "follow_up", "card_feedback"]
+ControlAction = Literal[
+    "pause", "resume", "catch_up", "clarify", "follow_up", "card_feedback", "ask", "tools"
+]
 
 
 class Envelope(_Model):
@@ -39,6 +41,17 @@ class Source(_Model):
     id: str
     at_ms: int | None = Field(
         default=None, ge=0, description="Offset into a meeting, for meeting and transcript sources."
+    )
+
+
+class SessionTools(_Model):
+    """Which automatic help a session wants; a missing field means on."""
+
+    answers: bool | None = Field(
+        default=None, description="Answer cards for questions asked to you."
+    )
+    topics: bool | None = Field(
+        default=None, description="Briefing cards when a known project topic comes up."
     )
 
 
@@ -275,6 +288,12 @@ class Control(_Model):
     card_id: str | None = Field(default=None, description="card_feedback: the card being rated.")
     useful: bool | None = Field(
         default=None, description="card_feedback: Used (true) or Not useful (false)."
+    )
+    text: str | None = Field(
+        default=None, description="ask: the question typed to the copilot during the meeting."
+    )
+    tools: SessionTools | None = Field(
+        default=None, description="tools: the session's automatic help switches."
     )
 
 

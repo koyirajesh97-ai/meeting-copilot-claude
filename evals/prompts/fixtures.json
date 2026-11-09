@@ -1,45 +1,115 @@
 {
   "question_detector": {
-    "vars": {"name": "Sai", "aliases": "Sai K, SK", "role_title": "DevOps/SRE", "systems_owned": "payments cluster, ArgoCD",
-             "tickets": "OPS-142", "last_3_utterances": "Priya: next item is the deploy", "speaker": "Priya",
-             "text": "Sai, when is the payments cluster deploy?"},
-    "expect": {"is_question": true, "addressed_to_me": true}
+    "vars": {
+      "name": "Sai",
+      "aliases": "Sai K, SK",
+      "role_title": "DevOps/SRE",
+      "systems_owned": "payments cluster, ArgoCD",
+      "tickets": "OPS-142",
+      "last_3_utterances": "Priya: next item is the deploy",
+      "speaker": "Priya",
+      "text": "Sai, when is the payments cluster deploy?"
+    },
+    "expect": {
+      "is_question": true,
+      "addressed_to_me": true
+    }
   },
   "answer_card": {
-    "vars": {"name": "Sai", "role_title": "DevOps/SRE", "speaking_style": "brief and direct",
-             "question": "When is the payments cluster deploy?",
-             "context": "[s1] Meeting m_101 at 12:14: Sai: the payments cluster deploy moved to Thursday after the cert renewal.\n[s2] Today's standup notes: none\n[s3] Last 5 minutes: Priya: next item is the deploy"},
-    "expect": {"cites": "s1"}
+    "vars": {
+      "name": "Sai",
+      "role_title": "DevOps/SRE",
+      "speaking_style": "brief and direct",
+      "question": "When is the payments cluster deploy?",
+      "context": "[s1] Meeting m_101 at 12:14: Sai: the payments cluster deploy moved to Thursday after the cert renewal.\n[s2] Today's standup notes: none\n[s3] Last 5 minutes: Priya: next item is the deploy"
+    },
+    "expect": {
+      "cites": "s1"
+    }
   },
   "catch_up": {
-    "vars": {"minutes": "2", "name": "Sai", "transcript": "[00:01] Priya: We moved the deploy to Thursday.\n[00:10] Alex: Sai, can you check the certs?"},
-    "expect": {"bullets_min": 1}
+    "vars": {
+      "minutes": "2",
+      "name": "Sai",
+      "transcript": "[00:01] Priya: We moved the deploy to Thursday.\n[00:10] Alex: Sai, can you check the certs?"
+    },
+    "expect": {
+      "bullets_min": 1
+    }
   },
   "clarify": {
-    "vars": {"speaker": "Speaker 2", "text": "Um, basically the ArgoCD sync is, like, drifting on prod.", "vocabulary": "ArgoCD = GitOps deploy tool"},
-    "expect": {"plain_contains": "ArgoCD sync"}
+    "vars": {
+      "speaker": "Speaker 2",
+      "text": "Um, basically the ArgoCD sync is, like, drifting on prod.",
+      "vocabulary": "ArgoCD = GitOps deploy tool"
+    },
+    "expect": {
+      "plain_contains": "ArgoCD sync"
+    }
   },
   "standup_script": {
-    "vars": {"name": "Sai", "role_title": "DevOps/SRE", "speaking_style": "brief", "notes": "finished OPS-142 cert renewal; today moving prod deploy; blocked on VPN access",
-             "previous_entry": "none", "action_items": "none", "tickets": "none"},
-    "expect": {"keeps": "OPS-142"}
+    "vars": {
+      "name": "Sai",
+      "role_title": "DevOps/SRE",
+      "speaking_style": "brief",
+      "notes": "finished OPS-142 cert renewal; today moving prod deploy; blocked on VPN access",
+      "previous_entry": "none",
+      "action_items": "none",
+      "tickets": "none"
+    },
+    "expect": {
+      "keeps": "OPS-142"
+    }
   },
   "summary_map": {
-    "vars": {"meeting_type": "Standup", "chunk": "[00:01] Sai: Today I'll move the deploy to Thursday.\n[00:05] Priya: I'm blocked on VPN access."},
-    "expect": {"action_items_min": 1, "blockers_min": 1}
+    "vars": {
+      "meeting_type": "Standup",
+      "chunk": "[00:01] Sai: Today I'll move the deploy to Thursday.\n[00:05] Priya: I'm blocked on VPN access."
+    },
+    "expect": {
+      "action_items_min": 1,
+      "blockers_min": 1
+    }
   },
   "summary_reduce": {
-    "vars": {"meeting_type": "Standup", "template_sections": "per_person: done / doing / blockers for each person",
-             "extracts": "[{\"decisions\": [], \"action_items\": [{\"owner\": \"Sai\", \"text\": \"Move the deploy\", \"due_date\": \"Thursday\"}], \"blockers\": [], \"open_questions\": [], \"key_points\": [], \"per_person\": []}]"},
-    "expect": {"action_items_min": 1}
+    "vars": {
+      "meeting_type": "Standup",
+      "template_sections": "per_person: done / doing / blockers for each person",
+      "extracts": "[{\"decisions\": [], \"action_items\": [{\"owner\": \"Sai\", \"text\": \"Move the deploy\", \"due_date\": \"Thursday\"}], \"blockers\": [], \"open_questions\": [], \"key_points\": [], \"per_person\": []}]"
+    },
+    "expect": {
+      "action_items_min": 1
+    }
   },
   "follow_up": {
-    "vars": {"name": "Sai", "question": "What's the rollback plan?", "asker": "Priya", "facts": "none"},
-    "expect": {"draft_min_words": 5}
+    "vars": {
+      "name": "Sai",
+      "question": "What's the rollback plan?",
+      "asker": "Priya",
+      "facts": "none"
+    },
+    "expect": {
+      "draft_min_words": 5
+    }
   },
   "ask": {
-    "vars": {"question": "What did we decide about the retry limit?",
-             "context": "[c1] Retry review, 2026-10-30 at 03:10, Priya: We decided to keep the retry limit at three.\n[c2] Standup, 2026-10-31 at 00:20, Sai: Deploy moved to Thursday."},
-    "expect": {"cites": "c1"}
+    "vars": {
+      "question": "What did we decide about the retry limit?",
+      "context": "[c1] Retry review, 2026-10-30 at 03:10, Priya: We decided to keep the retry limit at three.\n[c2] Standup, 2026-10-31 at 00:20, Sai: Deploy moved to Thursday."
+    },
+    "expect": {
+      "cites": "c1"
+    }
+  },
+  "ask_live": {
+    "vars": {
+      "name": "Sai",
+      "question": "When is the payments deploy now?",
+      "context": "[s1] [00:01] Priya: We moved the payments deploy to Thursday.\n[s2] [00:02] Sai: The certificate renewal is done.\n[s3] Platform review at 00:00: ArgoCD sync for prod uses the prod-east profile."
+    },
+    "expect": {
+      "bullets_min": 1,
+      "cites": "s1"
+    }
   }
 }

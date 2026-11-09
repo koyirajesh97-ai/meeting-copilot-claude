@@ -21,3 +21,15 @@ export function TypeTile({ type, size = "md" }: { type: string; size?: "md" | "l
     </span>
   );
 }
+
+/** What the copilot does in each mode (Start screen cards). */
+export const MODE_INFO: Record<string, { name: string; blurb: string; perks: string[] }> = {
+  standup: { name: "Standup", blurb: "Your update on cue, blockers captured.", perks: ["Your script when it's your turn", "Done / doing / blockers per person"] },
+  review: { name: "Review", blurb: "Code, design or sprint reviews.", perks: ["Answers about systems you own", "Feedback and decisions logged"] },
+  planning: { name: "Planning", blurb: "Refinement and roadmap calls.", perks: ["Scope, estimates and owners", "Open questions tracked"] },
+  incident: { name: "Incident", blurb: "War rooms where every second counts.", perks: ["Timeline as it happens", "Runbook facts on demand"] },
+  client: { name: "Client call", blurb: "Customers, partners, stakeholders.", perks: ["Commitments and next steps", "Jargon explained instantly"] },
+  one_on_one: { name: "1:1", blurb: "Manager and peer conversations.", perks: ["Feedback and goals noted", "Private by default"] },
+  research: { name: "Learning", blurb: "Talks, trainings, interviews to learn from.", perks: ["Key ideas and terms", "Catch up after any distraction"] },
+  custom: { name: "Anything else", blurb: "A general meeting copilot.", perks: ["Live captions and answers", "Summary and action items"] },
+};

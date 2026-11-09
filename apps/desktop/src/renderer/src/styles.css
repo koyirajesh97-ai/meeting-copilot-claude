@@ -15,6 +15,73 @@ body {
   font-feature-settings: "cv11", "ss01";
 }
 
+/* ---------- Futuristic dark: deep navy, glass panels, indigo/cyan glow ---------- */
+/* The whole dark palette lives here: every dark: class in the app picks it up. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-slate-950: #04050d;
+  --color-slate-900: #0a0d1c;
+  --color-slate-800: #171c35;
+  --color-slate-700: #262d50;
+  --color-slate-600: #3b4470;
+  --color-slate-500: #6b7399;
+  --color-slate-400: #8f97bd;
+  --color-slate-300: #b9bfdc;
+  --color-slate-200: #dadef0;
+  --color-gray-950: #04050d;
+  --color-gray-900: #0a0d1c;
+  --color-gray-800: #171c35;
+  --color-gray-700: #262d50;
+  --color-gray-500: #6b7399;
+  --color-gray-400: #8f97bd;
+  --color-gray-300: #b9bfdc;
+}
+
+[data-theme="dark"] body:not(.overlay) {
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, rgb(99 102 241 / 0.18), transparent 60%),
+    radial-gradient(50rem 35rem at -10% 110%, rgb(34 211 238 / 0.1), transparent 60%),
+    radial-gradient(40rem 30rem at 40% 50%, rgb(139 92 246 / 0.06), transparent 70%),
+    #04050d;
+  background-attachment: fixed;
+}
+
+/* Glass: the main panel and cards float over the glow. */
+[data-theme="dark"] main,
+[data-theme="dark"] .glass {
+  backdrop-filter: blur(18px) saturate(140%);
+}
+[data-theme="dark"] main.rounded-2xl {
+  box-shadow:
+    0 0 0 1px rgb(129 140 248 / 0.12),
+    0 30px 80px -30px rgb(79 70 229 / 0.45);
+}
+
+/* A soft glow for primary actions and live things. */
+.glow {
+  box-shadow: 0 0 0 1px rgb(165 180 252 / 0.25), 0 8px 30px -6px rgb(99 102 241 / 0.6);
+}
+.glow-cyan {
+  box-shadow: 0 0 0 1px rgb(103 232 249 / 0.3), 0 8px 30px -8px rgb(34 211 238 / 0.55);
+}
+.text-gradient {
+  background: linear-gradient(90deg, #a5b4fc, #c4b5fd 45%, #67e8f9);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0.45); }
+  70% { box-shadow: 0 0 0 14px rgb(99 102 241 / 0); }
+  100% { box-shadow: 0 0 0 0 rgb(99 102 241 / 0); }
+}
+.pulse-ring {
+  animation: pulse-ring 2.4s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pulse-ring { animation: none; }
+}
+
 body.overlay {
   @apply text-slate-100 select-none overflow-hidden;
   background: radial-gradient(120% 80% at 0% 0%, rgb(49 46 129 / 0.55), transparent 60%), linear-gradient(180deg, #0b1020, #0a0f1d);

@@ -92,6 +92,8 @@ const api: CopilotApi = {
   overlay: {
     setExpanded: (expanded) => ipcRenderer.invoke(IPC.overlaySetExpanded, expanded),
     action: (action, minutes) => ipcRenderer.invoke(IPC.overlayAction, action, minutes),
+    ask: (question) => ipcRenderer.invoke(IPC.overlayAsk, question),
+    typing: (on) => ipcRenderer.invoke(IPC.overlayTyping, on),
   },
   onLevels: (listener) => {
     const wrapped = (_e: IpcRendererEvent, levels: AudioLevels) => listener(levels);

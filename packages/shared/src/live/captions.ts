@@ -74,3 +74,26 @@ export function reduceCaptions(state: CaptionState, event: MeetingEvent): Captio
 export function visibleLines(state: CaptionState): CaptionLine[] {
   return [...state.finals, ...Object.values(state.partials).sort((a, b) => a.startMs - b.startMs)];
 }
+
+export interface TalkShare {
+  /** Share of words spoken by you (the mic), 0..1; null before anyone has spoken. */
+  you: number | null;
+  /** Words per speaker, most first. */
+  speakers: { speaker: string; words: number; me: boolean }[];
+}
+
+/** Talk-time from final captions, counted in words (the live meter). */
+export function talkShare(state: CaptionState): TalkShare {
+  const words = new Map<string, { speaker: string; words: number; me: boolean }>();
+  for (const l of state.finals) {
+    const n = l.text.split(/\s+/).filter(Boolean).length;
+    const cur = words.get(l.speakerId) ?? { speaker: l.speaker, words: 0, me: l.channel === "mic" };
+    cur.words += n;
+    cur.speaker = l.speaker;
+    words.set(l.speakerId, cur);
+  }
+  const speakers = [...words.values()].sort((a, b) => b.words - a.words);
+  const total = speakers.reduce((t, s) => t + s.words, 0);
+  const mine = speakers.filter((s) => s.me).reduce((t, s) => t + s.words, 0);
+  return { you: total ? mine / total : null, speakers };
+}

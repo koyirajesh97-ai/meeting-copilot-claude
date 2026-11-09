@@ -282,6 +282,37 @@ def catch_up(messages: list[dict[str, str]]) -> str:
     return json.dumps({"bullets": bullets})
 
 
+def ask_live(messages: list[dict[str, str]]) -> str:
+    """Fake mode: bullets from the context lines that share words with the question."""
+    user = _user(messages)
+    q = re.search(r"QUESTION: (.*)", user)
+    stop = {
+        "what",
+        "when",
+        "where",
+        "which",
+        "whose",
+        "does",
+        "with",
+        "this",
+        "that",
+        "from",
+        "have",
+        "about",
+        "there",
+        "their",
+        "they",
+    }
+    words = {w for w in re.findall(r"[a-z0-9]{4,}", (q.group(1) if q else "").lower())} - stop
+    bullets = []
+    for sid, body in re.findall(r"^\[(s\d+)\] (.*)$", section(user, "CONTEXT"), re.M):
+        if words & set(re.findall(r"[a-z0-9]{4,}", body.lower())):
+            bullets.append({"text": " ".join(body.split(": ", 1)[-1].split()[:18]), "source": sid})
+        if len(bullets) == 2:
+            break
+    return json.dumps({"bullets": bullets, "confidence": 0.8 if bullets else 0})
+
+
 def clarify(messages: list[dict[str, str]]) -> str:
     user = _user(messages)
     m = re.search(r'STATEMENT \([^)]*\): "(.*)"', user, re.DOTALL)
@@ -350,6 +381,7 @@ DISPATCH = [
     ("You help ", answer_card),
     ("Someone looked away", catch_up),
     ("Rewrite the statement", clarify),
+    ("Answer the user's own question", ask_live),
     ("Turn rough notes", standup),
     ("Draft a short follow-up", follow_up),
     ("You answer questions about past meetings", ask),

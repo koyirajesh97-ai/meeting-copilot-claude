@@ -40,7 +40,7 @@ test("opens the main window with every route", async () => {
   const main = await windowByTitle("Meeting Copilot");
   await expect(main.getByRole("heading", { name: "Meetings" })).toBeVisible();
   for (const [link, heading] of [
-    ["Start meeting", "Start meeting"],
+    ["Start meeting", "Launch your copilot"],
     ["Ask", "Ask my meetings"],
     ["Projects", "Projects"],
     ["Settings", "Settings"],

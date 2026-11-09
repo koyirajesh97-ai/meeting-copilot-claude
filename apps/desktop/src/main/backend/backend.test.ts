@@ -211,7 +211,10 @@ describe("start options", () => {
     const now = new Date("2026-11-02T09:00:00Z");
     expect(sanitizeStartOptions({ title: "  Standup ", type: "standup", mode: "local", visibility: "project" }, now)).toEqual({
       title: "Standup", type: "standup", mode: "local", visibility: "private", agenda: "", project_id: null, calendar_event_id: null,
+      tools: { answers: true, topics: true },
     });
+    // Tool switches: only the known ones, as booleans (missing means on).
+    expect(sanitizeStartOptions({ tools: { answers: false, topics: "no", evil: true } }, now).tools).toEqual({ answers: false, topics: true });
     expect(sanitizeStartOptions({ type: "party", mode: "evil" }, now)).toEqual(defaultStartOptions(now));
     expect(sanitizeStartOptions("junk", now).title).toContain("Meeting");
   });

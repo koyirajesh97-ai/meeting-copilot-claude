@@ -1,4 +1,4 @@
-import type { StartOptions } from "../shared/ipc";
+import type { SessionTools, StartOptions } from "../shared/ipc";
 import { MEETING_TYPES } from "../shared/meetings";
 
 const TYPES = new Set<string>(MEETING_TYPES.map((t) => t.id));
@@ -6,7 +6,7 @@ const MODES = new Set(["cloud", "local", "live-only"]);
 
 export function defaultStartOptions(now = new Date()): StartOptions {
   const when = now.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-  return { title: `Meeting, ${when}`, type: "custom", mode: "cloud", visibility: "private", agenda: "", project_id: null, calendar_event_id: null };
+  return { title: `Meeting, ${when}`, type: "custom", mode: "cloud", visibility: "private", agenda: "", project_id: null, calendar_event_id: null, tools: { answers: true, topics: true } };
 }
 
 /** Validate what a renderer sends; fall back to defaults for anything missing or invalid. */
@@ -25,6 +25,7 @@ export function sanitizeStartOptions(raw: unknown, now = new Date()): StartOptio
     agenda: typeof r.agenda === "string" ? r.agenda.slice(0, 4000) : "",
     project_id,
     calendar_event_id: typeof r.calendar_event_id === "string" && r.calendar_event_id.length <= 1024 ? r.calendar_event_id : null,
+    tools: sanitizeTools(r.tools),
   };
 }
 
@@ -47,4 +48,13 @@ export function liveConnectionAllowed(mode: StartOptions["mode"], backendUrl: st
     return { ok: false, message: "Local-only: the backend isn't on this computer, so this records to your computer only." };
   }
   return { ok: true };
+}
+
+/** Only the known switches, as booleans; anything else is dropped (missing means on). */
+export function sanitizeTools(raw: unknown): SessionTools {
+  const t = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
+  return {
+    answers: t.answers !== false,
+    topics: t.topics !== false,
+  };
 }
