@@ -74,5 +74,6 @@ class PostgresPrivacy:
     async def delete_user(self, user_id: str) -> None:
         """Deleting the auth user cascades to public.users and every row that belongs to them."""
         async with await self.store.connection() as conn:
-            await conn.execute("delete from auth.users where id = %s", (user_id,))
+            # Through a definer function: the backend's role may not touch auth.users directly.
+            await conn.execute("select public.delete_auth_user(%s)", (user_id,))
             await conn.execute("delete from public.users where id = %s", (user_id,))
