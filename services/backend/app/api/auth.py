@@ -67,7 +67,13 @@ async def create_session(body: SessionIn) -> SessionOut:
 async def dev_session(request: Request) -> SessionOut:
     """A fixed local user, without Supabase. Only with ALLOW_DEV_LOGIN=1 and only from this machine."""
     client = request.client.host if request.client else ""
-    if not dev_login_enabled() or client not in {"127.0.0.1", "::1", "localhost", "testclient"}:
+    # Behind a proxy the client address comes from a header anyone can set: refuse those too.
+    proxied = "x-forwarded-for" in request.headers or "forwarded" in request.headers
+    if (
+        not dev_login_enabled()
+        or proxied
+        or client not in {"127.0.0.1", "::1", "localhost", "testclient"}
+    ):
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not found")
     await _signed_in(DEV_USER_ID, DEV_USER_EMAIL, ensure_auth_user=True)
     return SessionOut(

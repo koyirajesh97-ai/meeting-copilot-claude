@@ -1,7 +1,11 @@
-// The hosted Supabase project ("meeting-copilot") that the apps sign in with by default.
-// Both values are public by design: the publishable key only allows what row-level security
-// allows. Never put a service-role key or an AI provider key here.
+// The apps' built-in server and sign-in settings, from config/client.json (the one place to
+// change them). Public values only; never put a service-role key or an AI key there.
+import client from "../../../config/client.json";
+
 export const HOSTED_SUPABASE = {
-  url: "https://qxzeghownilplbryvvzl.supabase.co",
-  publishableKey: "sb_publishable_8nYQPfmv_Epno_9tn7D9Hw_20tCWZny",
+  url: client.supabaseUrl,
+  publishableKey: client.supabasePublishableKey,
 } as const;
+
+/** The hosted backend, or "" when each person enters their own server. */
+export const HOSTED_BACKEND_URL: string = client.backendUrl;

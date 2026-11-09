@@ -9,7 +9,7 @@ services:
     region: ohio # next to the Supabase project (us-east-2)
     dockerfilePath: ./services/backend/Dockerfile
     dockerContext: .
-    healthCheckPath: /health
+    healthCheckPath: /ready # the database answers
     autoDeploy: true
     buildFilter:
       paths:
@@ -17,6 +17,9 @@ services:
         - config/**
         - render.yaml
     envVars:
+      # Refuses to start until the settings below are complete and safe (see app/readiness.py).
+      - key: COPILOT_ENV
+        value: production
       - key: BACKEND_SECRET
         generateValue: true
       - key: VOICEPRINT_KEY

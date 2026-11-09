@@ -4,7 +4,8 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 
 from app import telemetry
 from app.api import (
@@ -31,7 +32,9 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from app.privacy.service import retention_loop
+    from app.readiness import check_startup
 
+    check_startup()
     retention = (
         asyncio.create_task(retention_loop(services))
         if os.environ.get("COPILOT_RETENTION_JOB", "1") == "1"
@@ -86,6 +89,33 @@ app.include_router(privacy.router)
 app.include_router(integrations.router)
 app.include_router(setup.router)
 app.include_router(ws_meetings.router)
+
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Cache-Control", "no-store")
+    if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+    return response
+
+
+@app.get("/ready")
+async def ready() -> JSONResponse:
+    """Readiness: the database answers (when one is configured). For load balancers and deploys."""
+    s = services()
+    connection = getattr(s.meetings, "connection", None)
+    if connection is not None:
+        try:
+            async with await connection() as conn:
+                await conn.execute("select 1")
+        except Exception as e:  # noqa: BLE001 - any failure means not ready
+            logging.getLogger("app.readiness").warning("database not ready: %s", type(e).__name__)
+            return JSONResponse({"status": "not_ready", "database": "unreachable"}, status_code=503)
+    return JSONResponse({"status": "ready", "database": "ok" if connection else "memory"})
 
 
 @app.get("/health")

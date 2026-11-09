@@ -89,3 +89,6 @@ Follow-ups that were out of scope for the prompt that found them.
   custom SMTP before inviting people (the built-in sender is rate-limited). The `vector`
   extension sits in the public schema (security advisor warning); moving it means recreating
   the `chunks` embedding column, so it's left for a maintenance window.
+- Production: rate-limit the sign-in routes (`/auth/session`, `/auth/dev-session`) and WebSocket
+  connects per IP; Render's free plan has no built-in limiter.
+- Production: structured JSON logs and log shipping (the backend logs plain text to stdout today).

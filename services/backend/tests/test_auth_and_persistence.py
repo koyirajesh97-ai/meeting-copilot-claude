@@ -101,6 +101,11 @@ def test_dev_login_is_off_unless_enabled(
     r = client.post("/auth/dev-session")
     assert r.status_code == 200 and r.json()["email"] == "dev@localhost"
     assert client.get("/health").json()["dev_login"] is True
+    # Through a proxy the caller's address can be forged, so it's refused even when enabled.
+    assert (
+        client.post("/auth/dev-session", headers={"X-Forwarded-For": "127.0.0.1"}).status_code
+        == 404
+    )
 
 
 def test_meetings_and_transcripts_persist_in_postgres(

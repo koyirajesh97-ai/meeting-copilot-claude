@@ -228,6 +228,17 @@ Deploying to Vercel (static hosting; the backend runs elsewhere because it needs
 `render.yaml` deploys the backend as a Docker web service on Render's free plan (512 MB; it
 sleeps after 15 minutes idle and takes about a minute to wake on the next request).
 
+**Production mode.** With `COPILOT_ENV=production` (set by `render.yaml`) the backend refuses to
+start until its settings are complete and safe, and lists what's missing: `BACKEND_SECRET`,
+`VOICEPRINT_KEY`, `INTEGRATIONS_KEY`, `DATABASE_URL`, an https `SUPABASE_URL`, at least one AI key
+for captions, summaries and live cards (a single free `GROQ_API_KEY` covers all three), and
+neither `ALLOW_DEV_LOGIN` nor `COPILOT_FAKE_PROVIDERS`. `/health` says the process is up;
+`/ready` also checks the database (Render waits for it before switching traffic).
+
+**Built-in settings.** `config/client.json` holds what the apps are built with: the Supabase
+project's URL and public publishable key, and `backendUrl`. Put your hosted server's address in
+`backendUrl` and rebuild; the desktop, phone and web apps then use it without anyone typing it.
+
 1. Open https://render.com/deploy?repo=https://github.com/koyirajesh97-ai/meeting-copilot-claude
    and sign in (GitHub works; no card for the free plan).
 2. Render generates `BACKEND_SECRET`, `VOICEPRINT_KEY` and `INTEGRATIONS_KEY`, and asks for:

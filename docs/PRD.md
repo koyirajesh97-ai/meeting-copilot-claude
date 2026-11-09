@@ -439,6 +439,13 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - Meetings (summary, decisions, action items, transcript) and Search are read-only; editing stays on the desktop.
 - Look: the same dark slate and indigo style as the desktop overlay, a large round record button, icon tab bar (Record, Meetings, Search, Settings). Builds as an Android APK (`pnpm -C apps/mobile build:apk`, also attached to tagged releases) signed with the debug key for testers; store builds need your own signing keys. iOS builds run on a macOS runner (`.github/workflows/ios.yml`): a Simulator build and an unsigned IPA always, a signed ad-hoc IPA with Apple signing secrets.
 
+### Hosting and production mode
+
+- The backend ships as a Docker image (`services/backend/Dockerfile`, unprivileged user, health check) with a Render Blueprint (`render.yaml`, free plan).
+- `COPILOT_ENV=production` makes startup fail with a list of missing or unsafe settings (names only): secrets of 32+ characters, a database, an https Supabase project, a meeting-safe AI key for live captions, summaries and cards, and no dev login or test mode. `/ready` reports whether the database answers.
+- Every response carries `nosniff`, `X-Frame-Options: DENY`, `no-referrer` and `no-store`, plus HSTS over https. The dev login also refuses proxied requests, whose client address can be forged.
+- The apps' built-in server and Supabase settings live in `config/client.json` (public values only).
+
 ### Web app
 
 - `apps/web` runs the desktop screens in a browser, with a browser bridge in place of Electron's main process (same backend client, sign-in, live connection and project/integration calls). Static hosting (Vercel); the backend is hosted separately and allows the site's origin with `COPILOT_WEB_ORIGINS` (CORS is off unless set).

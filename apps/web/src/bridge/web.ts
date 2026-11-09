@@ -5,7 +5,7 @@
 // - settings live in localStorage, and so does the short-lived backend token (no API keys).
 
 import { DEFAULT_CONSENT_MESSAGE } from "@meeting-copilot/shared/meetings";
-import { Emitter, HOSTED_SUPABASE, OutboundAudio, type MeetingEvent } from "@meeting-copilot/shared";
+import { Emitter, HOSTED_BACKEND_URL, HOSTED_SUPABASE, OutboundAudio, type MeetingEvent } from "@meeting-copilot/shared";
 import { AuthManager, SIGNED_OUT, type SecretBox } from "@desktop/main/backend/auth";
 import { BackendClient, BackendError, type MeetingDetailOut, type MeetingOut } from "@desktop/main/backend/client";
 import { integrationCall } from "@desktop/main/backend/integrations";
@@ -37,7 +37,7 @@ import { recordMicSamples, WebRecorder, wavFromFloat } from "./recorder";
 
 /** Values baked in at build time (Vercel environment variables). */
 export const BUILD = {
-  backendUrl: (import.meta.env.VITE_BACKEND_URL as string | undefined)?.replace(/\/+$/, "") ?? "",
+  backendUrl: ((import.meta.env.VITE_BACKEND_URL as string | undefined) || HOSTED_BACKEND_URL).replace(/\/+$/, ""),
   supabaseUrl: (import.meta.env.VITE_SUPABASE_URL as string | undefined) || HOSTED_SUPABASE.url,
   supabaseAnonKey: (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || HOSTED_SUPABASE.publishableKey,
 };

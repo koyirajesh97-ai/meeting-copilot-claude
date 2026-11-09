@@ -1,6 +1,6 @@
 // App-wide singletons: settings, the API client, sign-in and the meeting.
 
-import { HOSTED_SUPABASE } from "@meeting-copilot/shared/hosted";
+import { HOSTED_BACKEND_URL, HOSTED_SUPABASE } from "@meeting-copilot/shared/hosted";
 import Constants from "expo-constants";
 import * as SecureStore from "expo-secure-store";
 import { Api } from "./core/api";
@@ -14,7 +14,7 @@ export interface MobileSettings {
 
 const extra = (Constants.expoConfig?.extra ?? {}) as Partial<MobileSettings>;
 export const DEFAULT_SETTINGS: MobileSettings = {
-  backendUrl: extra.backendUrl ?? "http://127.0.0.1:8000",
+  backendUrl: extra.backendUrl || HOSTED_BACKEND_URL || "http://127.0.0.1:8000",
   supabaseUrl: extra.supabaseUrl || HOSTED_SUPABASE.url,
   supabaseAnonKey: extra.supabaseAnonKey || HOSTED_SUPABASE.publishableKey,
 };

@@ -1,6 +1,6 @@
 // Contract between the main process and the renderers. Imported by main, preload and renderer.
 import type { MeetingEvent } from "@meeting-copilot/shared";
-import { HOSTED_SUPABASE } from "@meeting-copilot/shared/hosted";
+import { HOSTED_BACKEND_URL, HOSTED_SUPABASE } from "@meeting-copilot/shared/hosted";
 
 export const IPC = {
   getState: "app:get-state",
@@ -436,7 +436,8 @@ export const DEFAULT_SETTINGS: Settings = {
   captionFontSize: 15,
   overlayExpanded: false,
   overlayPosition: null,
-  backendUrl: "http://127.0.0.1:8000",
+  // The hosted server from config/client.json, else a server on this computer (development).
+  backendUrl: HOSTED_BACKEND_URL || "http://127.0.0.1:8000",
   micDeviceId: null,
   systemAudioApp: null,
   supabaseUrl: HOSTED_SUPABASE.url,
