@@ -173,7 +173,7 @@ Every AI call goes through one provider router that picks a free hosted API for 
 | Task | First choice (free) | Fallbacks, in order | Free limit to design around |
 |---|---|---|---|
 | Live captions (streaming) | Deepgram Nova-3 streaming on the $200 signup credit; no card, no expiry | Gladia, about 10 free hours a month → Groq whisper-large-v3 on 5 to 10 s chunks → local faster-whisper | Credit covers about 360 meeting-hours with both channels (estimate) |
-| Question detection | Groq llama-3.1-8b-instant | Groq gpt-oss-20b → rules only | 30 requests/min, 14,400/day, 500K tokens/day (Groq limits, Jul 2026); rules filter first so few calls reach the LLM |
+| Question detection | Groq gpt-oss-20b | local model → rules only | 30 requests/min, 1,000/day, 200K tokens/day (Groq limits); rules filter first so few calls reach the LLM. Groq retired llama-3.1-8b-instant (Nov 2026) |
 | Answer cards, Catch up, Clarify, standup script | Groq gpt-oss-20b | Groq gpt-oss-120b → Mistral Free mode → OpenRouter :free models | Groq: 30 requests/min, 1K/day, 8K tokens/min, 200K tokens/day per model; OpenRouter: 20/min, 50/day (Oct 2026 limits) |
 | Summaries and "Ask my meetings" | Mistral Free mode; API data isn't used for training | Groq gpt-oss-120b in chunks under 6K tokens → Gemini Flash free tier, test data only | Mistral shows its limits only in your console; Groq's 8K tokens/min forces chunking |
 | Embeddings | Small local embedding model (fastembed bge-small-en-v1.5, 384 dims, CPU, about 100 MB; `uv sync --extra embeddings`) | Cloudflare Workers AI bge-small-en-v1.5 (10,000 Neurons/day free) | Local embeddings cost nothing and never hit a quota; the chain is `tasks.embed` in config/providers.yaml |
@@ -445,6 +445,11 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - `COPILOT_ENV=production` makes startup fail with a list of missing or unsafe settings (names only): secrets of 32+ characters, a database, an https Supabase project, a meeting-safe AI key for live captions, summaries and cards, and no dev login or test mode. `/ready` reports whether the database answers.
 - Every response carries `nosniff`, `X-Frame-Options: DENY`, `no-referrer` and `no-store`, plus HSTS over https. The dev login also refuses proxied requests, whose client address can be forged.
 - The apps' built-in server and Supabase settings live in `config/client.json` (public values only).
+- Search runs on keywords alone when no embedding model is available (the model can't be downloaded, or isn't installed), instead of failing; a model that fails to load isn't retried for 10 minutes. The Docker image includes the embedding model.
+- The LLM client library loads at startup, so the first live call doesn't spend its budget on it.
+- Per-model request settings live in `config/providers.yaml` (`params`, e.g. `reasoning_effort: low` for the fast tier). Question detection has 1.5 s.
+
+Checked with a real Groq key (Nov 2026): Whisper captions both channels, catch-up cards and a standup summary with per-person done/blockers, decisions and action items, all through Groq alone; question detection answers in 0.3-0.6 s.
 
 ### Web app
 

@@ -84,6 +84,10 @@ class LiteLLMClient:
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        # Per-model request fields from config/providers.yaml (never keys or routing).
+        extra = provider.models.get(deployment.model)
+        for k, v in (extra.params if extra else {}).items():
+            kwargs.setdefault(k, v)
         try:
             resp = await litellm.acompletion(**kwargs)
         except Exception as e:  # litellm raises typed errors with status_code

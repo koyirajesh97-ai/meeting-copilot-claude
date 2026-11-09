@@ -71,7 +71,9 @@ async def usage(_user: CurrentUser) -> UsageResponse:
                 requests=total.requests,
                 tokens=total.tokens,
                 audio_seconds=round(total.audio_seconds, 1),
-                limits={k: v for k, v in limits.model_dump().items() if v is not None},
+                limits={
+                    k: v for k, v in limits.model_dump(exclude={"params"}).items() if v is not None
+                },
                 percent_used=None if pct is None else round(pct * 100, 1),
                 status=status,
                 trains_on_data=cfg.provider(d.provider).trains_on_data,

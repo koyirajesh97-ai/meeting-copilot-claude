@@ -2,7 +2,7 @@
 # Providers marked `local: true` run on this machine; Local-only meetings use nothing else.
 # Verify current limits in each provider's console; they change often.
 tasks:                     # tried in order; next one on 429, timeout or bad JSON
-  detect:  [groq/llama-3.1-8b-instant, groq/openai/gpt-oss-20b, ollama/llama3.2:3b]
+  detect:  [groq/openai/gpt-oss-20b, ollama/llama3.2:3b]   # then the built-in rules
   card:    [groq/openai/gpt-oss-20b, groq/openai/gpt-oss-120b, mistral/mistral-small-latest, ollama/llama3.2:3b]
   catchup: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest, ollama/llama3.2:3b]
   clarify: [groq/openai/gpt-oss-20b, mistral/mistral-small-latest, ollama/llama3.2:3b]
@@ -23,7 +23,7 @@ live_help:
   recent_minutes: 5          # transcript window given to cards
   context_chunks: 3          # project excerpts given to cards
   topic_cooldown_s: 60       # at most one topic card per minute
-timeouts_s: {detect: 1.0, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
+timeouts_s: {detect: 1.5, card: 1.5, catchup: 4, clarify: 3, standup: 8, summary: 60, ask: 15}
 providers:
   groq:
     signup_url: https://console.groq.com/keys
@@ -31,8 +31,8 @@ providers:
     key_env: GROQ_API_KEY
     trains_on_data: false
     models:
-      llama-3.1-8b-instant: {rpm: 30, rpd: 14400, tpd: 500000}
-      openai/gpt-oss-20b:   {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000}
+      # Fast tier (detection, live cards): low reasoning keeps it inside the live budgets.
+      openai/gpt-oss-20b:   {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000, params: {reasoning_effort: low}}
       openai/gpt-oss-120b:  {rpm: 30, rpd: 1000, tpm: 8000, tpd: 200000}
       whisper-large-v3:     {rpm: 20, rpd: 2000}
   mistral:

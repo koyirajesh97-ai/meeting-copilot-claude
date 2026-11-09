@@ -337,3 +337,70 @@ def test_in_memory_index_ranks_keyword_matches_first() -> None:
         return [h.title for h in await idx.search("u", "certificate renewal", v)]
 
     assert asyncio.run(go())[0] == "B"
+
+
+def test_without_an_embedding_model_search_falls_back_to_keywords() -> None:
+    """No embedding provider (e.g. the model can't be loaded): indexing and search still work."""
+    store = InMemoryMeetingStore()
+    s = build_services(
+        client=FakeClient(responder=fake_responder),
+        store=InMemoryQuotaStore(),
+        meetings=store,
+        embed_factory=lambda _d, _c: None,
+    )
+    set_services(s)
+    try:
+        with TestClient(app) as client:
+            mid = record((s, store, client), "u1", "Daily standup", "standup", STANDUP)
+            r = client.get("/search", params={"q": "certificate renewal"}, headers=h("u1"))
+            assert r.status_code == 200
+            hits = r.json()
+            assert hits and hits[0]["meeting_id"] == mid
+    finally:
+        set_services(None)
+
+
+async def test_postgres_keyword_only_chunks_and_queries(pg_dsn: str) -> None:
+    owner = str(uuid.UUID(int=21))
+    with psycopg.connect(pg_dsn, autocommit=True) as c:
+        c.execute("insert into auth.users (id) values (%s)", (owner,))
+        c.execute("insert into public.users (id) values (%s)", (owner,))
+    store = PostgresStore(pg_dsn)
+    index = PostgresIndex(store)
+    m = Meeting(new_id(), owner, "standup", "No vectors", "cloud", "private")
+    await store.create(m)
+    chunks = transcript_chunks(segs(m.id, STANDUP), {})
+    await index.replace_meeting(m, chunks, [None] * len(chunks))  # stored with a NULL embedding
+    assert [h.title for h in await index.search(owner, "certificate renewal", None)] == [
+        "No vectors"
+    ]
+    # A query with a vector still finds keyword-only chunks.
+    [v] = await FakeEmbedder().embed(["certificate renewal"])
+    assert (await index.search(owner, "certificate renewal", v))[0].title == "No vectors"
+    await store.close()
+
+
+async def test_a_model_that_fails_to_load_is_not_retried_for_a_while(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.providers.embeddings as emb
+
+    calls = 0
+
+    def broken(_model: str):
+        nonlocal calls
+        calls += 1
+        raise ValueError("Could not load model from any source")
+
+    broken.cache_info = lambda: type("I", (), {"currsize": 0})()  # never loaded
+    monkeypatch.setattr(emb, "_fastembed_model", broken)
+    monkeypatch.setitem(
+        __import__("sys").modules, "fastembed", type(__import__("sys"))("fastembed")
+    )
+    e = emb.FastEmbedder()
+    assert e.available() is True
+    with pytest.raises(ValueError):
+        await e.embed(["hello"])
+    assert calls == 1 and e.available() is False  # skipped (keyword search) until the retry time
+    monkeypatch.setattr(emb, "LOAD_RETRY_S", 0.0)
+    assert e.available() is True

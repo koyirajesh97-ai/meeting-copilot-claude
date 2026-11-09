@@ -10,13 +10,13 @@ from pydantic import BaseModel
 
 from app.meetings.store import Meeting, MeetingStore, StoredSummary
 from app.prompts import load
-from app.providers.embeddings import EmbeddingRouter
+from app.providers.embeddings import EmbeddingError, EmbeddingRouter
 from app.router.router import Router
 from app.summaries.pipeline import clock
 from app.summaries.schema import Summary
 
 from .chunking import summary_chunks, transcript_chunks
-from .index import Hit, SearchIndex
+from .index import Hit, SearchIndex, Vector
 
 log = logging.getLogger("app.search")
 
@@ -61,14 +61,26 @@ class SearchService:
         self.router = router
         self.store = store
 
+    async def embed_or_none(
+        self, texts: list[str], *, local_only: bool = False
+    ) -> tuple[list[Vector], str | None]:
+        """Embeddings, or None for each text when no embedding model is available: search then
+        runs on keywords alone instead of failing."""
+        try:
+            vectors, provider = await self.embedder.embed(texts, "meeting", local_only=local_only)
+        except EmbeddingError as e:
+            log.warning("no embeddings, keyword search only: %s", e)
+            return [None] * len(texts), None
+        return list(vectors), provider
+
     async def index_meeting(self, meeting: Meeting, summary: StoredSummary | None = None) -> int:
         """(Re)index a meeting's transcript and summary. Runs after summary.ready."""
         names = await self.store.speaker_names(meeting.id)
         chunks = transcript_chunks(await self.store.segments(meeting.id), names)
         if summary is not None:
             chunks += summary_chunks(Summary.model_validate(summary.sections))
-        vectors, provider = await self.embedder.embed(
-            [c.text for c in chunks], "meeting", local_only=meeting.mode == "local"
+        vectors, provider = await self.embed_or_none(
+            [c.text for c in chunks], local_only=meeting.mode == "local"
         )
         await self.index.replace_meeting(meeting, chunks, vectors)
         log.info("indexed meeting=%s chunks=%d embedder=%s", meeting.id, len(chunks), provider)
@@ -88,7 +100,7 @@ class SearchService:
         query = query.strip()
         if not query:
             return []
-        [vector], _ = await self.embedder.embed([query], "meeting", local_only=local_only)
+        [vector], _ = await self.embed_or_none([query], local_only=local_only)
         hits = await self.index.search(
             user_id, query, vector, limit * 2 if for_cloud_model else limit
         )

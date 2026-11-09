@@ -45,17 +45,21 @@ class DocRef:
     created_at: float
 
 
+#: A chunk's or query's embedding; None when no embedding model was available (keyword-only).
+Vector = list[float] | None
+
+
 class SearchIndex(Protocol):
     async def replace_meeting(
-        self, meeting: Meeting, chunks: list[Chunk], vectors: list[list[float]]
+        self, meeting: Meeting, chunks: list[Chunk], vectors: list[Vector]
     ) -> None: ...
     async def delete_meeting(self, meeting_id: str) -> None: ...
     async def replace_document(
-        self, doc: DocRef, chunks: list[Chunk], vectors: list[list[float]]
+        self, doc: DocRef, chunks: list[Chunk], vectors: list[Vector]
     ) -> None: ...
     async def delete_document(self, doc_id: str) -> None: ...
     async def search(
-        self, user_id: str, query: str, vector: list[float], limit: int = 10
+        self, user_id: str, query: str, vector: Vector, limit: int = 10
     ) -> list[Hit]: ...
 
 
@@ -87,7 +91,7 @@ class InMemoryIndex:
         return bool(self._is_member and await self._is_member(project_id, user_id))
 
     async def replace_meeting(
-        self, meeting: Meeting, chunks: list[Chunk], vectors: list[list[float]]
+        self, meeting: Meeting, chunks: list[Chunk], vectors: list[Vector]
     ) -> None:
         self._meetings[meeting.id] = list(
             zip([meeting] * len(chunks), chunks, vectors, strict=True)
@@ -97,16 +101,14 @@ class InMemoryIndex:
         self._meetings.pop(meeting_id, None)
 
     async def replace_document(
-        self, doc: DocRef, chunks: list[Chunk], vectors: list[list[float]]
+        self, doc: DocRef, chunks: list[Chunk], vectors: list[Vector]
     ) -> None:
         self._docs[doc.id] = list(zip([doc] * len(chunks), chunks, vectors, strict=True))
 
     async def delete_document(self, doc_id: str) -> None:
         self._docs.pop(doc_id, None)
 
-    async def search(
-        self, user_id: str, query: str, vector: list[float], limit: int = 10
-    ) -> list[Hit]:
+    async def search(self, user_id: str, query: str, vector: Vector, limit: int = 10) -> list[Hit]:
         keyed: dict[str, tuple[Hit, list[float]]] = {}
         for lst in self._meetings.values():
             for m, c, v in lst:
@@ -137,9 +139,15 @@ class InMemoryIndex:
         q = set(WORD.findall(query.lower()))
         overlap = {k: len(q & set(WORD.findall(h.text.lower()))) for k, (h, _v) in keyed.items()}
         text_rank = sorted((k for k in keyed if overlap[k]), key=lambda k: -overlap[k])
-        vec_rank = sorted(
-            keyed, key=lambda k: -sum(a * b for a, b in zip(vector, keyed[k][1], strict=False))
-        )[:50]
+        qv = vector
+        vec_rank = (
+            sorted(
+                (k for k in keyed if keyed[k][1] is not None),
+                key=lambda k: -sum(a * b for a, b in zip(qv, keyed[k][1] or [], strict=False)),
+            )[:50]
+            if qv is not None
+            else []
+        )
         out = []
         for k, s in sorted(rrf(text_rank, vec_rank).items(), key=lambda kv: -kv[1])[:limit]:
             h = keyed[k][0]
@@ -148,7 +156,9 @@ class InMemoryIndex:
         return out
 
 
-def _vec(v: list[float]) -> str:
+def _vec(v: Vector) -> str | None:
+    if v is None:
+        return None
     return "[" + ",".join(f"{x:.6f}" if math.isfinite(x) else "0" for x in v) + "]"
 
 
@@ -165,9 +175,7 @@ class PostgresIndex:
     def __init__(self, store) -> None:
         self.store = store
 
-    async def _insert(
-        self, conn, c: Chunk, v: list[float], project_id, meeting_id, owner_id
-    ) -> None:
+    async def _insert(self, conn, c: Chunk, v: Vector, project_id, meeting_id, owner_id) -> None:
         await conn.execute(
             "insert into public.chunks (source_type, source_id, project_id, meeting_id, owner_id, text, start_ms, embedding) "
             "values (%s, %s, %s, %s, %s, %s, %s, %s::vector)",
@@ -184,7 +192,7 @@ class PostgresIndex:
         )
 
     async def replace_meeting(
-        self, meeting: Meeting, chunks: list[Chunk], vectors: list[list[float]]
+        self, meeting: Meeting, chunks: list[Chunk], vectors: list[Vector]
     ) -> None:
         async with await self.store.connection() as conn, conn.transaction():
             await conn.execute("delete from public.chunks where meeting_id = %s", (meeting.id,))
@@ -196,7 +204,7 @@ class PostgresIndex:
             await conn.execute("delete from public.chunks where meeting_id = %s", (meeting_id,))
 
     async def replace_document(
-        self, doc: DocRef, chunks: list[Chunk], vectors: list[list[float]]
+        self, doc: DocRef, chunks: list[Chunk], vectors: list[Vector]
     ) -> None:
         async with await self.store.connection() as conn, conn.transaction():
             await conn.execute(
@@ -213,9 +221,7 @@ class PostgresIndex:
                 (doc_id,),
             )
 
-    async def search(
-        self, user_id: str, query: str, vector: list[float], limit: int = 10
-    ) -> list[Hit]:
+    async def search(self, user_id: str, query: str, vector: Vector, limit: int = 10) -> list[Hit]:
         sql = f"""
         with visible as (
           select c.* from public.chunks c left join public.meetings m on m.id = c.meeting_id where {VISIBLE}
@@ -226,7 +232,8 @@ class PostgresIndex:
         ),
         vec as (
           select id, row_number() over (order by embedding <=> %(v)s::vector) as r
-          from visible where embedding is not null order by embedding <=> %(v)s::vector limit 50
+          from visible where embedding is not null and %(v)s::vector is not null
+          order by embedding <=> %(v)s::vector limit 50
         ),
         fused as (
           select id, sum(1.0 / ({RRF_K} + r)) as score from (select * from fts union all select * from vec) x group by id

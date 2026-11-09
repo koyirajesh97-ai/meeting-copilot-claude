@@ -38,6 +38,8 @@ class Limits(BaseModel):
     tpm: int | None = None  # tokens per minute
     tpd: int | None = None  # tokens per day
     aspd: int | None = None  # audio seconds per day
+    #: Extra request fields for this model, e.g. {reasoning_effort: low} for a fast tier.
+    params: dict[str, str | int | float | bool] = Field(default_factory=dict)
 
 
 class ProviderConfig(BaseModel):

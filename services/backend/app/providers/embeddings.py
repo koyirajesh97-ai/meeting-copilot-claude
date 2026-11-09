@@ -72,12 +72,20 @@ def _fastembed_model(model: str):
     return TextEmbedding(model_name=model)
 
 
+#: After the model fails to load (e.g. it can't be downloaded), don't retry for this long:
+#: each attempt can take ~40 s of download retries, and search falls back to keywords meanwhile.
+LOAD_RETRY_S = 600.0
+
+
 class FastEmbedder:
     def __init__(self, model: str = "bge-small-en-v1.5") -> None:
         self.name = f"local/{model}"
         self.model = f"BAAI/{model}" if "/" not in model else model
+        self._failed_at: float | None = None
 
     def available(self) -> bool:
+        if self._failed_at is not None and time.monotonic() - self._failed_at < LOAD_RETRY_S:
+            return False
         try:
             import fastembed  # noqa: F401
         except ImportError:
@@ -90,7 +98,15 @@ class FastEmbedder:
                 normalize([float(x) for x in v]) for v in _fastembed_model(self.model).embed(texts)
             ]
 
-        return await asyncio.to_thread(run)
+        try:
+            return await asyncio.to_thread(run)
+        except Exception as e:
+            if not _fastembed_model.cache_info().currsize:  # the model never loaded
+                self._failed_at = time.monotonic()
+                log.warning(
+                    "embedding model %s unavailable for %.0f s: %s", self.model, LOAD_RETRY_S, e
+                )
+            raise
 
 
 class CloudflareEmbedder:

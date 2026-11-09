@@ -242,7 +242,7 @@ async def _index(d: Document, text: str) -> int:
     chunks = document_chunks(d, text)
     if not chunks:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "No text found in that document")
-    vectors, _ = await s.search.embedder.embed([c.text for c in chunks], "meeting")
+    vectors, _ = await s.search.embed_or_none([c.text for c in chunks])
     await s.search.index.replace_document(
         DocRef(d.id, d.project_id, d.title, d.uploaded_by, d.created_at), chunks, vectors
     )

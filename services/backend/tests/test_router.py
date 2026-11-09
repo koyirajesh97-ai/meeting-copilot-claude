@@ -250,7 +250,8 @@ def test_real_config_has_a_meeting_safe_provider_for_every_task() -> None:
         assert safe, f"{task} has no provider allowed to receive meeting data"
     assert cfg.timeout("card") == 1.5
     assert cfg.tasks["card"][0].id == "groq/openai/gpt-oss-20b"
-    assert cfg.limits(cfg.tasks["detect"][0]).rpd == 14400
+    assert cfg.tasks["detect"][0].id == "groq/openai/gpt-oss-20b"
+    assert cfg.limits(cfg.tasks["detect"][0]).rpd == 1000
 
 
 # ---------- nightly provider check ----------
@@ -265,9 +266,9 @@ async def test_provider_check_spots_dropped_models_and_changed_limits(monkeypatc
 
     monkeypatch.setenv("GROQ_API_KEY", "k")
     cfg = load_config()
-    d = Deployment.parse("groq/llama-3.1-8b-instant")
+    d = Deployment.parse("groq/openai/gpt-oss-20b")
     listed = httpx.MockTransport(
-        lambda r: httpx.Response(200, json={"data": [{"id": "llama-3.1-8b-instant"}]})
+        lambda r: httpx.Response(200, json={"data": [{"id": "openai/gpt-oss-20b"}]})
     )
     dropped = httpx.MockTransport(
         lambda r: httpx.Response(200, json={"data": [{"id": "llama-4-scout"}]})
@@ -276,9 +277,9 @@ async def test_provider_check_spots_dropped_models_and_changed_limits(monkeypatc
     assert await model_listed(cfg, d, listed) is True
     assert await model_listed(cfg, d, dropped) is False
     assert await model_listed(cfg, d, down) is None  # can't tell: don't raise an alarm
-    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "14400"}) == []
-    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "1000"}) == [
-        "rpd is 1000 (config says 14400)"
+    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "1000"}) == []
+    assert limit_changes(cfg, d, {"x-ratelimit-limit-requests": "14400"}) == [
+        "rpd is 14400 (config says 1000)"
     ]
 
     assert issue([{"deployment": "groq/x", "status": "ok"}]) is None
@@ -303,3 +304,30 @@ async def test_provider_check_spots_dropped_models_and_changed_limits(monkeypatc
     assert "`gemini/gemini-flash` | model_missing" in body and "replacement model" in body
     assert "rpd is 1000" in body and "1 provider(s) were fine; 1 were skipped" in body
     assert body.rstrip().endswith("actions/runs/1")
+
+
+async def test_per_model_params_from_config_reach_the_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import litellm
+
+    from app.router.client import LiteLLMClient
+    from app.router.config import Deployment
+
+    seen: dict = {}
+
+    async def fake_acompletion(**kwargs):
+        seen.update(kwargs)
+        msg = type("M", (), {"content": "ok"})()
+        return type("R", (), {"choices": [type("C", (), {"message": msg})()], "usage": None})()
+
+    monkeypatch.setattr(litellm, "acompletion", fake_acompletion)
+    monkeypatch.setenv("GROQ_API_KEY", "k")
+    cfg = load_config()
+    fast = Deployment.parse("groq/openai/gpt-oss-20b")
+    await LiteLLMClient().complete(fast, cfg.provider("groq"), [], timeout=1, json_mode=False)
+    assert seen["reasoning_effort"] == "low"  # config/providers.yaml: the fast tier
+    seen.clear()
+    big = Deployment.parse("groq/openai/gpt-oss-120b")
+    await LiteLLMClient().complete(big, cfg.provider("groq"), [], timeout=1, json_mode=False)
+    assert "reasoning_effort" not in seen

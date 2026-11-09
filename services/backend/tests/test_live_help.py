@@ -71,14 +71,16 @@ def test_a_rate_limited_groq_still_produces_cards() -> None:
     cards = [r for r in report["rows"] if r["expect"] == "card"]
     assert {r["provider"] for r in cards} == {"groq/openai/gpt-oss-120b"}
     sw = report["switches"]
-    assert sw and sw[0]["task"] == "card" and sw[0]["from"] == "groq/openai/gpt-oss-20b"
+    # gpt-oss-20b also serves detection, which meets the 429 first; the switch is announced there
+    # and cards then skip the rate-limited model (served by 120b above).
+    assert sw and sw[0]["from"] == "groq/openai/gpt-oss-20b"
 
 
 def test_detection_falls_back_to_rules_when_detect_is_down() -> None:
     err = ProviderError("down", status=503)
     client = FakeClient(
         responder=fake_responder,
-        script={"groq/llama-3.1-8b-instant": [err], "groq/openai/gpt-oss-20b": [err]},
+        script={"groq/openai/gpt-oss-20b": [err]},
     )
     # gpt-oss-20b also serves cards; let cards fall back to 120b.
     report = live_eval.run(live_eval.make_services(client=client))

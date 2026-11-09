@@ -223,6 +223,14 @@ Deploying to Vercel (static hosting; the backend runs elsewhere because it needs
 3. Deploy. Without `VITE_BACKEND_URL` the site opens on "Connect to your Meeting Copilot
    server", where each visitor enters their own server.
 
+### Testing with a real AI key
+
+One free Groq key (https://console.groq.com/keys, no card) runs everything: live captions
+(Whisper), question detection, cards, catch-up and summaries. Put it in `.env` as
+`GROQ_API_KEY=...` (never in code or `config/`: the repo is public), restart the backend, and
+check it with `scripts/check-providers`. Keys are read only by the backend; the apps never see
+them.
+
 ### Hosting the backend (Render, free)
 
 `render.yaml` deploys the backend as a Docker web service on Render's free plan (512 MB; it

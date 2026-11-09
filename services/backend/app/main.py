@@ -1,5 +1,6 @@
 import asyncio
 import contextlib
+import importlib
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -35,6 +36,10 @@ async def lifespan(_app: FastAPI):
     from app.readiness import check_startup
 
     check_startup()
+    # Load the LLM client library now (about 2 s): otherwise the first live call pays it inside
+    # its 1.5 s budget and question detection times out. Skipped with the fake providers.
+    if os.environ.get("COPILOT_FAKE_PROVIDERS") != "1":
+        await asyncio.to_thread(importlib.import_module, "litellm")
     retention = (
         asyncio.create_task(retention_loop(services))
         if os.environ.get("COPILOT_RETENTION_JOB", "1") == "1"
