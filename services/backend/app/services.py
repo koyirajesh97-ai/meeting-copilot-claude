@@ -75,6 +75,8 @@ class Services:
     integrations: IntegrationService | None = None
     #: For tests: an httpx transport used when fetching project links.
     link_transport: object = None
+    #: Tests: a stand-in DNS lookup for project links (host, port) -> addresses.
+    link_resolve: object = None
 
 
 def build_services(

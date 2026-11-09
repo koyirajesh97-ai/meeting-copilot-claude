@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser
 from app.jobs.summary import items_from
+from app.ratelimit import AI_ACTIONS
 from app.services import services
 from app.summaries.markdown import meeting_markdown
 from app.summaries.schema import Summary
@@ -54,6 +55,7 @@ class Regenerate(BaseModel):
     status_code=status.HTTP_202_ACCEPTED,
 )
 async def regenerate(meeting_id: str, body: Regenerate, user: CurrentUser) -> SummaryOut:
+    AI_ACTIONS.check(user.user_id)
     m = await _owned(meeting_id, user.user_id)
     if body.template and body.template not in TEMPLATES:
         raise HTTPException(

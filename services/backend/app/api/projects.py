@@ -18,6 +18,8 @@ from app.projects.documents import (
     extract_text,
     fetch_link,
     new_document_id,
+    resolve_host,
+    safe_filename,
 )
 from app.projects.invites import send_invite_email
 from app.projects.store import ROLES, WRITERS, Project, Role, new_project_id
@@ -262,7 +264,7 @@ async def upload_document(
 ) -> DocumentOut:
     await _role(project_id, user.user_id, WRITERS)
     data = await file.read(5 * 1024 * 1024 + 1)
-    name = file.filename or "document.txt"
+    name = safe_filename(file.filename or "document.txt")
     try:
         text = extract_text(name, data)
     except DocumentError as e:
@@ -287,7 +289,10 @@ class LinkIn(BaseModel):
 async def add_link(project_id: str, body: LinkIn, user: CurrentUser) -> DocumentOut:
     await _role(project_id, user.user_id, WRITERS)
     try:
-        page_title, text = await fetch_link(body.url, services().link_transport)
+        s = services()
+        page_title, text = await fetch_link(
+            body.url, s.link_transport, s.link_resolve or resolve_host
+        )
     except DocumentError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
     d = Document(

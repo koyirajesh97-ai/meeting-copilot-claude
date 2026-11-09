@@ -1,20 +1,25 @@
 import { AudioLines, FolderKanban, LayoutDashboard, Mic, Settings, Sparkles } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { lazy, Suspense, useEffect, useRef, type ComponentType } from "react";
 import { HashRouter, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { ROUTES } from "../../shared/ipc";
 import { RecordingIndicator } from "./components/RecordingIndicator";
-import { AskPage } from "./pages/AskPage";
-import { MeetingDetailPage } from "./pages/MeetingDetailPage";
 import { MeetingsHome } from "./pages/MeetingsHome";
-import { ProjectDetailPage, ProjectsPage } from "./pages/ProjectsPage";
-import { LiveViewerPage } from "./projects/LiveViewerPage";
-import { SettingsPage } from "./pages/SettingsPage";
-import { StandupPage } from "./pages/StandupPage";
 import { StartMeetingPage } from "./pages/StartMeetingPage";
-import { SystemAudioHelpPage } from "./pages/SystemAudioHelpPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { SetupPage } from "./pages/SetupPage";
-import { VoicePage } from "./pages/VoicePage";
+
+// The two screens used every day load with the app; the rest load the first time they're opened.
+const lazyPage = <K extends string>(load: () => Promise<Record<K, ComponentType>>, name: K) =>
+  lazy(() => load().then((m) => ({ default: m[name] })));
+const AskPage = lazyPage(() => import("./pages/AskPage"), "AskPage");
+const MeetingDetailPage = lazyPage(() => import("./pages/MeetingDetailPage"), "MeetingDetailPage");
+const ProjectsPage = lazyPage(() => import("./pages/ProjectsPage"), "ProjectsPage");
+const ProjectDetailPage = lazyPage(() => import("./pages/ProjectsPage"), "ProjectDetailPage");
+const LiveViewerPage = lazyPage(() => import("./projects/LiveViewerPage"), "LiveViewerPage");
+const SettingsPage = lazyPage(() => import("./pages/SettingsPage"), "SettingsPage");
+const StandupPage = lazyPage(() => import("./pages/StandupPage"), "StandupPage");
+const SystemAudioHelpPage = lazyPage(() => import("./pages/SystemAudioHelpPage"), "SystemAudioHelpPage");
+const ProfilePage = lazyPage(() => import("./pages/ProfilePage"), "ProfilePage");
+const SetupPage = lazyPage(() => import("./pages/SetupPage"), "SetupPage");
+const VoicePage = lazyPage(() => import("./pages/VoicePage"), "VoicePage");
 import { useAppState, useSettings } from "./useAppState";
 
 // Four places to go, plus the one thing you do most: start a meeting. Standup prep, your role
@@ -108,6 +113,7 @@ function Shell() {
         </nav>
         <main className={`flex-1 overflow-y-auto bg-white dark:bg-slate-900/40 ${inSetup ? "" : "my-2 mr-2 rounded-2xl border border-slate-200/80 shadow-sm dark:border-white/[0.06]"}`}>
           <div className="mx-auto max-w-5xl px-10 py-9">
+          <Suspense fallback={<p className="text-sm text-slate-500" role="status">Loading…</p>}>
           <Routes>
             <Route path={ROUTES.home} element={<MeetingsHome />} />
             <Route path={ROUTES.start} element={<StartMeetingPage state={state} />} />
@@ -123,6 +129,7 @@ function Shell() {
             <Route path={ROUTES.profile} element={<ProfilePage />} />
             <Route path={ROUTES.setup} element={<SetupPage />} />
           </Routes>
+          </Suspense>
           </div>
         </main>
       </div>

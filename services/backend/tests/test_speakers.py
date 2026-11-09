@@ -243,3 +243,11 @@ async def test_postgres_voiceprints_consent_replace_and_leaving_a_project(pg_dsn
         )  # Priya leaves the project
     assert await sp.mine(member) == []
     await store.close()
+
+
+def test_project_voiceprints_only_for_members(env) -> None:
+    """Otherwise anyone could plant a voice named "Priya" in someone else's project."""
+    pid = project_with_teammate(env)
+    _, _, client = env
+    assert enroll(client, "u3", "A", "Priya", project_id=pid).status_code == 404
+    assert enroll(client, "u2", "B", "Sai", project_id=pid).status_code == 201

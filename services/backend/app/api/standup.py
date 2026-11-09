@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser
 from app.meetings.store import MeetingType
+from app.ratelimit import AI_ACTIONS
 from app.services import services
 from app.standup.service import build_brief, today
 from app.standup.store import StandupEntry
@@ -47,6 +48,7 @@ def _out(e: StandupEntry) -> StandupOut:
 
 @router.post("/standup", response_model=StandupOut)
 async def generate(body: StandupIn, user: CurrentUser) -> StandupOut:
+    AI_ACTIONS.check(user.user_id)
     """Rough notes in; done / doing / blockers and a 30-second script out (saved for today)."""
     return _out(await services().standup.generate(user.user_id, body.notes, body.project_id))
 

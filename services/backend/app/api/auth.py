@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from app.auth import SESSION_TTL_S, CurrentUser, issue_token
 from app.auth_supabase import SupabaseTokenError, verify_supabase_token
+from app.ratelimit import SIGN_IN, client_address
 from app.services import services
 
 router = APIRouter()
@@ -49,7 +50,8 @@ async def _signed_in(user_id: str, email: str | None, ensure_auth_user: bool = F
 
 
 @router.post("/auth/session", response_model=SessionOut)
-async def create_session(body: SessionIn) -> SessionOut:
+async def create_session(body: SessionIn, request: Request) -> SessionOut:
+    SIGN_IN.check(client_address(request))
     try:
         user = verify_supabase_token(body.access_token)
     except SupabaseTokenError as e:
@@ -65,6 +67,7 @@ async def create_session(body: SessionIn) -> SessionOut:
 
 @router.post("/auth/dev-session", response_model=SessionOut)
 async def dev_session(request: Request) -> SessionOut:
+    SIGN_IN.check(client_address(request))
     """A fixed local user, without Supabase. Only with ALLOW_DEV_LOGIN=1 and only from this machine."""
     client = request.client.host if request.client else ""
     # Behind a proxy the client address comes from a header anyone can set: refuse those too.

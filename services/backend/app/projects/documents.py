@@ -3,14 +3,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import html
 import io
+import ipaddress
 import os
 import re
+import socket
 import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 
@@ -63,20 +68,73 @@ def extract_text(filename: str, data: bytes) -> str:
     raise DocumentError(f"Unsupported file type {ext or '(none)'}: use text, Markdown, HTML or PDF")
 
 
-async def fetch_link(
-    url: str, transport: httpx.AsyncBaseTransport | None = None
-) -> tuple[str, str]:
-    """(title, text) of a web page."""
-    if not re.match(r"^https?://", url):
+Resolve = Callable[[str, int], Awaitable[list[str]]]
+MAX_REDIRECTS = 5
+
+
+async def resolve_host(host: str, port: int) -> list[str]:
+    infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
+    return [str(i[4][0]) for i in infos]
+
+
+async def check_public_url(url: str, resolve: Resolve = resolve_host) -> None:
+    """Links may only reach the public internet: not this server, its private network or the
+    cloud's metadata service (a hosted backend must not fetch those for a user)."""
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
         raise DocumentError("Links must start with http:// or https://")
-    async with httpx.AsyncClient(timeout=10, follow_redirects=True, transport=transport) as c:
-        r = await c.get(url, headers={"User-Agent": "MeetingCopilot/0.1 (project knowledge)"})
-    if r.status_code >= 400:
-        raise DocumentError(f"Couldn't fetch the link ({r.status_code})")
-    body = r.text[:MAX_BYTES]
+    host = parts.hostname.lower().rstrip(".")
+    if host == "localhost" or host.endswith((".localhost", ".internal", ".local")):
+        raise DocumentError("That link points to a private address.")
+    try:
+        addrs = await resolve(host, parts.port or (443 if parts.scheme == "https" else 80))
+    except OSError as e:
+        raise DocumentError(f"Couldn't find {host}.") from e
+    for a in addrs:
+        ip = ipaddress.ip_address(a.split("%")[0])
+        if not ip.is_global or ip.is_multicast:
+            raise DocumentError("That link points to a private address.")
+
+
+async def fetch_link(
+    url: str,
+    transport: httpx.AsyncBaseTransport | None = None,
+    resolve: Resolve = resolve_host,
+) -> tuple[str, str]:
+    """(title, text) of a web page. Every hop (redirects included) must be a public address, and
+    at most MAX_BYTES are read."""
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False, transport=transport) as c:
+        for _ in range(MAX_REDIRECTS + 1):
+            await check_public_url(url, resolve)
+            async with c.stream(
+                "GET", url, headers={"User-Agent": "MeetingCopilot/0.1 (project knowledge)"}
+            ) as r:
+                if r.is_redirect and r.headers.get("location"):
+                    url = urljoin(url, r.headers["location"])
+                    continue
+                if r.status_code >= 400:
+                    raise DocumentError(f"Couldn't fetch the link ({r.status_code})")
+                chunks, size = [], 0
+                async for chunk in r.aiter_bytes():
+                    chunks.append(chunk)
+                    size += len(chunk)
+                    if size >= MAX_BYTES:
+                        break
+                body = b"".join(chunks)[:MAX_BYTES].decode(r.encoding or "utf-8", errors="replace")
+                content_type = r.headers.get("content-type", "html")
+                break
+        else:
+            raise DocumentError("Too many redirects.")
     title = re.search(r"(?is)<title[^>]*>(.*?)</title>", body)
-    text = html_to_text(body) if "html" in r.headers.get("content-type", "html") else body
+    text = html_to_text(body) if "html" in content_type else body
     return (html.unescape(title.group(1)).strip()[:200] if title else url), text
+
+
+def safe_filename(name: str) -> str:
+    """A storage-safe file name: no folders, no "..", only ordinary characters."""
+    base = re.split(r"[\\/]", name or "")[-1]
+    base = re.sub(r"[^\w .()-]+", "_", base).strip(" .")
+    return (base or "document.txt")[:120]
 
 
 def document_chunks(doc: Document, text: str) -> list[Chunk]:

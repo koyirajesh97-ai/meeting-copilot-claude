@@ -133,3 +133,13 @@ def pg_dsn(pg_server: str) -> Iterator[str]:
     finally:
         with psycopg.connect(pg_server, autocommit=True) as conn:
             conn.execute(f'drop database if exists "{name}" with (force)')
+
+
+@pytest.fixture(autouse=True)
+def _fresh_rate_limits():
+    """Each test starts with empty rate limits (they're per process)."""
+    from app.ratelimit import AI_ACTIONS, SIGN_IN
+
+    SIGN_IN.reset()
+    AI_ACTIONS.reset()
+    yield

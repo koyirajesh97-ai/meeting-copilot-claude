@@ -3,7 +3,11 @@
   "build": {
     "builder": "DOCKERFILE",
     "dockerfilePath": "services/backend/Dockerfile",
-    "watchPatterns": ["services/backend/**", "config/**", "railway.json"]
+    "watchPatterns": [
+      "/services/backend/**",
+      "/config/**",
+      "/railway.json"
+    ]
   },
   "deploy": {
     "healthcheckPath": "/ready",

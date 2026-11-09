@@ -97,3 +97,9 @@ Follow-ups that were out of scope for the prompt that found them.
 - Phone app sign-in: same email/password, sign-up and forgot-password screens as the web and
   desktop apps (it still offers the emailed code only), and Google via a deep link.
 - Desktop: "Continue with Google" through a loopback redirect (the web app has it already).
+- Rate limits are per process (in memory); with more than one backend instance, move them to a
+  shared store (Redis).
+- Project links: the address is checked before each request, but a DNS answer could change between
+  the check and the connection (rebinding); pin the checked IP in the connection to close that.
+- Add a second free AI key (MISTRAL_API_KEY) on the hosted server so summaries and cards have a
+  fallback when Groq's daily limits run out (1,000 requests a day per model).

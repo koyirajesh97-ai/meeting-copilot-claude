@@ -745,6 +745,22 @@ class LiveHelp(Plugin):
                     only=peer,
                 )
             else:
+                from fastapi import HTTPException
+
+                from app.ratelimit import AI_ACTIONS
+
+                try:
+                    AI_ACTIONS.check(self.session.meeting.owner_id)
+                except HTTPException:
+                    await self.session.emit(
+                        Error,
+                        code="rate_limited",
+                        message="Too many questions at once: try again in a moment.",
+                        retryable=True,
+                        store=False,
+                        only=peer,
+                    )
+                    return True
                 self._spawn(self.ask_live(msg.text or "", peer))
             return True
         if msg.action == "catch_up":

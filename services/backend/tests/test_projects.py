@@ -350,6 +350,11 @@ def test_documents_ground_search_and_answers_for_members_only(env) -> None:
         )
 
     s.link_transport = httpx.MockTransport(page)
+
+    async def public(_host: str, _port: int) -> list[str]:
+        return ["93.184.215.14"]
+
+    s.link_resolve = public
     link = client.post(
         f"/projects/{pid}/links", json={"url": "https://wiki.example/release"}, headers=h("member")
     ).json()
@@ -524,3 +529,48 @@ async def test_postgres_projects_invites_documents_and_search(pg_dsn: str) -> No
             )
             assert len(c.execute("select 1 from project_invites").fetchall()) == n
     await store.close()
+
+
+async def test_links_reach_only_the_public_internet() -> None:
+    """A hosted backend must not fetch its own network for a user (SSRF)."""
+    import httpx as _httpx
+
+    from app.projects.documents import DocumentError, check_public_url, fetch_link, safe_filename
+
+    async def dns(host: str, _port: int) -> list[str]:
+        return {"wiki.example": ["93.184.215.14"], "evil.example": ["10.0.0.5"]}.get(
+            host, ["169.254.169.254"]
+        )
+
+    for bad in (
+        "http://localhost:8000/x",
+        "http://api.railway.internal/",
+        "https://evil.example/",
+        "ftp://wiki.example/",
+        "http://metadata.example/latest",
+    ):
+        with pytest.raises(DocumentError):
+            await check_public_url(bad, dns)
+    await check_public_url("https://wiki.example/page", dns)
+
+    # A redirect into the private network is refused too.
+    def bounce(req: _httpx.Request) -> _httpx.Response:
+        if req.url.host == "wiki.example":
+            return _httpx.Response(302, headers={"location": "https://evil.example/admin"})
+        return _httpx.Response(200, text="secret")
+
+    with pytest.raises(DocumentError, match="private"):
+        await fetch_link("https://wiki.example/", _httpx.MockTransport(bounce), dns)
+
+    # Huge pages are cut at the size limit.
+    big = _httpx.MockTransport(
+        lambda r: _httpx.Response(
+            200, text="a" * (6 * 1024 * 1024), headers={"content-type": "text/plain"}
+        )
+    )
+    _title, text = await fetch_link("https://wiki.example/", big, dns)
+    assert len(text) <= 5 * 1024 * 1024
+
+    assert safe_filename("../../etc/passwd") == "passwd"
+    assert safe_filename("..\\secret\\run book?.md") == "run book_.md"
+    assert safe_filename("") == "document.txt"

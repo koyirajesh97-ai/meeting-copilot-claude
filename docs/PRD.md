@@ -445,6 +445,9 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - `COPILOT_ENV=production` makes startup fail with a list of missing or unsafe settings (names only): secrets of 32+ characters, a database, an https Supabase project, a meeting-safe AI key for live captions, summaries and cards, and no dev login or test mode. `/ready` reports whether the database answers.
 - Every response carries `nosniff`, `X-Frame-Options: DENY`, `no-referrer` and `no-store`, plus HSTS over https. The dev login also refuses proxied requests, whose client address can be forged.
 - The apps' built-in server and Supabase settings live in `config/client.json` (public values only).
+- Project links only reach the public internet: every address (and every redirect) is checked, and private, loopback, link-local and cloud-metadata addresses are refused; at most 5 MB is read. Uploaded file names are reduced to a plain name before storage.
+- A project voiceprint can only be enrolled by a member of that project.
+- Rate limits (per server process): 20 sign-in attempts a minute per address; 30 AI-heavy actions (Ask, standup drafts, summary regeneration, live Ask) a minute per user, so one account can't drain the shared free AI quotas.
 - Search runs on keywords alone when no embedding model is available (the model can't be downloaded, or isn't installed), instead of failing; a model that fails to load isn't retried for 10 minutes. The Docker image includes the embedding model.
 - The LLM client library loads at startup, so the first live call doesn't spend its budget on it.
 - Summaries name the meeting owner by their profile name ("Sai is blocked…"), falling back to "Me" when no name is set; a name given to the mic speaker on the meeting itself wins.

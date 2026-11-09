@@ -3,7 +3,7 @@
 // short-lived backend token (POST /auth/session). A dev login exists only when the backend
 // allows it (ALLOW_DEV_LOGIN=1 on localhost).
 
-import { createClient, type SupabaseClient, type SupportedStorage } from "@supabase/supabase-js";
+import type { SupabaseClient, SupportedStorage } from "@supabase/supabase-js";
 import { EventEmitter } from "node:events";
 import type { AuthState, Settings } from "../../shared/ipc";
 import type { BackendClient, SessionOut } from "./client";
@@ -94,8 +94,9 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
     private readonly secrets: SecretBox,
     private readonly now: () => number = () => Date.now() / 1000,
     /** Tests pass a fake Supabase client. */
-    private readonly makeClient: (url: string, key: string, storage: SupportedStorage) => SupabaseClient = (url, key, storage) =>
-      createClient(url, key, {
+    private readonly makeClient: (url: string, key: string, storage: SupportedStorage) => SupabaseClient | Promise<SupabaseClient> = async (url, key, storage) =>
+      // Loaded on first use: the web app's first screen doesn't need it once you're signed in.
+      (await import("@supabase/supabase-js")).createClient(url, key, {
         auth: {
           persistSession: true,
           autoRefreshToken: false, // refreshed on demand when the backend token needs renewing
@@ -120,13 +121,13 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
     return this.session ? { signedIn: true, email: this.session.email, kind: this.session.kind } : SIGNED_OUT;
   }
 
-  private client(): SupabaseClient {
+  private async client(): Promise<SupabaseClient> {
     const { supabaseUrl, supabaseAnonKey } = this.settings();
     if (!supabaseAnonKey) throw new Error("Add your Supabase URL and anon key in Settings first.");
     const key = `${supabaseUrl}|${supabaseAnonKey}`;
     if (!this.supabase || this.supabaseKey !== key) {
       // The Supabase session lives in the OS keychain (desktop) or local storage (web).
-      this.supabase = this.makeClient(supabaseUrl, supabaseAnonKey, slotStorage(this.secrets, SUPABASE));
+      this.supabase = await this.makeClient(supabaseUrl, supabaseAnonKey, slotStorage(this.secrets, SUPABASE));
       this.supabaseKey = key;
     }
     return this.supabase;
@@ -145,7 +146,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
 
   /** Email and password. */
   async signIn(email: string, password: string): Promise<AuthState> {
-    const { data, error } = await this.client().auth.signInWithPassword({ email: email.trim(), password });
+    const { data, error } = await (await this.client()).auth.signInWithPassword({ email: email.trim(), password });
     if (error || !data.session) throw new Error(friendly(error?.message ?? "Sign-in failed"));
     return this.fromSupabase(data.session.access_token);
   }
@@ -153,7 +154,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
   /** New account. Returns needsConfirmation when Supabase emails a code to confirm the address first. */
   async signUp(email: string, password: string): Promise<{ needsConfirmation: boolean; state: AuthState }> {
     if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Use at least ${MIN_PASSWORD_LENGTH} characters for the password.`);
-    const { data, error } = await this.client().auth.signUp({ email: email.trim(), password });
+    const { data, error } = await (await this.client()).auth.signUp({ email: email.trim(), password });
     if (error) throw new Error(friendly(error.message));
     // An existing, confirmed address comes back with no identities (Supabase hides that it exists).
     if (data.user && data.user.identities?.length === 0) throw new Error(friendly("User already registered"));
@@ -165,7 +166,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
   async setPassword(password: string): Promise<void> {
     if (password.length < MIN_PASSWORD_LENGTH) throw new Error(`Use at least ${MIN_PASSWORD_LENGTH} characters for the password.`);
     if (this.session?.kind !== "supabase") throw new Error("Sign in with your email first.");
-    const { error } = await this.client().auth.updateUser({ password });
+    const { error } = await (await this.client()).auth.updateUser({ password });
     if (error) throw new Error(friendly(error.message));
   }
 
@@ -187,7 +188,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
 
   /** The Google sign-in page; afterwards Google sends the browser back to `redirectTo` with ?code=. */
   async googleUrl(redirectTo: string): Promise<string> {
-    const { data, error } = await this.client().auth.signInWithOAuth({
+    const { data, error } = await (await this.client()).auth.signInWithOAuth({
       provider: "google",
       options: { redirectTo, skipBrowserRedirect: true },
     });
@@ -197,21 +198,21 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
 
   /** Finish Google sign-in with the ?code= it returned. */
   async completeOAuth(code: string): Promise<AuthState> {
-    const { data, error } = await this.client().auth.exchangeCodeForSession(code);
+    const { data, error } = await (await this.client()).auth.exchangeCodeForSession(code);
     if (error || !data.session) throw new Error(friendly(error?.message ?? "Google sign-in didn't finish"));
     return this.fromSupabase(data.session.access_token);
   }
 
   async sendCode(email: string): Promise<void> {
-    const { error } = await this.client().auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
+    const { error } = await (await this.client()).auth.signInWithOtp({ email: email.trim(), options: { shouldCreateUser: true } });
     if (error) throw new Error(error.message);
   }
 
   async verifyCode(email: string, code: string): Promise<AuthState> {
     // "email" covers sign-in codes; a new account's confirmation code is type "signup".
-    let { data, error } = await this.client().auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
+    let { data, error } = await (await this.client()).auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "email" });
     if (error || !data.session) {
-      const retry = await this.client().auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "signup" });
+      const retry = await (await this.client()).auth.verifyOtp({ email: email.trim(), token: code.trim(), type: "signup" });
       if (retry.data.session) ({ data, error } = retry);
     }
     if (error || !data.session) throw new Error(friendly(error?.message ?? "That code didn't work"));
@@ -233,7 +234,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
   async signOut(): Promise<AuthState> {
     if (this.session?.kind === "supabase") {
       try {
-        await this.client().auth.signOut({ scope: "local" });
+        await (await this.client()).auth.signOut({ scope: "local" });
       } catch {
         /* offline: forget locally anyway */
       }
@@ -262,7 +263,7 @@ export class AuthManager extends EventEmitter<{ change: [AuthState] }> {
       if (s.kind === "dev") {
         out = await this.backend.devSession();
       } else {
-        const { data, error } = await this.client().auth.refreshSession();
+        const { data, error } = await (await this.client()).auth.refreshSession();
         if (error || !data.session) throw new Error(error?.message ?? "session expired");
         out = await this.backend.exchangeSupabase(data.session.access_token);
       }

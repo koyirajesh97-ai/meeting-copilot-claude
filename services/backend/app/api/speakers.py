@@ -56,8 +56,11 @@ async def enroll(
 ) -> SpeakerOut:
     if consent is not True:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "A voiceprint needs your explicit consent")
-    pcm = _pcm(await audio.read(MAX_S * 32_000 + 1024))
     s = services()
+    # A project voiceprint names you in that project's meetings: only for its members.
+    if project_id and await s.projects.role(project_id, user.user_id) is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Project not found")
+    pcm = _pcm(await audio.read(MAX_S * 32_000 + 1024))
     try:
         vector, _model = await s.speaker_id.embed(pcm)
     except SpeakerIdUnavailable as e:

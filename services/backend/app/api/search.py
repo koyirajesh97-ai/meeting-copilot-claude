@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser
+from app.ratelimit import AI_ACTIONS
 from app.services import services
 
 router = APIRouter()
@@ -50,6 +51,7 @@ class AnswerOut(BaseModel):
 
 @router.post("/ask", response_model=AnswerOut)
 async def ask(body: AskIn, user: CurrentUser) -> AnswerOut:
+    AI_ACTIONS.check(user.user_id)
     a = await services().search.ask(user.user_id, body.question)
     return AnswerOut(
         answer=a.answer,
