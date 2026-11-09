@@ -231,6 +231,19 @@ One free Groq key (https://console.groq.com/keys, no card) runs everything: live
 check it with `scripts/check-providers`. Keys are read only by the backend; the apps never see
 them.
 
+### The live deployment (Railway + Vercel)
+
+- Backend: Railway project `meeting-copilot`, service `api`, at
+  https://api-production-7add3.up.railway.app (built from `services/backend/Dockerfile` via
+  `railway.json`; every push to `main` that touches `services/backend/` or `config/` redeploys).
+  Settings: `COPILOT_ENV=production`, `PORT=8000`, `SUPABASE_URL`, `COPILOT_WEB_ORIGINS`, plus the
+  secrets `DATABASE_URL` (the `copilot_backend` login via the Supabase session pooler),
+  `BACKEND_SECRET`, `VOICEPRINT_KEY`, `INTEGRATIONS_KEY` and `GROQ_API_KEY`. Railway's
+  **Raw Editor replaces every variable**: when pasting there, include the non-secret ones too.
+- Web app: Vercel, https://meeting-copilot-claude-five.vercel.app (rebuilds on every push).
+- Sign-in: Supabase project `meeting-copilot`; its emails go out through custom SMTP and the
+  Magic Link template shows `{{ .Token }}` (the apps sign in with the code).
+
 ### Hosting the backend (Render, free)
 
 `render.yaml` deploys the backend as a Docker web service on Render's free plan (512 MB; it
