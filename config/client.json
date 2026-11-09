@@ -1,6 +1,6 @@
 {
   "//": "Settings the desktop, phone and web apps are built with. Public values only: the Supabase publishable key is safe to ship (row-level security protects the data). backendUrl is the hosted server; empty means each person enters their own. Build-time overrides: VITE_BACKEND_URL / VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY (web), app.json extra (phone).",
-  "backendUrl": "",
+  "backendUrl": "https://api-production-7add3.up.railway.app",
   "supabaseUrl": "https://qxzeghownilplbryvvzl.supabase.co",
   "supabasePublishableKey": "sb_publishable_8nYQPfmv_Epno_9tn7D9Hw_20tCWZny"
 }

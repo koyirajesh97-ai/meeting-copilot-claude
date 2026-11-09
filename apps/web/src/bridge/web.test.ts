@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HOSTED_BACKEND_URL } from "@meeting-copilot/shared";
 import { DEFAULT_SETTINGS } from "@desktop/shared/ipc";
 import { wavFromFloat } from "./recorder";
 import { loadSettings, localSecrets, saveSettings, toCached, toCachedDetail } from "./web";
@@ -27,9 +28,9 @@ class MemoryStorage {
 const store = () => new MemoryStorage() as unknown as Storage;
 
 describe("web settings", () => {
-  it("starts from the desktop defaults with no server (the site asks for one)", () => {
+  it("starts from the desktop defaults and the built-in server (config/client.json)", () => {
     const s = loadSettings(store());
-    expect(s.backendUrl).toBe("");
+    expect(s.backendUrl).toBe(HOSTED_BACKEND_URL);
     expect(s.captionFontSize).toBe(DEFAULT_SETTINGS.captionFontSize);
     expect(s.setupDone).toBe(false);
   });
@@ -39,7 +40,7 @@ describe("web settings", () => {
     saveSettings({ backendUrl: "https://api.example.com", theme: "dark" }, st);
     expect(loadSettings(st)).toMatchObject({ backendUrl: "https://api.example.com", theme: "dark" });
     st.setItem("meeting-copilot.settings", "{not json");
-    expect(loadSettings(st).backendUrl).toBe("");
+    expect(loadSettings(st).backendUrl).toBe(HOSTED_BACKEND_URL);
   });
 
   it("stores the session token under its own key and forgets it on delete", () => {
