@@ -305,3 +305,36 @@ async def test_summary_storage_in_postgres(pg_dsn: str) -> None:
             "select due_date::text from action_items where text = 'manual'"
         ).fetchone() == ("2026-11-06",)
     await store.close()
+
+
+async def test_summaries_call_the_owner_by_their_profile_name() -> None:
+    """The mic speaker is the meeting owner: "Sai is blocked…", not "Me is blocked…"."""
+    from app.profiles.store import RoleProfile
+
+    seen: list[str] = []
+
+    def recording(task, messages, json_mode):
+        seen.extend(m["content"] for m in messages)
+        return fake_responder(task, messages, json_mode)
+
+    async def run(profile_name: str | None, renamed: dict[str, str] | None = None) -> str:
+        seen.clear()
+        store = InMemoryMeetingStore()
+        s = build_services(
+            client=FakeClient(responder=recording), store=InMemoryQuotaStore(), meetings=store
+        )
+        if profile_name is not None:
+            await s.profiles.put("u1", RoleProfile(name=profile_name))
+        m = await _seed(store)
+        for label, name in (renamed or {}).items():
+            await store.set_speaker_name(m.id, label, name)
+        await s.summaries.enqueue(m.id)
+        await s.summaries.wait(m.id)
+        return "\n".join(seen)
+
+    text = await run("Sai")
+    assert "] Sai: " in text and "] Me: " not in text
+    assert "] Me: " in await run(None)  # no profile name yet: "Me"
+    assert "] Me: " in await run("   ")
+    # A speaker label the owner set on the meeting itself still wins.
+    assert "] Sai K: " in await run("Sai", {"me": "Sai K"})

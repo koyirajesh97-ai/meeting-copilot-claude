@@ -447,6 +447,7 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 - The apps' built-in server and Supabase settings live in `config/client.json` (public values only).
 - Search runs on keywords alone when no embedding model is available (the model can't be downloaded, or isn't installed), instead of failing; a model that fails to load isn't retried for 10 minutes. The Docker image includes the embedding model.
 - The LLM client library loads at startup, so the first live call doesn't spend its budget on it.
+- Summaries name the meeting owner by their profile name ("Sai is blocked…"), falling back to "Me" when no name is set; a name given to the mic speaker on the meeting itself wins.
 - Per-model request settings live in `config/providers.yaml` (`params`, e.g. `reasoning_effort: low` for the fast tier). Question detection has 1.5 s.
 
 Checked with a real Groq key (Nov 2026): Whisper captions both channels, catch-up cards and a standup summary with per-person done/blockers, decisions and action items, all through Groq alone; question detection answers in 0.3-0.6 s.

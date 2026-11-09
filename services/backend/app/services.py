@@ -134,6 +134,12 @@ def build_services(
     speaker_id = SpeakerIdRouter(cfg, **({"factory": speaker_factory} if speaker_factory else {}))
     sessions.plugin_factories.append(speaker_plugin_factory(speakers, speaker_id, cfg.speaker_id))
     profiles = PostgresProfiles(meetings) if pg else InMemoryProfiles()
+
+    async def owner_name(user_id: str) -> str | None:
+        p = await profiles.get(user_id)
+        return p.name if p else None
+
+    summaries.owner_name = owner_name
     privacy = PostgresPrivacy(meetings) if pg else InMemoryPrivacy(meetings)
 
     async def opted_in(user_id: str) -> bool:

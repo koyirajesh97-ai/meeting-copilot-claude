@@ -92,7 +92,5 @@ Follow-ups that were out of scope for the prompt that found them.
 - Production: rate-limit the sign-in routes (`/auth/session`, `/auth/dev-session`) and WebSocket
   connects per IP; Render's free plan has no built-in limiter.
 - Production: structured JSON logs and log shipping (the backend logs plain text to stdout today).
-- Summaries call the mic speaker "Me" ("Me is blocked on VPN access"); pass the profile name
-  so they read "Sai is blocked…" (seen in the real-key test).
 - Embedding model download on Render: verify on the first deploy (the build fetches it from
   Hugging Face; this sandbox couldn't). Without it, search runs on keywords alone.

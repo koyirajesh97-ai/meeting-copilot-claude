@@ -7,6 +7,7 @@ still connected) or failed (with the reason, so the desktop can offer Regenerate
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 from collections.abc import Awaitable, Callable
 
@@ -27,6 +28,8 @@ log = logging.getLogger("app.jobs.summary")
 
 AfterReady = Callable[[Meeting, StoredSummary], Awaitable[None]]
 Notify = Callable[[str, str], Awaitable[None]]  # (meeting_id, summary_id)
+#: The meeting owner's name as people say it (their role profile), or None if not set.
+OwnerName = Callable[[str], Awaitable[str | None]]
 
 
 class SummaryJobs:
@@ -35,6 +38,7 @@ class SummaryJobs:
         self.router = router
         self.notify = notify
         self.after_ready: list[AfterReady] = []
+        self.owner_name: OwnerName | None = None
         self._tasks: dict[str, asyncio.Task] = {}
 
     async def enqueue(self, meeting_id: str, template: str | None = None) -> None:
@@ -56,6 +60,11 @@ class SummaryJobs:
         try:
             segments = await self.store.segments(meeting_id)
             names = await self.store.speaker_names(meeting_id)
+            # The mic channel is the owner: "Sai is blocked…", not "Me is blocked…".
+            if "me" not in names and self.owner_name:
+                with contextlib.suppress(Exception):  # no name is fine: "Me" then
+                    if name := (await self.owner_name(meeting.owner_id) or "").strip():
+                        names = {**names, "me": name}
             template = template_for(meeting.type, template_id)
             result = await summarize(
                 self.router,
