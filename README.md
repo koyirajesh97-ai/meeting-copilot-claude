@@ -112,6 +112,15 @@ in Supabase Studio (http://127.0.0.1:54323) → Authentication → Email templat
 No Supabase yet? Start the backend with `ALLOW_DEV_LOGIN=1` and use "Use the local dev login".
 Add `COPILOT_FAKE_PROVIDERS=1` to try the whole app with no AI keys (scripted captions).
 
+### Sign-in methods
+
+Email and password, emailed codes, and Google all go through the Supabase project. For Google:
+create an OAuth client (Web application) in Google Cloud Console with the redirect URI
+`https://<project>.supabase.co/auth/v1/callback`, paste its client ID and secret in Supabase →
+Authentication → Sign In / Providers → Google, and add the web app's addresses to Authentication →
+URL Configuration → Redirect URLs. The "Continue with Google" button appears once it's on. The
+Magic Link and Confirm signup email templates must show `{{ .Token }}` (the apps take the code).
+
 ### The desktop app
 
 ```bash

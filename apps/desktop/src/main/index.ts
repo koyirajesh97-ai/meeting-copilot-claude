@@ -484,6 +484,15 @@ function registerIpc(): void {
   handle(IPC.authDevAvailable, () => auth!.devAvailable());
   handle(IPC.authDevSignIn, () => auth!.devSignIn());
   handle(IPC.authSignOut, () => auth!.signOut());
+  const str = (v: unknown, max = 500) => String(v ?? "").slice(0, max);
+  handle(IPC.authSignIn, (email, password) => auth!.signIn(str(email, 320), str(password, 200)));
+  handle(IPC.authSignUp, (email, password) => auth!.signUp(str(email, 320), str(password, 200)));
+  handle(IPC.authSetPassword, (password) => auth!.setPassword(str(password, 200)));
+  // Google sign-in needs a browser redirect back into the app; the desktop app offers email only.
+  handle(IPC.authProviders, () => ({ google: false }));
+  handle(IPC.authGoogle, () => {
+    throw new Error("Google sign-in is available in the web app. Here, sign in with your email.");
+  });
   handle(IPC.meetingsList, () => cache!.listMeetings());
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
   handle(IPC.meetingsSync, () => runSync());

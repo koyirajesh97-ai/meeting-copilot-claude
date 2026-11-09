@@ -452,6 +452,11 @@ Ten screens cover the whole app, and the overlay is the one that matters most: i
 
 Checked with a real Groq key (Nov 2026): Whisper captions both channels, catch-up cards and a standup summary with per-person done/blockers, decisions and action items, all through Groq alone; question detection answers in 0.3-0.6 s.
 
+### Sign-in
+
+- A sign-in page like other apps: email and password, "Create an account" (the address is confirmed with an emailed 6-digit code), "Forgot password?" (an emailed code, then a new password), "Email me a sign-in code instead", and "Continue with Google" when the Supabase project has Google turned on (the button appears only then). The web app shows this page to anyone signed out; the desktop app has the same form in Setup and Settings → Account, without Google (it needs a browser redirect back into the app). Signed-in people can set or change their password in Settings → Account.
+- Supabase holds the accounts; the backend still issues its own short-lived token after any of these sign-ins.
+
 ### Web app
 
 - `apps/web` runs the desktop screens in a browser, with a browser bridge in place of Electron's main process (same backend client, sign-in, live connection and project/integration calls). Static hosting (Vercel); the backend is hosted separately and allows the site's origin with `COPILOT_WEB_ORIGINS` (CORS is off unless set).

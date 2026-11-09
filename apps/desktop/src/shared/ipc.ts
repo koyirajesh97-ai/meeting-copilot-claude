@@ -26,6 +26,11 @@ export const IPC = {
   authDevSignIn: "auth:dev-sign-in",
   authDevAvailable: "auth:dev-available",
   authSignOut: "auth:sign-out",
+  authSignIn: "auth:sign-in",
+  authSignUp: "auth:sign-up",
+  authSetPassword: "auth:set-password",
+  authProviders: "auth:providers",
+  authGoogle: "auth:google",
   meetingsList: "meetings:list",
   meetingsGet: "meetings:get",
   meetingsSync: "meetings:sync",
@@ -483,6 +488,17 @@ export interface CopilotApi {
   /** Live meeting events from the backend (captions, provider switches, errors). */
   onLive(listener: (event: MeetingEvent) => void): () => void;
   auth: {
+    /** Email and password. */
+    signIn(email: string, password: string): Promise<AuthState>;
+    /** New account; needsConfirmation means a code was emailed to confirm the address (then verifyCode). */
+    signUp(email: string, password: string): Promise<{ needsConfirmation: boolean; state: AuthState }>;
+    /** Change or set the password while signed in. */
+    setPassword(password: string): Promise<void>;
+    /** Sign-in methods to offer, beyond email: Google when the project has it on and this app supports it. */
+    providers(): Promise<{ google: boolean }>;
+    /** Continue with Google (opens Google's page; the app finishes sign-in when it comes back). */
+    google(): Promise<void>;
+    /** A one-time code by email (sign-in without a password, or a forgotten one). */
     sendCode(email: string): Promise<void>;
     verifyCode(email: string, code: string): Promise<AuthState>;
     devAvailable(): Promise<boolean>;

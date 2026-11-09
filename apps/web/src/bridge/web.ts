@@ -149,6 +149,30 @@ const AUDIO_CHECK_MS = 5000;
 const SUMMARY_POLL_MS = 3000;
 const SUMMARY_WAIT_MS = 3 * 60_000;
 
+/** Set when a Google sign-in came back with an error (shown on the sign-in screen). */
+export let oauthError: string | null = null;
+
+/**
+ * Back from Google: ?code= (or ?error=) is in the address. Finish signing in, then clean the
+ * address so a reload doesn't try the one-time code again.
+ */
+async function finishOAuthRedirect(auth: AuthManager): Promise<void> {
+  const params = new URLSearchParams(location.search);
+  const code = params.get("code");
+  const error = params.get("error_description") ?? params.get("error");
+  if (!code && !error) return;
+  history.replaceState(null, "", `${location.pathname}${location.hash || "#/"}`);
+  if (error) {
+    oauthError = error;
+    return;
+  }
+  try {
+    await auth.completeOAuth(code!);
+  } catch (e) {
+    oauthError = (e as Error).message;
+  }
+}
+
 export function createWebApi(): CopilotApi {
   let settings = loadSettings();
   const backendUrl = () => settings.backendUrl;
@@ -190,6 +214,7 @@ export function createWebApi(): CopilotApi {
     state.auth = s;
     broadcast();
   });
+  const oauthDone = finishOAuthRedirect(auth).finally(broadcast);
   live.on("state", (s) => {
     state.live = s;
     broadcast();
@@ -330,12 +355,21 @@ export function createWebApi(): CopilotApi {
   };
 
   return {
-    getState: async () => ({ ...state }),
+    // Wait for a Google sign-in that's finishing, so the first screen is the right one.
+    getState: async () => (await oauthDone, { ...state }),
     onState: (l) => sub("state", l),
     toggleCapture: () => setCapturing(!state.capturing),
     startMeeting: (opts) => setCapturing(true, opts),
     onLive: (l) => sub("live", l),
     auth: {
+      signIn: (email, password) => auth.signIn(String(email), String(password)),
+      signUp: (email, password) => auth.signUp(String(email), String(password)),
+      setPassword: (password) => auth.setPassword(String(password)),
+      providers: () => auth.providers(),
+      async google() {
+        // Google sends the browser back here with ?code=, finished by finishOAuthRedirect().
+        location.assign(await auth.googleUrl(`${location.origin}${location.pathname}`));
+      },
       sendCode: (email) => auth.sendCode(String(email)),
       verifyCode: (email, code) => auth.verifyCode(String(email), String(code)),
       devAvailable: () => (settings.backendUrl ? auth.devAvailable() : Promise.resolve(false)),

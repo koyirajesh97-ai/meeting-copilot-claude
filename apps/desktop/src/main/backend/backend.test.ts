@@ -7,7 +7,7 @@ import { WebSocketServer, type WebSocket as ServerSocket } from "ws";
 import { DEFAULT_SETTINGS, type LiveState } from "../../shared/ipc";
 import { OutboundAudio } from "@meeting-copilot/shared";
 import { defaultStartOptions, sanitizeStartOptions } from "../startOptions";
-import { AuthManager, type SecretBox } from "./auth";
+import { AuthManager, slotStorage, type SecretBox } from "./auth";
 import { Cache } from "./cache";
 import { BackendClient, BackendError, type MeetingSocket, type SessionOut } from "./client";
 import { LiveConnection } from "./live";
@@ -255,6 +255,81 @@ describe("auth", () => {
     expect(auth.state.signedIn).toBe(false);
     expect(secrets.data.size).toBe(0);
     expect(changes).toEqual([true, true, false]);
+  });
+
+  // A stand-in Supabase client: just enough of auth for the sign-in methods.
+  function fakeSupabase(over: Record<string, unknown> = {}) {
+    const session = { access_token: "sb-access" };
+    const calls: string[] = [];
+    const auth = {
+      signInWithPassword: async ({ password }: { password: string }) => (calls.push("password"), password === "right-password" ? { data: { session }, error: null } : { data: { session: null }, error: { message: "Invalid login credentials" } }),
+      signUp: async () => (calls.push("signUp"), { data: { session: null, user: { identities: [{}] } }, error: null }),
+      verifyOtp: async ({ type }: { type: string }) => (calls.push(`otp:${type}`), type === "signup" ? { data: { session }, error: null } : { data: { session: null }, error: { message: "Token has expired or is invalid" } }),
+      signInWithOAuth: async ({ options }: { options: { redirectTo: string } }) => ({ data: { url: `https://accounts.example/auth?redirect=${options.redirectTo}` }, error: null }),
+      exchangeCodeForSession: async (code: string) => (code === "good" ? { data: { session }, error: null } : { data: { session: null }, error: { message: "invalid flow state" } }),
+      updateUser: async () => (calls.push("updateUser"), { data: {}, error: null }),
+      ...over,
+    };
+    return { client: { auth } as never, calls };
+  }
+  const backendFor = () =>
+    ({ exchangeSupabase: async (t: string): Promise<SessionOut> => ({ token: `backend-for-${t}`, expires_at: 9e9, user_id: "u", email: "a@b.co" }) }) as unknown as BackendClient;
+
+  it("signs in with email and password, and says plainly when it's wrong", async () => {
+    const { client } = fakeSupabase();
+    const auth = new AuthManager(backendFor(), () => DEFAULT_SETTINGS, new MemorySecrets(), undefined, () => client);
+    await expect(auth.signIn("a@b.co", "nope")).rejects.toThrow("Wrong email or password.");
+    expect(await auth.signIn("a@b.co", "right-password")).toEqual({ signedIn: true, email: "a@b.co", kind: "supabase" });
+    expect(await auth.token()).toBe("backend-for-sb-access");
+    await auth.setPassword("another-long-one");
+    await expect(auth.setPassword("short")).rejects.toThrow("at least 8");
+  });
+
+  it("creates an account, then confirms it with the emailed code", async () => {
+    const { client, calls } = fakeSupabase();
+    const auth = new AuthManager(backendFor(), () => DEFAULT_SETTINGS, new MemorySecrets(), undefined, () => client);
+    await expect(auth.signUp("a@b.co", "short")).rejects.toThrow("at least 8");
+    expect((await auth.signUp("a@b.co", "long-enough-password")).needsConfirmation).toBe(true);
+    expect(auth.state.signedIn).toBe(false);
+    // The confirmation code is type "signup"; verifyCode tries "email" first, then that.
+    expect((await auth.verifyCode("a@b.co", "123456")).signedIn).toBe(true);
+    expect(calls).toEqual(["signUp", "otp:email", "otp:signup"]);
+  });
+
+  it("tells you when an account already exists", async () => {
+    const { client } = fakeSupabase({ signUp: async () => ({ data: { session: null, user: { identities: [] } }, error: null }) });
+    const auth = new AuthManager(backendFor(), () => DEFAULT_SETTINGS, new MemorySecrets(), undefined, () => client);
+    await expect(auth.signUp("a@b.co", "long-enough-password")).rejects.toThrow("already an account");
+  });
+
+  it("Google: builds the sign-in address and finishes with the returned code", async () => {
+    const { client } = fakeSupabase();
+    const auth = new AuthManager(backendFor(), () => DEFAULT_SETTINGS, new MemorySecrets(), undefined, () => client);
+    expect(await auth.googleUrl("https://app.example/")).toContain("redirect=https://app.example/");
+    await expect(auth.completeOAuth("bad")).rejects.toThrow("invalid flow state");
+    expect((await auth.completeOAuth("good")).signedIn).toBe(true);
+  });
+
+  it("shows Google only when the Supabase project has it on", async () => {
+    const auth = new AuthManager({} as BackendClient, () => DEFAULT_SETTINGS, new MemorySecrets());
+    const reply = (body: unknown) => (async () => new Response(JSON.stringify(body))) as unknown as typeof fetch;
+    expect(await auth.providers(reply({ external: { google: true, email: true } }))).toEqual({ google: true });
+    expect(await auth.providers(reply({ external: { email: true } }))).toEqual({ google: false });
+    expect(await auth.providers((async () => Promise.reject(new Error("offline"))) as unknown as typeof fetch)).toEqual({ google: false });
+  });
+
+  it("keeps Supabase's values in one keychain slot and still reads the old format", () => {
+    const secrets = new MemorySecrets();
+    secrets.set("supabaseSession", '{"access_token":"old"}'); // stored by an earlier version
+    const store = slotStorage(secrets, "supabaseSession");
+    expect(store.getItem("sb-x-auth-token")).toBe('{"access_token":"old"}');
+    store.setItem("sb-x-auth-token-code-verifier", "verifier");
+    store.setItem("sb-x-auth-token", '{"access_token":"new"}');
+    expect(store.getItem("sb-x-auth-token-code-verifier")).toBe("verifier");
+    expect(store.getItem("sb-x-auth-token")).toBe('{"access_token":"new"}');
+    store.removeItem("sb-x-auth-token");
+    store.removeItem("sb-x-auth-token-code-verifier");
+    expect(secrets.data.size).toBe(0);
   });
 
   it("asks for Supabase settings before sending a code", async () => {

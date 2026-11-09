@@ -2,13 +2,11 @@ import { useEffect, useState } from "react";
 import type { Settings } from "../../../shared/ipc";
 import { useAppState } from "../useAppState";
 import { buttonClass, inputClass, secondaryButtonClass } from "./EmptyState";
+import { errorMessage, LoginForm } from "./LoginForm";
 
 /** Sign-in. `compact` (first-run setup) leaves out the heading and the server fields. */
 export function AccountSettings({ settings, update, compact = false }: { settings: Settings; update: (p: Partial<Settings>) => Promise<void>; compact?: boolean }) {
   const state = useAppState();
-  const [email, setEmail] = useState("");
-  const [code, setCode] = useState("");
-  const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [devAvailable, setDevAvailable] = useState(false);
@@ -23,7 +21,7 @@ export function AccountSettings({ settings, update, compact = false }: { setting
     try {
       await fn();
     } catch (err) {
-      setError((err as Error).message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ""));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }
@@ -44,34 +42,11 @@ export function AccountSettings({ settings, update, compact = false }: { setting
           </button>
         </div>
       ) : (
-        <div className="space-y-3">
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            Sign in to get live captions and keep your meetings in sync. We email you a one-time code.
-          </p>
-          <div className="flex gap-2">
-            <input className={inputClass} type="email" placeholder="you@example.com" aria-label="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <button type="button" className={`${buttonClass} whitespace-nowrap`} disabled={busy || !email.includes("@")} onClick={() => void run(async () => {
-              await window.copilot.auth.sendCode(email);
-              setSent(true);
-            })}>
-              Send code
-            </button>
-          </div>
-          {sent && (
-            <div className="flex gap-2">
-              <input className={inputClass} inputMode="numeric" placeholder="6-digit code" aria-label="Code" value={code} onChange={(e) => setCode(e.target.value)} />
-              <button type="button" className={buttonClass} disabled={busy || code.trim().length < 6} onClick={() => void run(() => window.copilot.auth.verifyCode(email, code))}>
-                Sign in
-              </button>
-            </div>
-          )}
-          {devAvailable && (
-            <button type="button" className={secondaryButtonClass} disabled={busy} onClick={() => void run(() => window.copilot.auth.devSignIn())}>
-              Use the local dev login
-            </button>
-          )}
+        <div className="max-w-sm">
+          <LoginForm devAvailable={devAvailable} />
         </div>
       )}
+      {auth?.signedIn && auth.kind === "supabase" && !compact && <ChangePassword />}
       {error && <p className="text-sm text-red-600 dark:text-red-400" role="alert">{error}</p>}
       {!compact && <ServerFields settings={settings} update={update} title="Supabase project" />}
     </div>
@@ -98,5 +73,40 @@ export function ServerFields({ settings, update, title, children }: { settings: 
           </p>
         </div>
     </details>
+  );
+}
+
+/** Set or change the password (accounts made with a code or Google may not have one yet). */
+function ChangePassword() {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState("");
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  if (!open) {
+    return (
+      <button type="button" className="text-sm font-medium text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => setOpen(true)}>
+        Set or change your password
+      </button>
+    );
+  }
+  return (
+    <form
+      className="flex max-w-sm gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+        setBusy(true);
+        void window.copilot.auth
+          .setPassword(password)
+          .then(() => {
+            setNote({ ok: true, text: "Password saved." });
+            setPassword("");
+          }, (err) => setNote({ ok: false, text: errorMessage(err) }))
+          .finally(() => setBusy(false));
+      }}
+    >
+      <input className={inputClass} type="password" autoComplete="new-password" aria-label="New password" placeholder="New password (8+ characters)" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <button type="submit" className={buttonClass} disabled={busy || password.length < 8}>Save</button>
+      {note && <p className={`self-center text-xs ${note.ok ? "text-green-700" : "text-red-600"}`} role="status">{note.text}</p>}
+    </form>
   );
 }

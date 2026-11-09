@@ -19,6 +19,11 @@ const api: CopilotApi = {
     return () => ipcRenderer.removeListener(IPC.liveEvent, wrapped);
   },
   auth: {
+    signIn: (email, password) => ipcRenderer.invoke(IPC.authSignIn, email, password),
+    signUp: (email, password) => ipcRenderer.invoke(IPC.authSignUp, email, password),
+    setPassword: (password) => ipcRenderer.invoke(IPC.authSetPassword, password),
+    providers: () => ipcRenderer.invoke(IPC.authProviders),
+    google: () => ipcRenderer.invoke(IPC.authGoogle),
     sendCode: (email) => ipcRenderer.invoke(IPC.authSendCode, email),
     verifyCode: (email, code) => ipcRenderer.invoke(IPC.authVerifyCode, email, code),
     devAvailable: () => ipcRenderer.invoke(IPC.authDevAvailable),

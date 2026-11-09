@@ -94,3 +94,6 @@ Follow-ups that were out of scope for the prompt that found them.
 - Production: structured JSON logs and log shipping (the backend logs plain text to stdout today).
 - Embedding model download on Render: verify on the first deploy (the build fetches it from
   Hugging Face; this sandbox couldn't). Without it, search runs on keywords alone.
+- Phone app sign-in: same email/password, sign-up and forgot-password screens as the web and
+  desktop apps (it still offers the emailed code only), and Google via a deep link.
+- Desktop: "Continue with Google" through a loopback redirect (the web app has it already).

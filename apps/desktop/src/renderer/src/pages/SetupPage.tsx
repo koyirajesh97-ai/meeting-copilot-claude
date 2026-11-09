@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { AudioCheck, ProviderKey, RoleProfile, Settings } from "../../../shared/ipc";
 import { AccountSettings, ServerFields } from "../components/AccountSettings";
@@ -19,12 +19,15 @@ export function SetupPage() {
   const [index, setIndex] = useState(0);
   const [needsKeys, setNeedsKeys] = useState(false);
   const navigate = useNavigate();
+  // Already signed in when setup opened (the web app signs in first): no sign-in step.
+  const signedInAtStart = useRef<boolean | null>(null);
+  if (signedInAtStart.current === null && signedIn !== undefined) signedInAtStart.current = signedIn;
   useEffect(() => {
     if (!signedIn) return;
     void window.copilot.setup<ProviderKey[]>({ op: "providers" }).then((rows) => setNeedsKeys(rows.some((r) => r.required && !r.has_key)), () => undefined);
   }, [signedIn]);
   if (!settings) return null;
-  const steps: Step[] = ["signin", ...(needsKeys ? (["keys"] as Step[]) : []), "audio", "you"];
+  const steps: Step[] = [...(signedInAtStart.current ? [] : (["signin"] as Step[])), ...(needsKeys ? (["keys"] as Step[]) : []), "audio", "you"];
   const step = steps[Math.min(index, steps.length - 1)];
   const last = index >= steps.length - 1;
   const finish = async () => {
