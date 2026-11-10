@@ -22,3 +22,6 @@ playwright-report/
 # Expo
 .expo/
 release/
+
+# Built installers (shared outside git)
+*.apk
