@@ -7,6 +7,6 @@ export * from "./live/cards";
 export * from "./live/speakers";
 export * from "./live/connection";
 export * from "./live/emitter";
-export { DEFAULT_CONSENT_MESSAGE, MEETING_MODES, MEETING_TYPES, type MeetingType, type Visibility } from "./meetings";
+export { DEFAULT_CONSENT_MESSAGE, MEETING_MODES, MEETING_TYPES, MODE_INFO, type MeetingType, type Visibility } from "./meetings";
 export * from "./time";
 export { HOSTED_BACKEND_URL, HOSTED_SUPABASE } from "./hosted";

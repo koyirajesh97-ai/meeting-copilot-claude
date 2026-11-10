@@ -13,6 +13,7 @@ import {
   type CardState,
   type LiveState,
   type MeetingEvent,
+  type SessionTools,
 } from "@meeting-copilot/shared";
 import type { Api, StartOptions } from "./api";
 import { PhoneFramer } from "./pcm";
@@ -47,6 +48,7 @@ export class PhoneMeeting extends Emitter<{ change: [MeetingView] }> {
   private readonly outbound = new OutboundAudio(PHONE_REPLAY_FRAMES);
   private readonly live: LiveConnection<StartOptions>;
   private framer = new PhoneFramer();
+  private tools: SessionTools | undefined;
 
   constructor(
     api: Api,
@@ -55,7 +57,11 @@ export class PhoneMeeting extends Emitter<{ change: [MeetingView] }> {
   ) {
     super();
     this.live = new LiveConnection<StartOptions>({ backend: api, outbound: this.outbound, WebSocketImpl });
-    this.live.on("state", (live) => this.set({ live }));
+    this.live.on("state", (live) => {
+      this.set({ live });
+      // The session's tool switches, again after every reconnect.
+      if (live.status === "live" && this.tools) this.live.send({ type: "control", action: "tools", tools: this.tools });
+    });
     this.live.on("event", (e) => this.onEvent(e));
   }
 
@@ -76,6 +82,7 @@ export class PhoneMeeting extends Emitter<{ change: [MeetingView] }> {
   async start(options: StartOptions): Promise<void> {
     if (this.view.recording) return;
     this.framer = new PhoneFramer();
+    this.tools = options.tools;
     this.set({ ...IDLE, recording: true });
     try {
       await this.recorder.start((chunk) => {
@@ -99,6 +106,12 @@ export class PhoneMeeting extends Emitter<{ change: [MeetingView] }> {
   /** Catch me up, Clarify, I'll follow up, card feedback. False when not connected. */
   control(action: "catch_up" | "clarify" | "follow_up", minutes?: number): boolean {
     return this.live.send({ type: "control", action, ...(action === "catch_up" ? { minutes: minutes === 5 ? 5 : 2 } : {}) });
+  }
+
+  /** "Ask the copilot": a typed question, answered as a card. False when not connected. */
+  ask(question: string): boolean {
+    const text = question.trim().slice(0, 500);
+    return text.length > 0 && this.live.send({ type: "control", action: "ask", text });
   }
 
   feedback(cardId: string, useful: boolean): void {

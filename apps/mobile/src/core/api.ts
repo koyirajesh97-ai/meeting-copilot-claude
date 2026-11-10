@@ -1,7 +1,7 @@
 // The backend REST API as the phone uses it. Same routes and token as the desktop app; no
 // provider keys ever live on the phone.
 
-import type { MeetingApi, MeetingSocket } from "@meeting-copilot/shared";
+import type { MeetingApi, MeetingSocket, SessionTools } from "@meeting-copilot/shared";
 
 export class ApiError extends Error {
   constructor(message: string, readonly status: number) {
@@ -15,6 +15,9 @@ export interface StartOptions {
   mode: "cloud" | "live-only";
   visibility: "private" | "project";
   project_id: string | null;
+  agenda?: string;
+  /** The session's adaptive tools; sent over the live socket, not to the meeting record. */
+  tools?: SessionTools;
 }
 
 export interface SessionOut {
@@ -111,7 +114,10 @@ export class Api implements MeetingApi<StartOptions> {
     return this.request<SessionOut>("POST", "/auth/dev-session", undefined, false);
   }
   createMeeting(o: StartOptions): Promise<MeetingSocket> {
-    return this.request("POST", "/meetings", o);
+    // Tools go over the live socket, not into the meeting record.
+    const meeting: Partial<StartOptions> = { ...o };
+    delete meeting.tools;
+    return this.request("POST", "/meetings", meeting);
   }
   wsToken(id: string): Promise<MeetingSocket> {
     return this.request("POST", `/meetings/${encodeURIComponent(id)}/ws-token`);

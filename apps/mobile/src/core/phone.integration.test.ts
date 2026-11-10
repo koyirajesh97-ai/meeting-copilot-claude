@@ -99,7 +99,8 @@ describe("phone companion end to end", () => {
     const api = new Api(() => url, () => auth.token());
     await auth.devSignIn();
     const meeting = new PhoneMeeting(api, new FileRecorder());
-    await meeting.start({ title: "Phone standup", type: "standup", mode: "cloud", visibility: "private", project_id: null });
+    // Automatic answer cards off for this session (the tool switch goes over the live socket).
+    await meeting.start({ title: "Phone standup", type: "standup", mode: "cloud", visibility: "private", project_id: null, tools: { answers: false, topics: true } });
     expect(meeting.state.recording).toBe(true);
 
     await until(() => meeting.state.live.status === "live", 15_000);
@@ -110,6 +111,11 @@ describe("phone companion end to end", () => {
 
     expect(meeting.control("catch_up")).toBe(true);
     await until(() => meeting.state.cards.cards.some((c) => c.kind === "catch_up"), 15_000);
+
+    // Ask the copilot: a typed question comes back as an answer card.
+    expect(meeting.ask("   ")).toBe(false);
+    expect(meeting.ask("What did they finish yesterday?")).toBe(true);
+    await until(() => meeting.state.cards.cards.some((c) => c.text.startsWith("You asked: What did they finish yesterday?")), 15_000);
 
     const id = await meeting.stop();
     expect(meeting.state.recording).toBe(false);

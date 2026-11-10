@@ -1,15 +1,18 @@
 import { StyleSheet } from "react-native";
 
-// Same look as the desktop overlay: deep slate, an indigo accent, soft rounded surfaces.
+// Same look as the web and desktop apps: deep navy, glass-like cards, an indigo/violet/cyan glow.
 export const colors = {
-  bg: "#0b1020",
-  card: "#131a2c",
-  cardRaised: "#182036",
-  border: "#222c45",
-  text: "#e7ebf3",
-  muted: "#8a94a8",
+  bg: "#04050d",
+  card: "#0b0f21",
+  cardRaised: "#12183a",
+  border: "rgba(129,140,248,0.16)",
+  text: "#e8ebf8",
+  muted: "#8f97bd",
   accent: "#6366f1",
+  violet: "#8b5cf6",
+  cyan: "#22d3ee",
   accentSoft: "rgba(99,102,241,0.16)",
+  cyanSoft: "rgba(34,211,238,0.12)",
   accentText: "#c7d2fe",
   red: "#ef4444",
   redSoft: "rgba(239,68,68,0.14)",
