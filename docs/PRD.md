@@ -466,7 +466,7 @@ Checked with a real Groq key (Nov 2026): Whisper captions both channels, catch-u
 
 ### Sign-in
 
-- A sign-in page like other apps: email and password, "Create an account" (the address is confirmed with an emailed 6-digit code), "Forgot password?" (an emailed code, then a new password), "Email me a sign-in code instead", and "Continue with Google" when the Supabase project has Google turned on (the button appears only then). The web app shows this page to anyone signed out; the desktop app has the same form in Setup and Settings → Account, without Google (it needs a browser redirect back into the app). Signed-in people can set or change their password in Settings → Account.
+- A sign-in page like other apps: email and password, "Create an account" (the address is confirmed with an emailed 6-digit code), "Forgot password?" (an emailed code, then a new password), "Email me a sign-in code instead", and "Continue with Google" when the Supabase project has Google turned on (the button appears only then). The web app shows this page to anyone signed out; the desktop app has the same form in Setup and Settings → Account. On the desktop, "Continue with Google" opens your browser; after sign-in, Google and Supabase send it back to a one-shot server on `http://127.0.0.1:<random port>/auth/callback` that the app runs only while it waits (5 minutes at most, PKCE, so the code is useless to anyone else), and the browser tab says you can go back. Clicking again starts over. This needs `http://127.0.0.1:*/auth/callback` in Supabase's Redirect URLs. Signed-in people can set or change their password in Settings → Account.
 - Supabase holds the accounts; the backend still issues its own short-lived token after any of these sign-ins.
 
 ### Web app

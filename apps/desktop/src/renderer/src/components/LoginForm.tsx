@@ -1,5 +1,5 @@
 import { ArrowLeft, Eye, EyeOff, Loader2, Mail } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { buttonClass, inputClass, secondaryButtonClass } from "./EmptyState";
 
 type Mode = "signin" | "signup" | "code" | "forgot";
@@ -88,6 +88,32 @@ export function LoginForm({ initialError = null, devAvailable = false }: { initi
     }
   };
 
+  // The desktop app signs in through the system browser; clicking again starts over (the
+  // earlier attempt is cancelled), so a closed browser tab never leaves the form stuck.
+  const [waitingForBrowser, setWaitingForBrowser] = useState(false);
+  const googleAttempt = useRef(0);
+  const continueWithGoogle = async () => {
+    const attempt = ++googleAttempt.current;
+    setBusy(true);
+    setError(null);
+    setWaitingForBrowser(true);
+    setNote("Finish signing in with Google in your browser, then come back here.");
+    try {
+      await window.copilot.auth.google();
+      if (attempt === googleAttempt.current) setNote(null);
+    } catch (err) {
+      if (attempt === googleAttempt.current) {
+        setNote(null);
+        setError(errorMessage(err));
+      }
+    } finally {
+      if (attempt === googleAttempt.current) {
+        setBusy(false);
+        setWaitingForBrowser(false);
+      }
+    }
+  };
+
   const validEmail = /^\S+@\S+\.\S+$/.test(email.trim());
 
   const sendCode = () =>
@@ -153,8 +179,8 @@ export function LoginForm({ initialError = null, devAvailable = false }: { initi
           <button
             type="button"
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-800 shadow-sm transition hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
-            disabled={busy}
-            onClick={() => void run(() => window.copilot.auth.google())}
+            disabled={busy && !waitingForBrowser}
+            onClick={() => void continueWithGoogle()}
           >
             <GoogleIcon />
             Continue with Google

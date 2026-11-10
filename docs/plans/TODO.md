@@ -95,7 +95,6 @@ Follow-ups that were out of scope for the prompt that found them.
 - Embedding model download on Render: verify on the first deploy (the build fetches it from
   Hugging Face; this sandbox couldn't). Without it, search runs on keywords alone.
 - Phone app: "Continue with Google" via a deep link (email/password, sign-up and reset are done).
-- Desktop: "Continue with Google" through a loopback redirect (the web app has it already).
 - Rate limits are per process (in memory); with more than one backend instance, move them to a
   shared store (Redis).
 - Project links: the address is checked before each request, but a DNS answer could change between

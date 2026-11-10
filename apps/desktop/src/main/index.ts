@@ -25,6 +25,7 @@ import { Cache } from "./backend/cache";
 import { BackendClient } from "./backend/client";
 import { LiveConnection } from "./backend/live";
 import { dueNudges, integrationCall } from "./backend/integrations";
+import { loopbackSignIn } from "./backend/oauthLoopback";
 import { projectCall } from "./backend/projects";
 import { syncAll, syncMeeting, waitForSummary } from "./backend/sync";
 import { WatchConnection } from "./backend/watch";
@@ -492,10 +493,15 @@ function registerIpc(): void {
   handle(IPC.authSignIn, (email, password) => auth!.signIn(str(email, 320), str(password, 200)));
   handle(IPC.authSignUp, (email, password) => auth!.signUp(str(email, 320), str(password, 200)));
   handle(IPC.authSetPassword, (password) => auth!.setPassword(str(password, 200)));
-  // Google sign-in needs a browser redirect back into the app; the desktop app offers email only.
-  handle(IPC.authProviders, () => ({ google: false }));
-  handle(IPC.authGoogle, () => {
-    throw new Error("Google sign-in is available in the web app. Here, sign in with your email.");
+  handle(IPC.authProviders, () => auth!.providers());
+  // Google: the system browser signs in and comes back to a one-shot server on 127.0.0.1.
+  handle(IPC.authGoogle, async () => {
+    const code = await loopbackSignIn({ buildUrl: (redirect) => auth!.googleUrl(redirect), open: (url) => shell.openExternal(url) });
+    await auth!.completeOAuth(code);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
   });
   handle(IPC.meetingsList, () => cache!.listMeetings());
   handle(IPC.meetingsGet, (id) => (typeof id === "string" ? cache!.getMeeting(id) : null));
