@@ -80,6 +80,8 @@ export interface ProviderKey {
   trains_on_data: boolean | string;
   tasks: string[];
   required: boolean;
+  /** A hosted server: its admin sets the keys, so users are never asked for them. */
+  managed?: boolean;
 }
 
 export interface AudioCheck {

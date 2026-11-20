@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Cable, Check, Cloud, HardDrive, Megaphone, Mic, MonitorUp, Radio, Sparkles, Speaker, Square, Zap } from "lucide-react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import type { AppState, Brief, MeetingAudioSource, PrivacySettings, SessionTools, UpcomingMeeting } from "../../../shared/ipc";
 import {
   DEFAULT_CONSENT_MESSAGE,
@@ -210,6 +210,19 @@ export function StartMeetingPage({ state }: { state: AppState | null }) {
   };
 
   const capturing = !!state?.capturing;
+  // When a saved meeting stops, open it: that's where the transcript and summary show up.
+  const navigate = useNavigate();
+  const recorded = useRef<string | null>(null);
+  const liveId = state?.live.meetingId ?? null;
+  useEffect(() => {
+    if (capturing) {
+      if (liveId && state?.meetingMode === "cloud") recorded.current = liveId;
+      return;
+    }
+    const id = recorded.current;
+    recorded.current = null;
+    if (id) navigate(`/meetings/${encodeURIComponent(id)}`);
+  }, [capturing, liveId, state?.meetingMode, navigate]);
   const start = () =>
     void (capturing
       ? window.copilot.toggleCapture()

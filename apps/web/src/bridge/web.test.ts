@@ -33,6 +33,7 @@ describe("web settings", () => {
     expect(s.backendUrl).toBe(HOSTED_BACKEND_URL);
     expect(s.captionFontSize).toBe(DEFAULT_SETTINGS.captionFontSize);
     expect(s.setupDone).toBe(false);
+    expect(s.overlayExpanded).toBe(true);
   });
 
   it("keeps changes and survives broken saved data", () => {

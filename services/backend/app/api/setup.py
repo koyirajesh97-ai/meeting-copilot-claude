@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel, Field
 
 from app.auth import CurrentUser
+from app.readiness import production_mode
 from app.router.config import RouterConfig
 from app.services import fake_providers_enabled, services
 
@@ -31,6 +32,8 @@ class ProviderKey(BaseModel):
     tasks: list[str]
     #: Groq, Mistral and Deepgram cover every task; the rest are extra fallbacks.
     required: bool
+    #: A hosted (production) server: its admin sets keys in the host's settings, not users.
+    managed: bool = False
 
 
 REQUIRED = {"groq", "mistral", "deepgram"}
@@ -60,6 +63,7 @@ async def providers(_user: CurrentUser) -> list[ProviderKey]:
                 trains_on_data=p.trains_on_data,
                 tasks=tasks,
                 required=name in REQUIRED,
+                managed=production_mode(),
             )
         )
     return sorted(out, key=lambda x: (not x.required, x.provider))
@@ -133,6 +137,13 @@ def save_env(path: Path, name: str, value: str) -> None:
 
 @router.post("/setup/keys", response_model=KeyResult)
 async def add_key(body: KeyIn, request: Request, _user: CurrentUser) -> KeyResult:
+    if production_mode():
+        # A hosted server is shared: testing a key swaps it into the process for everyone and
+        # would let any account use the server to try keys. The admin sets keys on the host.
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "AI keys on this server are managed by its admin (in the host's settings).",
+        )
     cfg = services().config
     p = cfg.providers.get(body.provider)
     if p is None or not p.key_env:

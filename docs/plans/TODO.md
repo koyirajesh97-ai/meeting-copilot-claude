@@ -101,3 +101,7 @@ Follow-ups that were out of scope for the prompt that found them.
   the check and the connection (rebinding); pin the checked IP in the connection to close that.
 - Add a second free AI key (MISTRAL_API_KEY) on the hosted server so summaries and cards have a
   fallback when Groq's daily limits run out (1,000 requests a day per model).
+- Speaker separation in room mode: a production test with two synthetic (espeak) voices came back
+  as one speaker from Deepgram's streaming diarization. Check with two real people on a call; if
+  it still merges them, try Deepgram's `diarize_version` options or a post-meeting re-diarization
+  pass on the saved audio.

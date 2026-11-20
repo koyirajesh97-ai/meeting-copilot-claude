@@ -106,3 +106,14 @@ async def test_real_key_test_uses_the_provider_check(monkeypatch) -> None:
     ok, detail = await check_key(load_config(), "deepgram", "dg-key-123")
     assert not ok and "401" in detail and seen == ["Token dg-key-123"]
     assert "DEEPGRAM_API_KEY" not in os.environ
+
+
+def test_a_hosted_server_never_asks_users_for_keys(client, monkeypatch) -> None:
+    monkeypatch.setenv("COPILOT_ENV", "production")
+    monkeypatch.delenv("MISTRAL_API_KEY", raising=False)
+    rows = client.get("/setup/providers", headers=H).json()
+    assert rows and all(r["managed"] for r in rows)
+    r = client.post(
+        "/setup/keys", json={"provider": "mistral", "key": "mistral-key-123"}, headers=H
+    )
+    assert r.status_code == 403 and "admin" in r.json()["detail"]

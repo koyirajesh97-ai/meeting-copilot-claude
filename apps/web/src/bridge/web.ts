@@ -61,7 +61,9 @@ export function loadSettings(store: Storage | null = storage()): Settings {
   } catch {
     saved = {};
   }
-  const s: Settings = { ...DEFAULT_SETTINGS, backendUrl: "", supabaseUrl: "", supabaseAnonKey: "", ...saved };
+  // In the browser the live panel sits inside the page (not over the meeting app), so it opens
+  // expanded: captions, Ask and cards are visible without finding the arrow.
+  const s: Settings = { ...DEFAULT_SETTINGS, overlayExpanded: true, backendUrl: "", supabaseUrl: "", supabaseAnonKey: "", ...saved };
   return {
     ...s,
     backendUrl: s.backendUrl || BUILD.backendUrl,

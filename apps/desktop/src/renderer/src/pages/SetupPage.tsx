@@ -24,7 +24,7 @@ export function SetupPage() {
   if (signedInAtStart.current === null && signedIn !== undefined) signedInAtStart.current = signedIn;
   useEffect(() => {
     if (!signedIn) return;
-    void window.copilot.setup<ProviderKey[]>({ op: "providers" }).then((rows) => setNeedsKeys(rows.some((r) => r.required && !r.has_key)), () => undefined);
+    void window.copilot.setup<ProviderKey[]>({ op: "providers" }).then((rows) => setNeedsKeys(rows.some((r) => r.required && !r.has_key && !r.managed)), () => undefined);
   }, [signedIn]);
   if (!settings) return null;
   const steps: Step[] = [...(signedInAtStart.current ? [] : (["signin"] as Step[])), ...(needsKeys ? (["keys"] as Step[]) : []), "audio", "you"];
