@@ -124,6 +124,38 @@ def test_socket_rejects_bad_tokens(env: Env, token_for: str, code: int) -> None:
     assert e.value.code == code
 
 
+def test_a_backend_restart_mid_meeting_keeps_the_transcript(env: Env) -> None:
+    """A deploy or crash mid-meeting: the client reconnects to a fresh session for the same
+    meeting. Its lines must continue the transcript, not overwrite seg_1... (found in production)."""
+    m = env.create()
+    with env.connect(m) as ws:
+        ws.receive_json()
+        for f in wav_frames(1):
+            ws.send_bytes(f)
+        first = receive_until(
+            ws, lambda e: e["type"] == "transcript.final" and e["text"] == "great thanks"
+        )
+    last_seq = max(e["seq"] for e in first)
+    # The old process is gone: drop its session without ending the meeting.
+    env.client.portal.call(lambda: env.services.sessions.end(m["meeting_id"], mark_ended=False))
+    ws_token = env.client.post(f"/meetings/{m['meeting_id']}/ws-token", headers=env.headers).json()[
+        "ws_token"
+    ]
+    with env.connect({**m, "ws_token": ws_token}, last_seq=last_seq) as ws:
+        started = ws.receive_json()
+        assert started["type"] == "meeting.started" and started["seq"] > last_seq
+        for f in wav_frames(1):
+            ws.send_bytes(f)
+        second = receive_until(
+            ws, lambda e: e["type"] == "transcript.final" and e["text"] == "great thanks"
+        )
+    assert [e["segment_id"] for e in finals(second)] == ["seg_4", "seg_5", "seg_6"]
+    saved = env.client.portal.call(env.store.segments, m["meeting_id"])
+    by_id = {x.segment_id: x.text for x in saved}
+    assert sorted(by_id) == [f"seg_{i}" for i in range(1, 7)]  # nothing overwritten
+    assert [by_id[e["segment_id"]] for e in finals(first)] == [e["text"] for e in finals(first)]
+
+
 def test_streams_a_wav_into_live_captions_and_stores_finals(env: Env) -> None:
     m = env.create(vocabulary=["ArgoCD"])
     with env.connect(m) as ws:

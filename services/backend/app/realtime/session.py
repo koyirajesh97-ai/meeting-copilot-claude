@@ -282,6 +282,18 @@ class Plugin:
     async def close(self) -> None: ...
 
 
+def seq_base(meeting_start_ms: float, now: float) -> int:
+    """First event number for a session: 10 per millisecond into the meeting (far above any real
+    event rate), so a session started later always numbers above an earlier one."""
+    return 1 + max(0, int(now - meeting_start_ms)) * 10
+
+
+def segment_number(segment_id: str) -> int:
+    """N in "seg_N" (0 for anything else)."""
+    tail = segment_id.removeprefix("seg_")
+    return int(tail) if tail != segment_id and tail.isdigit() else 0
+
+
 PluginFactory = Callable[["MeetingSession"], Awaitable[Plugin | None]]
 
 
@@ -318,6 +330,18 @@ class MeetingSession:
         if self._started:
             return
         self._started = True
+        try:
+            saved = await self.store.segments(self.meeting.id)
+        except Exception:
+            log.exception("could not read the saved transcript; numbering segments from 1")
+            saved = []
+        if saved:
+            # This meeting outlived an earlier session (a backend restart or deploy mid-meeting;
+            # the client reconnected). Continue its numbering instead of overwriting seg_1...,
+            # and number events above anything the client saw (it resumes from its last seq).
+            last = max(segment_number(x.segment_id) for x in saved)
+            self._segments = itertools.count(last + 1)
+            self._seq = itertools.count(seq_base(self.start_wall_ms, now_ms()))
         for make in self._plugin_factories:
             try:
                 plugin = await make(self)
