@@ -66,3 +66,13 @@ def test_client_address_by_proxy_hops(monkeypatch) -> None:
     assert client_address(_Req("6.6.6.6, 203.0.113.7, 10.0.0.2")) == "203.0.113.7"
     assert client_address(_Req("203.0.113.7")) == "203.0.113.7"
     assert client_address(_Req(None)) == "198.51.100.1"
+
+
+def test_a_proxy_set_client_ip_header_wins_when_configured(monkeypatch) -> None:
+    """Railway's edge sets X-Real-IP to the caller's address."""
+    monkeypatch.setenv("COPILOT_CLIENT_IP_HEADER", "X-Real-IP")
+    monkeypatch.setenv("COPILOT_PROXY_HOPS", "1")
+    req = _Req("6.6.6.6, 10.0.0.2")
+    req.headers["x-real-ip"] = "203.0.113.9"
+    assert client_address(req) == "203.0.113.9"
+    assert client_address(_Req("6.6.6.6, 10.0.0.2")) == "10.0.0.2"  # header missing: hops
