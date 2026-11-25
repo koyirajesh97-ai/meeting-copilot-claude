@@ -3,6 +3,7 @@ action-item board. Owners manage the project; members add meetings and documents
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, date, datetime
 from typing import Annotated, Literal
 
@@ -65,7 +66,10 @@ class ProjectIn(BaseModel):
 
 @router.get("/projects", response_model=list[ProjectOut])
 async def list_projects(user: CurrentUser) -> list[ProjectOut]:
-    return [_out(p, r) for p, r in await services().projects.for_user(user.user_id)]
+    s = services()
+    if user.email:  # a confirmed address (see /auth/session): join projects you were invited to
+        await s.projects.accept_invites(user.user_id, user.email)
+    return [_out(p, r) for p, r in await s.projects.for_user(user.user_id)]
 
 
 @router.post("/projects", response_model=ProjectOut, status_code=status.HTTP_201_CREATED)
@@ -124,7 +128,7 @@ class Invite(BaseModel):
 
 
 class InviteResult(BaseModel):
-    status: Literal["added", "invited"]
+    status: Literal["invited"]
     email_sent: bool
 
 
@@ -149,14 +153,15 @@ async def members(project_id: str, user: CurrentUser) -> list[MemberOut]:
     status_code=status.HTTP_201_CREATED,
 )
 async def invite(project_id: str, body: Invite, user: CurrentUser) -> InviteResult:
-    """Existing users join right away; anyone else gets an invite (accepted when they sign in)."""
+    """Everyone gets an invite, accepted the next time they open their projects or sign in with
+    that (confirmed) address. Same answer whether or not the email has an account, so inviting
+    can't be used to find out who uses the app."""
     await _role(project_id, user.user_id, ("owner",))
     s = services()
     email = body.email.lower()
-    existing = await s.projects.user_by_email(email)
-    if existing:
-        await s.projects.set_member(project_id, existing, body.role)
-        return InviteResult(status="added", email_sent=False)
+    if any((m.email or "").lower() == email for m in await s.projects.member_list(project_id)):
+        # Already in the project (the owner can see that in the member list): change roles there.
+        return InviteResult(status="invited", email_sent=False)
     await s.projects.add_invite(project_id, email, body.role, user.user_id)
     return InviteResult(status="invited", email_sent=await send_invite_email(email))
 
@@ -266,15 +271,23 @@ async def upload_document(
     data = await file.read(5 * 1024 * 1024 + 1)
     name = safe_filename(file.filename or "document.txt")
     try:
-        text = extract_text(name, data)
+        # PDF parsing is CPU-bound: off the event loop, so live meetings keep streaming.
+        text = await asyncio.to_thread(extract_text, name, data)
     except DocumentError as e:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(e)) from e
+    except Exception as e:  # a malformed PDF
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "Couldn't read that file") from e
     s = services()
     doc_id = new_document_id()
     path = await s.blobs.put(f"{project_id}/{doc_id}/{name}", data)
     d = Document(doc_id, project_id, (title or name).strip(), user.user_id, storage_path=path)
-    n = await _index(d, text)
-    await s.documents.add(d)
+    try:
+        n = await _index(d, text)
+        await s.documents.add(d)
+    except BaseException:
+        # Not saved (e.g. no text in it): don't leave the file behind in storage.
+        await s.blobs.delete(path)
+        raise
     return _doc_out(d, n)
 
 

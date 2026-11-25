@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import html
 import json
+import re
 import time
 import uuid
 from urllib.parse import parse_qs, urlparse
@@ -188,7 +190,10 @@ async def test_jira_asks_for_my_tickets_updated_since() -> None:
             },
         )
 
-    j = JiraCloud(httpx.MockTransport(handler))
+    async def dns(host: str, _port: int) -> list[str]:
+        return {"team.atlassian.net": ["104.192.141.1"]}.get(host, ["10.0.0.5"])
+
+    j = JiraCloud(httpx.MockTransport(handler), dns)
     creds = {"site": "https://team.atlassian.net/", "email": "sai@example.com", "api_token": "tok"}
     [t] = await j.updated_since(creds, 1793664000)  # 2026-11-03 00:00 UTC
     assert (t.key, t.status, t.url) == (
@@ -201,14 +206,37 @@ async def test_jira_asks_for_my_tickets_updated_since() -> None:
         body["jql"]
         == 'assignee = currentUser() AND updated >= "2026-11-03 00:00" ORDER BY updated DESC'
     )
-    assert str(sent[0].url) == "https://team.atlassian.net/rest/api/3/search/jql"
+    # Sent to the address that was checked, still named (and TLS-verified) as the site.
+    assert str(sent[0].url) == "https://104.192.141.1/rest/api/3/search/jql"
+    assert sent[0].headers["Host"] == "team.atlassian.net"
+    assert sent[0].extensions["sni_hostname"] == "team.atlassian.net"
     assert sent[0].headers["Authorization"].startswith("Basic ")
-    bad = JiraCloud(httpx.MockTransport(lambda r: httpx.Response(401)))
+    bad = JiraCloud(httpx.MockTransport(lambda r: httpx.Response(401)), dns)
     with pytest.raises(IntegrationError) as err:
         await bad.updated_since(creds, 0)
     assert err.value.reconnect
     with pytest.raises(IntegrationError, match="https"):
         await j.updated_since({**creds, "site": "http://team.atlassian.net"}, 0)
+
+
+async def test_jira_site_cannot_reach_the_servers_own_network() -> None:
+    """The site is typed by the user; a hosted backend must not call its private network."""
+    sent: list[httpx.Request] = []
+
+    async def dns(host: str, _port: int) -> list[str]:
+        return {"rebind.example": ["104.192.141.1", "10.0.0.5"]}.get(host, ["169.254.169.254"])
+
+    j = JiraCloud(httpx.MockTransport(lambda r: sent.append(r) or httpx.Response(200)), dns)
+    for site in (
+        "https://localhost:8443",
+        "https://api.railway.internal",
+        "https://metadata.example",
+        "https://rebind.example",
+        "https://[::ffff:10.0.0.5]",
+    ):
+        with pytest.raises(IntegrationError, match="private|find"):
+            await j.updated_since({"site": site, "email": "a@b.c", "api_token": "t"}, 0)
+    assert sent == []
 
 
 async def test_webhooks_only_go_to_slack_or_teams() -> None:
@@ -409,13 +437,35 @@ def test_calendar_oauth_connect_and_callback(monkeypatch) -> None:
                 "microsoft"
             ]["available"] is False
             assert client.post("/integrations/microsoft/connect", headers=h()).status_code == 409
-            url = client.post("/integrations/google/connect", headers=h()).json()["authorize_url"]
+            start = client.post(
+                "/integrations/google/connect",
+                headers={"Authorization": f"Bearer {issue_token('u1', email='sai@example.com')}"},
+            ).json()["authorize_url"]
+            # First our page, naming the account the calendar will be connected to.
+            assert urlparse(start).path == "/integrations/oauth/start"
+            page = client.get(start)
+            assert page.status_code == 200 and "sai@example.com" in page.text
+            assert "If someone sent you this link" in page.text
+            url = html.unescape(re.search(r'href="([^"]+)"', page.text).group(1))
+            assert url.startswith("https://accounts.google.com/")
             q = parse_qs(urlparse(url).query)
             assert (
                 q["client_id"] == ["cid"]
                 and q["access_type"] == ["offline"]
                 and "calendar.readonly" in q["scope"][0]
             )
+            assert client.get("/integrations/oauth/start", params={"state": "x"}).status_code == 400
+            # Provider errors are shown as text, never as markup (on a separate connect link).
+            other = parse_qs(
+                urlparse(
+                    client.post("/integrations/google/connect", headers=h()).json()["authorize_url"]
+                ).query
+            )["state"][0]
+            denied = client.get(
+                "/integrations/oauth/callback",
+                params={"state": other, "error": "<script>alert(1)</script>"},
+            )
+            assert denied.status_code == 400 and "<script>" not in denied.text
             assert (
                 client.get(
                     "/integrations/oauth/callback", params={"state": "forged", "code": "c"}
@@ -426,6 +476,11 @@ def test_calendar_oauth_connect_and_callback(monkeypatch) -> None:
                 "/integrations/oauth/callback", params={"state": q["state"][0], "code": "c"}
             )
             assert r.status_code == 200 and "connected" in r.text
+            # A connect link works once.
+            again = client.get(
+                "/integrations/oauth/callback", params={"state": q["state"][0], "code": "c"}
+            )
+            assert again.status_code == 400 and "already used" in again.text
             i = client.portal.call(s.integrations.store.get, "u1", "google")
             assert i.secret["refresh_token"] == "rt"
             assert {x["kind"]: x for x in client.get("/integrations", headers=h()).json()}[

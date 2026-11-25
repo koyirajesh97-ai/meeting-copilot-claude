@@ -110,8 +110,16 @@ def pg_server() -> Iterator[str]:
         check=True,
         capture_output=True,
     )
+    dsn = f"postgresql://postgres@127.0.0.1:{port}/postgres"
     try:
-        yield f"postgresql://postgres@127.0.0.1:{port}/postgres"
+        # The schema needs pgvector. A throwaway local cluster without it skips the database
+        # tests (with DATABASE_URL, as in CI, a missing extension still fails loudly).
+        with psycopg.connect(dsn, autocommit=True) as conn:
+            if not conn.execute(
+                "select 1 from pg_available_extensions where name = 'vector'"
+            ).fetchone():
+                pytest.skip("Local Postgres has no pgvector: install postgresql-NN-pgvector")
+        yield dsn
     finally:
         subprocess.run(
             [*run_as, str(bin_dir / "pg_ctl"), "-D", str(data), "-m", "immediate", "stop"],

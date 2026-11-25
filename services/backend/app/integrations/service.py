@@ -17,7 +17,7 @@ from .store import Integration
 log = logging.getLogger("app.integrations")
 
 
-def real_factory(transport=None) -> Callable[[Kind], object]:
+def real_factory(transport=None, resolve=None) -> Callable[[Kind], object]:
     from .calendars import GoogleCalendar, MicrosoftCalendar
     from .jira import JiraCloud
     from .webhooks import WebhookPoster
@@ -26,7 +26,7 @@ def real_factory(transport=None) -> Callable[[Kind], object]:
         return {
             "google": lambda: GoogleCalendar(transport),
             "microsoft": lambda: MicrosoftCalendar(transport),
-            "jira": lambda: JiraCloud(transport),
+            "jira": lambda: JiraCloud(transport, **({"resolve": resolve} if resolve else {})),
             "slack": lambda: WebhookPoster("slack", transport),
             "teams": lambda: WebhookPoster("teams", transport),
         }[kind]()

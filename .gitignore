@@ -25,3 +25,6 @@ release/
 
 # Built installers (shared outside git)
 *.apk
+
+# Local uploads (development)
+services/backend/.data/

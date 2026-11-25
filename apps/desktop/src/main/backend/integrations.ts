@@ -18,6 +18,17 @@ const target = (t: unknown): "slack" | "teams" => {
   return t;
 };
 
+export function safeConnectUrl(url: string, backendOrigin: string): boolean {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return false;
+  }
+  if (u.origin === backendOrigin && u.pathname === "/integrations/oauth/start") return true;
+  return u.protocol === "https:" && (u.hostname === "accounts.google.com" || u.hostname === "login.microsoftonline.com");
+}
+
 export async function integrationCall(backend: BackendClient, call: IntegrationCall, openExternal: (url: string) => Promise<void>): Promise<unknown> {
   switch (call.op) {
     case "list":
@@ -32,9 +43,9 @@ export async function integrationCall(backend: BackendClient, call: IntegrationC
     case "connect": {
       const k = kind(call.kind);
       const { authorize_url } = await backend.call<{ authorize_url: string }>("POST", `/integrations/${k}/connect`);
-      // Only the providers' own sign-in pages are opened.
-      const host = new URL(authorize_url).hostname;
-      if (host !== "accounts.google.com" && host !== "login.microsoftonline.com") throw new Error("Unexpected sign-in page");
+      // Only the backend's own "connect to this account?" page, or (older backends) the
+      // providers' sign-in pages, are opened.
+      if (!safeConnectUrl(authorize_url, backend.origin)) throw new Error("Unexpected sign-in page");
       await openExternal(authorize_url);
       return null;
     }

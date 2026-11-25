@@ -7,13 +7,16 @@ from datetime import UTC, datetime
 
 import httpx
 
+from app.netguard import Resolve, UnsafeUrl, pinned, public_ip, resolve_host
+
 from .base import IntegrationError, Ticket
 from .calendars import _parse
 
 
 class JiraCloud:
-    def __init__(self, transport=None) -> None:
+    def __init__(self, transport=None, resolve: Resolve = resolve_host) -> None:
         self.transport = transport
+        self.resolve = resolve
 
     async def updated_since(self, creds: dict, since: float) -> list[Ticket]:
         site = str(creds.get("site", "")).rstrip("/")
@@ -21,6 +24,13 @@ class JiraCloud:
             raise IntegrationError(
                 "Jira site must be an https:// URL, e.g. https://yourteam.atlassian.net"
             )
+        url = f"{site}/rest/api/3/search/jql"
+        # The site is whatever the user typed: only a public address, connected to as checked.
+        try:
+            ip = await public_ip(url, self.resolve)
+        except UnsafeUrl as e:
+            raise IntegrationError(f"Jira site: {e}") from e
+        target, pin_headers, extensions = pinned(url, ip)
         auth = base64.b64encode(
             f"{creds.get('email', '')}:{creds.get('api_token', '')}".encode()
         ).decode()
@@ -32,9 +42,14 @@ class JiraCloud:
         }
         async with httpx.AsyncClient(transport=self.transport, timeout=15) as c:
             r = await c.post(
-                f"{site}/rest/api/3/search/jql",
+                target,
                 json=body,
-                headers={"Authorization": f"Basic {auth}", "Accept": "application/json"},
+                headers={
+                    **pin_headers,
+                    "Authorization": f"Basic {auth}",
+                    "Accept": "application/json",
+                },
+                extensions=extensions,
             )
         if r.status_code in (401, 403):
             raise IntegrationError("Jira rejected the email or API token.", reconnect=True)

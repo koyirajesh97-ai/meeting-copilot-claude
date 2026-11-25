@@ -32,6 +32,7 @@ def supabase_token(
         "role": role,
         "aud": "authenticated",
         "email": "sai@example.com",
+        "user_metadata": {"email_verified": True},
         "exp": int(time.time()) + exp_in,
         **kw,
     }

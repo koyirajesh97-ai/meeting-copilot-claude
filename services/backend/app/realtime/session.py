@@ -288,6 +288,16 @@ def seq_base(meeting_start_ms: float, now: float) -> int:
     return 1 + max(0, int(now - meeting_start_ms)) * 10
 
 
+#: A session that starts this long after its meeting did is taken to be a resumed one.
+RESUMED_AFTER_MS = 30_000
+
+
+def segment_base(meeting_start_ms: float, now: float) -> int:
+    """First segment number for a resumed session with nothing saved: 10 per second into the
+    meeting (more finals than two channels of speech produce)."""
+    return 1 + max(0, int(now - meeting_start_ms)) // 100
+
+
 def segment_number(segment_id: str) -> int:
     """N in "seg_N" (0 for anything else)."""
     tail = segment_id.removeprefix("seg_")
@@ -315,6 +325,8 @@ class MeetingSession:
         self._segments = itertools.count(1)
         self._log: list[dict[str, Any]] = []
         self._peers: list[Peer] = []
+        #: Peers that record (the owner's app); project members watching aren't counted.
+        self._recorders: list[Peer] = []
         self._lock = asyncio.Lock()
         self.workers = {"mic": ChannelWorker(self, "mic"), "system": ChannelWorker(self, "system")}
         self._started = False
@@ -335,13 +347,20 @@ class MeetingSession:
         except Exception:
             log.exception("could not read the saved transcript; numbering segments from 1")
             saved = []
+        now = now_ms()
         if saved:
             # This meeting outlived an earlier session (a backend restart or deploy mid-meeting;
             # the client reconnected). Continue its numbering instead of overwriting seg_1...,
             # and number events above anything the client saw (it resumes from its last seq).
             last = max(segment_number(x.segment_id) for x in saved)
             self._segments = itertools.count(last + 1)
-            self._seq = itertools.count(seq_base(self.start_wall_ms, now_ms()))
+            self._seq = itertools.count(seq_base(self.start_wall_ms, now))
+        elif now - self.start_wall_ms > RESUMED_AFTER_MS:
+            # Under way already but nothing saved to continue from (Live-only keeps nothing):
+            # an earlier session may still have shown seg_1... and seq 1... on screen, so start
+            # above anything it could have used.
+            self._segments = itertools.count(segment_base(self.start_wall_ms, now))
+            self._seq = itertools.count(seq_base(self.start_wall_ms, now))
         for make in self._plugin_factories:
             try:
                 plugin = await make(self)
@@ -375,23 +394,34 @@ class MeetingSession:
                 peer(data)
             return data
 
-    async def attach(self, peer: Peer, last_seq: int = 0) -> int:
+    async def attach(self, peer: Peer, last_seq: int = 0, *, recorder: bool = True) -> int:
         """Replay everything after `last_seq`, then stream live. Returns how many were replayed.
-        A peer that filters events (watchers) only gets what it accepts."""
+        A peer that filters events (watchers, `recorder=False`) only gets what it accepts."""
         async with self._lock:
             missed = [e for e in self._log if e["seq"] > last_seq]
             for e in missed:
                 peer(e)
             self._peers.append(peer)
+            if recorder:
+                self._recorders.append(peer)
             return len(missed)
 
     def detach(self, peer: Peer) -> None:
         with contextlib.suppress(ValueError):
             self._peers.remove(peer)
+        with contextlib.suppress(ValueError):
+            self._recorders.remove(peer)
 
     @property
     def watchers(self) -> int:
+        """Everyone connected (the recorder and project members watching)."""
         return len(self._peers)
+
+    @property
+    def recorders(self) -> int:
+        """Connected recording apps. With none, the meeting's STT streams are closed when idle,
+        even while project members are still watching."""
+        return len(self._recorders)
 
     async def on_audio(self, data: bytes) -> None:
         if len(data) == 0 or len(data) % WIRE_FRAME_BYTES:

@@ -50,9 +50,10 @@ class SessionManager:
         return s
 
     def released(self, meeting_id: str) -> None:
-        """A client disconnected; close the session if nobody comes back."""
+        """A client (recorder or watcher) disconnected; close the session if no recorder comes back.
+        Watchers alone don't keep a meeting's STT streams open."""
         s = self._sessions.get(meeting_id)
-        if s and s.watchers == 0 and meeting_id not in self._reapers:
+        if s and s.recorders == 0 and meeting_id not in self._reapers:
             self._reapers[meeting_id] = asyncio.create_task(self._reap(meeting_id))
 
     def _cancel_reaper(self, meeting_id: str) -> None:
@@ -64,7 +65,7 @@ class SessionManager:
         with contextlib.suppress(asyncio.CancelledError):
             await asyncio.sleep(self.idle_close_s)
             s = self._sessions.get(meeting_id)
-            if s and s.watchers == 0:
+            if s and s.recorders == 0:
                 log.info("closing idle meeting %s", meeting_id)
                 await self.end(meeting_id, mark_ended=False)
         self._reapers.pop(meeting_id, None)

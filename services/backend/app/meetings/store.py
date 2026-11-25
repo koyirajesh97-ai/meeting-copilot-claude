@@ -123,8 +123,11 @@ class MeetingStore(Protocol):
     async def action_items(self, meeting_id: str) -> list[ActionItemRecord]: ...
     async def set_draft(self, item_id: str, draft: str) -> None: ...
     async def open_action_items(
-        self, user_id: str, limit: int = 20
-    ) -> list[tuple[ActionItemRecord, Meeting]]: ...
+        self, user_id: str, limit: int = 20, *, include_local: bool = True
+    ) -> list[tuple[ActionItemRecord, Meeting]]:
+        """`include_local=False` leaves out Local-only meetings (for anything sent to a cloud model)."""
+        ...
+
     async def previous_in_series(
         self, owner_id: str, meeting_type: str, series: str, before: float, exclude_id: str | None
     ) -> Meeting | None: ...
@@ -269,12 +272,12 @@ class InMemoryMeetingStore:
                     i.draft = draft
 
     async def open_action_items(
-        self, user_id: str, limit: int = 20
+        self, user_id: str, limit: int = 20, *, include_local: bool = True
     ) -> list[tuple[ActionItemRecord, Meeting]]:
         out = []
         for mid, items in self._items.items():
             m = self._meetings.get(mid)
-            if m and m.owner_id == user_id:
+            if m and m.owner_id == user_id and (include_local or m.mode != "local"):
                 out += [(i, m) for i in items if i.status == "open"]
         return sorted(out, key=lambda x: -x[0].created_at)[:limit]
 

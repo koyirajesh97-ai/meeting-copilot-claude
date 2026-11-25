@@ -115,17 +115,17 @@ describe("ring buffer and replay", () => {
     expect(sent).toEqual([2, 3, 4, 5, 6]);
   });
 
-  it("re-buffers when the transport fails mid-replay", () => {
+  it("keeps the rest queued when the transport pushes back mid-replay, and resumes", () => {
     const out = new OutboundAudio(10);
     [1, 2, 3].forEach((n) => out.push(Uint8Array.of(n)));
-    let ok = 1;
-    expect(out.attach(() => ok-- > 0)).toBe(1);
-    expect(out.attached).toBe(false);
-    expect(out.buffered).toBe(2);
-    out.push(Uint8Array.of(4));
     const sent: number[] = [];
-    out.attach((f) => (sent.push(f[0]), true));
-    expect(sent).toEqual([2, 3, 4]);
+    let room = 1;
+    expect(out.attach((f) => room-- > 0 && (sent.push(f[0]), true))).toBe(1);
+    expect(out.attached).toBe(true); // a full send buffer isn't a closed socket
+    expect(out.buffered).toBe(2);
+    room = 10;
+    out.push(Uint8Array.of(4));
+    expect(sent).toEqual([1, 2, 3, 4]);
   });
 });
 
