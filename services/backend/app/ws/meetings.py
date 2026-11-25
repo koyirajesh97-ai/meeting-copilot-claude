@@ -157,7 +157,7 @@ async def watch_socket(
             await websocket.send_json(event)
         await websocket.close(1013, "client too slow; reconnect with last_seq")
 
-    await session.attach(peer, last_seq)
+    await session.attach(peer, last_seq, recorder=False)
     send_task = asyncio.create_task(writer())
     try:
         while True:
@@ -172,3 +172,5 @@ async def watch_socket(
         send_task.cancel()
         with contextlib.suppress(asyncio.CancelledError, Exception):
             await send_task
+        # If the recorder left while we were watching, nobody scheduled the idle close yet.
+        s.sessions.released(meeting_id)

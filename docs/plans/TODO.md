@@ -105,3 +105,11 @@ Follow-ups that were out of scope for the prompt that found them.
   as one speaker from Deepgram's streaming diarization. Check with two real people on a call; if
   it still merges them, try Deepgram's `diarize_version` options or a post-meeting re-diarization
   pass on the saved audio.
+
+## From the November 2026 code review
+- Hosted deploy: confirm `COPILOT_PROXY_HOPS=1` matches Railway's edge (log `X-Forwarded-For` once
+  and check the rightmost entry is the caller). If not, set the right hop count in the service.
+- Supabase: keep "Confirm email" on. Tokens for email sign-ups that don't carry
+  `user_metadata.email_verified` are checked through the admin API, which needs
+  `SUPABASE_SERVICE_ROLE_KEY` on the backend; without it those users' invites wait until it's set.
+- Apply migration `20261125000100_users_email_backend_only.sql` to the hosted project.

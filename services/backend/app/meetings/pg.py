@@ -333,7 +333,7 @@ class PostgresStore:
             return {r[0]: r[1] for r in await cur.fetchall()}
 
     async def open_action_items(
-        self, user_id: str, limit: int = 20
+        self, user_id: str, limit: int = 20, *, include_local: bool = True
     ) -> list[tuple[ActionItemRecord, Meeting]]:
         async with await self.connection() as conn:
             cur = conn.cursor(row_factory=dict_row)
@@ -342,8 +342,9 @@ class PostgresStore:
                           a.source as a_source, a.created_at as a_created, a.question as a_q, a.asker as a_asker,
                           a.draft as a_draft, m.*
                    from public.action_items a join public.meetings m on m.id = a.meeting_id
-                   where m.owner_id = %s and a.status = 'open' order by a.created_at desc limit %s""",
-                (user_id, limit),
+                   where m.owner_id = %s and a.status = 'open' and (%s or m.mode <> 'local')
+                   order by a.created_at desc limit %s""",
+                (user_id, include_local, limit),
             )
             rows = await cur.fetchall()
         return [

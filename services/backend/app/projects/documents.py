@@ -3,22 +3,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import html
 import io
-import ipaddress
 import os
 import re
-import socket
 import time
 import uuid
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 import httpx
 
+from app.netguard import Resolve, UnsafeUrl, pinned, public_ip, resolve_host
 from app.search.chunking import CHARS_PER_TOKEN, CHUNK_TOKENS, OVERLAP_TOKENS, Chunk
 
 MAX_BYTES = 5 * 1024 * 1024
@@ -68,32 +65,19 @@ def extract_text(filename: str, data: bytes) -> str:
     raise DocumentError(f"Unsupported file type {ext or '(none)'}: use text, Markdown, HTML or PDF")
 
 
-Resolve = Callable[[str, int], Awaitable[list[str]]]
 MAX_REDIRECTS = 5
 
 
-async def resolve_host(host: str, port: int) -> list[str]:
-    infos = await asyncio.get_running_loop().getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    return [str(i[4][0]) for i in infos]
-
-
-async def check_public_url(url: str, resolve: Resolve = resolve_host) -> None:
+async def check_public_url(url: str, resolve: Resolve = resolve_host) -> str:
     """Links may only reach the public internet: not this server, its private network or the
-    cloud's metadata service (a hosted backend must not fetch those for a user)."""
-    parts = urlsplit(url)
-    if parts.scheme not in ("http", "https") or not parts.hostname:
+    cloud's metadata service (a hosted backend must not fetch those for a user). Returns the
+    checked address to connect to."""
+    if urlsplit(url).scheme not in ("http", "https"):
         raise DocumentError("Links must start with http:// or https://")
-    host = parts.hostname.lower().rstrip(".")
-    if host == "localhost" or host.endswith((".localhost", ".internal", ".local")):
-        raise DocumentError("That link points to a private address.")
     try:
-        addrs = await resolve(host, parts.port or (443 if parts.scheme == "https" else 80))
-    except OSError as e:
-        raise DocumentError(f"Couldn't find {host}.") from e
-    for a in addrs:
-        ip = ipaddress.ip_address(a.split("%")[0])
-        if not ip.is_global or ip.is_multicast:
-            raise DocumentError("That link points to a private address.")
+        return await public_ip(url, resolve)
+    except UnsafeUrl as e:
+        raise DocumentError(str(e).replace("That address", "That link")) from e
 
 
 async def fetch_link(
@@ -101,14 +85,20 @@ async def fetch_link(
     transport: httpx.AsyncBaseTransport | None = None,
     resolve: Resolve = resolve_host,
 ) -> tuple[str, str]:
-    """(title, text) of a web page. Every hop (redirects included) must be a public address, and
-    at most MAX_BYTES are read."""
+    """(title, text) of a web page. Every hop (redirects included) must be a public address and
+    is fetched from exactly the address that was checked; at most MAX_BYTES are read."""
     async with httpx.AsyncClient(timeout=10, follow_redirects=False, transport=transport) as c:
         for _ in range(MAX_REDIRECTS + 1):
-            await check_public_url(url, resolve)
-            async with c.stream(
-                "GET", url, headers={"User-Agent": "MeetingCopilot/0.1 (project knowledge)"}
-            ) as r:
+            ip = await check_public_url(url, resolve)
+            target, headers, extensions = pinned(url, ip)
+            request = c.build_request(
+                "GET",
+                target,
+                headers={**headers, "User-Agent": "MeetingCopilot/0.1 (project knowledge)"},
+                extensions=extensions,
+            )
+            r = await c.send(request, stream=True)
+            try:
                 if r.is_redirect and r.headers.get("location"):
                     url = urljoin(url, r.headers["location"])
                     continue
@@ -123,6 +113,8 @@ async def fetch_link(
                 body = b"".join(chunks)[:MAX_BYTES].decode(r.encoding or "utf-8", errors="replace")
                 content_type = r.headers.get("content-type", "html")
                 break
+            finally:
+                await r.aclose()
         else:
             raise DocumentError("Too many redirects.")
     title = re.search(r"(?is)<title[^>]*>(.*?)</title>", body)

@@ -192,6 +192,7 @@ export class LiveConnection<O = unknown> extends Emitter<{ event: [MeetingEvent]
     const ws = this.ws;
     if (ws && ws.readyState === OPEN) {
       for (let i = 0; i < 50 && (ws.bufferedAmount > 0 || this.opts.outbound.buffered > 0); i++) {
+        this.opts.outbound.flush(); // capture has stopped: nothing else will push the backlog out
         await new Promise((r) => setTimeout(r, 100));
       }
     }

@@ -49,7 +49,8 @@ class StandupService:
         profile = await self.profiles.get(user_id) or RoleProfile()
         day = today()
         previous = await self.store.previous(user_id, project_id, day)
-        items = await self.meetings.open_action_items(user_id, 10)
+        # The draft goes to a cloud model: Local-only meetings' items never leave this machine.
+        items = await self.meetings.open_action_items(user_id, 10, include_local=False)
         tickets = []
         if self.tickets:
             import time as _time

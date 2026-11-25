@@ -100,7 +100,7 @@ class InMemoryProjects:
         joined = []
         for (pid, e), (role, _by) in list(self.invites.items()):
             if e == email.lower() and pid in self.projects:
-                self.members[pid][user_id] = role
+                self.members[pid].setdefault(user_id, role)  # like Postgres: keep a current role
                 del self.invites[(pid, e)]
                 joined.append(pid)
         return joined

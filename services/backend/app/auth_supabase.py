@@ -8,11 +8,15 @@ Supports both Supabase signing modes:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from functools import lru_cache
 
+import httpx
 import jwt
+
+log = logging.getLogger("app.auth")
 
 
 class SupabaseTokenError(Exception):
@@ -23,6 +27,9 @@ class SupabaseTokenError(Exception):
 class SupabaseUser:
     id: str
     email: str | None
+    #: Supabase says this address was confirmed (a link was clicked, or Google vouched for it).
+    #: None: the token doesn't say; ask Supabase with `email_confirmed`.
+    email_verified: bool | None = None
 
 
 @lru_cache(maxsize=4)
@@ -58,4 +65,32 @@ def verify_supabase_token(token: str) -> SupabaseUser:
         raise SupabaseTokenError(str(e)) from e
     if claims.get("role") != "authenticated":
         raise SupabaseTokenError("not a signed-in user session")
-    return SupabaseUser(id=claims["sub"], email=claims.get("email"))
+    meta = claims.get("user_metadata")
+    verified = meta.get("email_verified") if isinstance(meta, dict) else None
+    return SupabaseUser(
+        id=claims["sub"],
+        email=claims.get("email") or None,
+        email_verified=verified if isinstance(verified, bool) else None,
+    )
+
+
+async def email_confirmed(user_id: str, transport: httpx.AsyncBaseTransport | None = None) -> bool:
+    """Whether Supabase Auth has confirmed this user's email (admin API; needs SUPABASE_URL and
+    SUPABASE_SERVICE_ROLE_KEY). False when it can't tell: an unconfirmed address must never be
+    trusted for project invites, which are matched by email."""
+    url, key = os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not url or not key:
+        return False
+    try:
+        async with httpx.AsyncClient(timeout=10, transport=transport) as c:
+            r = await c.get(
+                f"{url.rstrip('/')}/auth/v1/admin/users/{user_id}",
+                headers={"apikey": key, "Authorization": f"Bearer {key}"},
+            )
+    except httpx.HTTPError as e:
+        log.warning("couldn't check email confirmation: %s", e)
+        return False
+    if r.status_code != 200:
+        log.warning("email confirmation check refused (%s)", r.status_code)
+        return False
+    return bool(r.json().get("email_confirmed_at"))

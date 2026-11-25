@@ -4,6 +4,7 @@ store (Redis) instead."""
 
 from __future__ import annotations
 
+import os
 import time
 from collections import defaultdict, deque
 
@@ -46,5 +47,25 @@ SIGN_IN = RateLimiter(20, 60)
 AI_ACTIONS = RateLimiter(30, 60)
 
 
+def proxy_hops() -> int:
+    """How many proxies in front of this server append to X-Forwarded-For (COPILOT_PROXY_HOPS;
+    the container image sets 1 for Railway's or Render's edge). 0: no proxy, use the socket."""
+    try:
+        return max(0, int(os.environ.get("COPILOT_PROXY_HOPS", "0")))
+    except ValueError:
+        return 0
+
+
 def client_address(request: Request) -> str:
+    """The caller's address for rate limits. Behind proxies it's the entry the nearest trusted
+    proxy appended, counted from the right: the left end of X-Forwarded-For is whatever the
+    caller sent, so keying on it would let anyone pick a fresh address per request."""
+    hops = proxy_hops()
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if hops and forwarded:
+        entries = [e.strip() for e in forwarded.split(",") if e.strip()]
+        if entries:
+            return entries[-hops] if len(entries) >= hops else entries[0]
+    # Note: uvicorn's --proxy-headers rewrites request.client from the *left* end, so it's only
+    # used when no proxy is configured.
     return request.client.host if request.client else "unknown"

@@ -156,6 +156,24 @@ def test_a_backend_restart_mid_meeting_keeps_the_transcript(env: Env) -> None:
     assert [by_id[e["segment_id"]] for e in finals(first)] == [e["text"] for e in finals(first)]
 
 
+def test_a_resumed_live_only_meeting_numbers_above_what_was_shown(env: Env) -> None:
+    """Live-only saves nothing, so after a restart there's nothing to continue numbering from:
+    new captions must not reuse seg_1... or event numbers the app already has on screen."""
+    m = env.create(mode="live-only")
+    meeting = env.client.portal.call(env.store.get, m["meeting_id"])
+    meeting.started_at -= 120  # two minutes in when the backend restarted
+    with env.connect(m, last_seq=900) as ws:
+        started = ws.receive_json()
+        assert started["seq"] > 120_000 * 10 - 10  # seq_base: 10 per ms into the meeting
+        for f in wav_frames(1):
+            ws.send_bytes(f)
+        events = receive_until(
+            ws, lambda e: e["type"] == "transcript.final" and e["text"] == "great thanks"
+        )
+    numbers = [int(e["segment_id"].removeprefix("seg_")) for e in finals(events)]
+    assert min(numbers) > 1200 and numbers == sorted(numbers)
+
+
 def test_streams_a_wav_into_live_captions_and_stores_finals(env: Env) -> None:
     m = env.create(vocabulary=["ArgoCD"])
     with env.connect(m) as ws:
@@ -306,6 +324,48 @@ def test_ended_meeting_refuses_new_sockets(env: Env) -> None:
         env.client.post(f"/meetings/{m['meeting_id']}/ws-token", headers=env.headers).status_code
         == 409
     )
+
+
+def test_a_watcher_never_keeps_a_meeting_open_after_the_recorder_leaves(env: Env) -> None:
+    """Project members watching don't hold the STT streams open: once the recording app is gone
+    the idle close runs, whether watchers leave before or after it."""
+    import asyncio
+    import time as _time
+
+    sessions = env.services.sessions
+    sessions.idle_close_s = 0.2
+    m = env.create()
+    mid = m["meeting_id"]
+    watch = env.client.post(f"/meetings/{mid}/watch", headers=env.headers).json()
+    with env.connect(m) as owner:
+        owner.receive_json()
+        with env.client.websocket_connect(f"{watch['ws_url']}?token={watch['ws_token']}") as w:
+            w.receive_json()  # meeting.started (replayed)
+            session = sessions.get(mid)
+            assert (session.recorders, session.watchers) == (1, 2)
+            owner.close()
+            deadline = _time.time() + 5
+            while sessions.get(mid) is not None and _time.time() < deadline:
+                env.client.portal.call(asyncio.sleep, 0.05)
+            assert sessions.get(mid) is None  # closed although a watcher was still connected
+    # The reverse order: the watcher's disconnect (not the recorder's) schedules the close.
+    m2 = env.create()
+    mid2 = m2["meeting_id"]
+    w2 = env.client.post(f"/meetings/{mid2}/watch", headers=env.headers).json()
+    with env.connect(m2) as owner:
+        owner.receive_json()
+        with env.client.websocket_connect(f"{w2['ws_url']}?token={w2['ws_token']}") as w:
+            w.receive_json()
+    assert mid2 in sessions._reapers  # scheduled when the last connection (the watcher) left
+
+    async def watcher_left_last() -> bool:
+        sessions._cancel_reaper(mid2)  # as if the recorder's release found it still watched
+        session = sessions.get(mid2)
+        session._peers.append(lambda e: None)  # a watcher, not a recorder
+        sessions.released(mid2)
+        return mid2 in sessions._reapers
+
+    assert env.client.portal.call(watcher_left_last)
 
 
 def test_local_mode_uses_only_local_transcription(env: Env) -> None:

@@ -267,6 +267,23 @@ def test_project_members_see_each_others_names(world) -> None:
         }
 
 
+def test_nobody_can_change_the_email_invites_match_on(world) -> None:
+    """Invites match public.users.email: a user setting someone else's address would be added
+    to projects in their place. Only the backend writes it; other settings stay editable."""
+    with as_user(world["dsn"], OUTSIDER) as c:
+        with pytest.raises(errors.InsufficientPrivilege):
+            c.execute("update users set email = 'o@x.io' where id = %s", (OUTSIDER,))
+    with as_user(world["dsn"], OUTSIDER) as c:
+        with pytest.raises(errors.InsufficientPrivilege):
+            c.execute("insert into users (id, email) values (%s, 'o@x.io')", (str(uuid.uuid4()),))
+    with as_user(world["dsn"], OUTSIDER) as c:
+        c.execute("update users set name = 'Zed', retention_days = 30 where id = %s", (OUTSIDER,))
+        assert c.execute("select name, email from users where id = %s", (OUTSIDER,)).fetchone() == (
+            "Zed",
+            "z@x.io",
+        )
+
+
 def test_deleting_a_meeting_removes_everything_hanging_off_it(world) -> None:
     with as_user(world["dsn"], OWNER) as c:
         c.execute("delete from meetings where id = %s", (world["private"],))

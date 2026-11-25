@@ -51,6 +51,11 @@ export class BackendClient {
     private readonly fetchImpl: typeof fetch = (input, init) => fetch(input, init),
   ) {}
 
+  /** The backend's origin (scheme, host and port), e.g. to check a page it asks us to open. */
+  get origin(): string {
+    return new URL(this.baseUrl()).origin;
+  }
+
   /** Called with each request's span (the trace context is sent as `traceparent`). */
   onSpan: ((span: Span) => void) | null = null;
 

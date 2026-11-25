@@ -77,6 +77,8 @@ class Services:
     link_transport: object = None
     #: Tests: a stand-in DNS lookup for project links (host, port) -> addresses.
     link_resolve: object = None
+    #: Tests: an httpx transport for Supabase Auth's admin API (email confirmation).
+    auth_transport: object = None
 
 
 def build_services(

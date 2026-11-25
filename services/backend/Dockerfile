@@ -24,7 +24,9 @@ COPY services/backend/app ./app
 # Unprivileged user; uploaded project documents go to a writable folder.
 RUN useradd --create-home copilot && mkdir -p /srv/data/documents && chown -R copilot /srv/data /srv/models
 USER copilot
-ENV DOCUMENTS_DIR=/srv/data/documents PORT=8000
+# One proxy (Railway's or Render's edge) appends the caller's address to X-Forwarded-For; rate
+# limits key on that entry. Set COPILOT_PROXY_HOPS to the number of proxies in front if different.
+ENV DOCUMENTS_DIR=/srv/data/documents PORT=8000 COPILOT_PROXY_HOPS=1
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import os,urllib.request; urllib.request.urlopen(f'http://127.0.0.1:{os.environ[\"PORT\"]}/health', timeout=4)"

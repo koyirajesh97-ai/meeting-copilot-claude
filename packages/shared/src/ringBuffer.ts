@@ -28,6 +28,21 @@ export class RingBuffer<T> {
     }
   }
 
+  /** The oldest item, without removing it. */
+  peek(): T | undefined {
+    return this.count ? this.items[this.head] : undefined;
+  }
+
+  /** Remove and return the oldest item. */
+  shift(): T | undefined {
+    if (!this.count) return undefined;
+    const item = this.items[this.head];
+    this.items[this.head] = undefined;
+    this.head = (this.head + 1) % this.capacity;
+    this.count--;
+    return item;
+  }
+
   /** Remove and return everything, oldest first. */
   drain(): T[] {
     const out: T[] = [];

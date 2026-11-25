@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import BaseModel
 
 from app.auth import SESSION_TTL_S, CurrentUser, issue_token
-from app.auth_supabase import SupabaseTokenError, verify_supabase_token
+from app.auth_supabase import SupabaseTokenError, email_confirmed, verify_supabase_token
 from app.ratelimit import SIGN_IN, client_address
 from app.services import services
 
@@ -42,7 +42,8 @@ class Me(BaseModel):
 
 
 async def _signed_in(user_id: str, email: str | None, ensure_auth_user: bool = False) -> None:
-    """Record the user and turn any pending project invites for their email into memberships."""
+    """Record the user and turn any pending project invites for their email into memberships.
+    `email` must be a confirmed address (or None): invites and member lookups match on it."""
     s = services()
     await s.meetings.upsert_user(user_id, email, ensure_auth_user=ensure_auth_user)
     await s.projects.register_user(user_id, email)
@@ -56,9 +57,15 @@ async def create_session(body: SessionIn, request: Request) -> SessionOut:
         user = verify_supabase_token(body.access_token)
     except SupabaseTokenError as e:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, f"Sign-in not accepted: {e}") from e
-    await _signed_in(user.id, user.email)
+    # Only a confirmed address is recorded and put in the token: with sign-ups that don't confirm
+    # email, anyone could otherwise register as an invitee and take their invite.
+    verified = user.email_verified
+    if verified is None and user.email:
+        verified = await email_confirmed(user.id, getattr(services(), "auth_transport", None))
+    email = user.email if verified else None
+    await _signed_in(user.id, email)
     return SessionOut(
-        token=issue_token(user.id, email=user.email),
+        token=issue_token(user.id, email=email),
         expires_at=int(time.time()) + SESSION_TTL_S,
         user_id=user.id,
         email=user.email,
@@ -67,8 +74,8 @@ async def create_session(body: SessionIn, request: Request) -> SessionOut:
 
 @router.post("/auth/dev-session", response_model=SessionOut)
 async def dev_session(request: Request) -> SessionOut:
-    SIGN_IN.check(client_address(request))
     """A fixed local user, without Supabase. Only with ALLOW_DEV_LOGIN=1 and only from this machine."""
+    SIGN_IN.check(client_address(request))
     client = request.client.host if request.client else ""
     # Behind a proxy the client address comes from a header anyone can set: refuse those too.
     proxied = "x-forwarded-for" in request.headers or "forwarded" in request.headers

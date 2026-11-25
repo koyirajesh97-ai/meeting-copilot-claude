@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import html
 import time
 from typing import Literal
 
+import jwt
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
@@ -131,19 +133,65 @@ def _redirect_uri(request: Request) -> str:
 
 @router.post("/integrations/{kind}/connect")
 async def connect(kind: str, request: Request, user: CurrentUser) -> dict[str, str]:
-    """The URL to open in the browser to let us read your calendar."""
+    """The URL to open in the browser to let us read your calendar: first a page of ours that
+    names the Meeting Copilot account it will connect to, then the provider's sign-in."""
     k = _kind(kind)
     if k not in CALENDARS:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Only calendars connect by signing in")
-    state = issue_token(user.user_id, scope="oauth", meeting_id=k, ttl_s=600)
+    if client_creds(k) is None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"Set {k.upper()}_CLIENT_ID and _CLIENT_SECRET on the backend first.",
+        )
+    state = issue_token(user.user_id, scope="oauth", email=user.email, meeting_id=k, ttl_s=600)
+    return {"authorize_url": str(request.url_for("oauth_start").include_query_params(state=state))}
+
+
+PAGE = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Meeting Copilot</title>
+<body style="font-family:system-ui;max-width:32rem;margin:4rem auto;padding:0 1rem;line-height:1.5"><h1>{title}</h1><p>{body}</p></body>"""
+
+#: Connect links already used (state -> expiry): a link works once.
+_used_states: dict[str, float] = {}
+
+
+def _use_state(state: str, exp: float) -> bool:
+    """Mark a connect link used. False if it was used before."""
+    now = time.time()
+    for k in [k for k, e in _used_states.items() if e < now]:
+        del _used_states[k]
+    if state in _used_states:
+        return False
+    _used_states[state] = exp
+    return True
+
+
+@router.get("/integrations/oauth/start", name="oauth_start", response_class=HTMLResponse)
+async def oauth_start(request: Request, state: str = "") -> HTMLResponse:
+    """Says which Meeting Copilot account the calendar will be connected to before sending the
+    browser to Google or Microsoft. A connect link someone else forwards you names their
+    account, not yours, so you can tell not to continue."""
     try:
-        return {"authorize_url": authorize_url(k, _redirect_uri(request), state)}
+        p = verify_token(state, scope="oauth")
+    except InvalidToken:
+        return HTMLResponse(
+            PAGE.format(title="Link expired", body="Start again from Settings in the app."), 400
+        )
+    k: Kind = p.meeting_id  # type: ignore[assignment]
+    try:
+        url = authorize_url(k, _redirect_uri(request), state)
     except IntegrationError as e:
-        raise HTTPException(status.HTTP_409_CONFLICT, str(e)) from e
-
-
-PAGE = """<!doctype html><meta charset="utf-8"><title>Meeting Copilot</title>
-<body style="font-family:system-ui;max-width:32rem;margin:4rem auto;line-height:1.5"><h1>{title}</h1><p>{body}</p></body>"""
+        return HTMLResponse(PAGE.format(title="Not available", body=html.escape(str(e))), 409)
+    account = html.escape(p.email) if p.email else "the account that started this in the app"
+    body = (
+        f"This connects your {LABEL[k]} (read-only) to the Meeting Copilot account "
+        f"<strong>{account}</strong>.</p><p>Only continue if you just clicked Connect in your own "
+        f"Meeting Copilot app. If someone sent you this link, close this page.</p>"
+        f'<p><a href="{html.escape(url)}" style="display:inline-block;padding:.6rem 1rem;'
+        f'background:#2563eb;color:#fff;border-radius:.5rem;text-decoration:none">'
+        f"Continue to {LABEL[k]}</a>"
+    )
+    return HTMLResponse(PAGE.format(title=f"Connect {LABEL[k]}", body=body))
 
 
 @router.get("/integrations/oauth/callback", name="oauth_callback", response_class=HTMLResponse)
@@ -152,15 +200,22 @@ async def oauth_callback(
 ) -> HTMLResponse:
     try:
         p = verify_token(state, scope="oauth")
-    except InvalidToken:
+        claims = jwt.decode(state, options={"verify_signature": False})
+    except (InvalidToken, jwt.PyJWTError):
         return HTMLResponse(
             PAGE.format(title="Link expired", body="Start again from Settings in the app."), 400
         )
     k: Kind = p.meeting_id  # type: ignore[assignment]
+    if not _use_state(state, float(claims.get("exp", time.time() + 600))):
+        return HTMLResponse(
+            PAGE.format(title="Link already used", body="Start again from Settings in the app."),
+            400,
+        )
     if error or not code:
         return HTMLResponse(
             PAGE.format(
-                title="Not connected", body=f"{LABEL[k]} wasn't connected ({error or 'cancelled'})."
+                title="Not connected",
+                body=f"{LABEL[k]} wasn't connected ({html.escape(error or 'cancelled')}).",
             ),
             400,
         )
@@ -170,7 +225,7 @@ async def oauth_callback(
             k, code, _redirect_uri(request), getattr(svc, "transport", None)
         )
     except IntegrationError as e:
-        return HTMLResponse(PAGE.format(title="Not connected", body=str(e)), 400)
+        return HTMLResponse(PAGE.format(title="Not connected", body=html.escape(str(e))), 400)
     await svc.store.put(Integration(p.user_id, k, True, {}, secret))
     svc.forget(p.user_id)
     return HTMLResponse(

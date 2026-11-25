@@ -112,6 +112,29 @@ def test_standup_prep_from_rough_notes(env) -> None:
     )
 
 
+def test_standup_draft_never_sends_local_only_meetings_to_the_cloud(env) -> None:
+    s, store, client, h = env
+    for title, mode, text in [
+        ("Cloud sync", "cloud", "renew the cloud cert"),
+        ("Private 1:1", "local", "SECRET local-only item"),
+    ]:
+        m = Meeting(new_id(), "u1", "custom", title, mode, "private", started_at=time.time() - 60)
+        client.portal.call(store.create, m)
+        client.portal.call(store.add_action_item, m, ActionItemRecord(new_id(), m.id, text))
+    sent: list[str] = []
+    original = s.router.complete
+
+    async def spy(task, messages, *args, **kwargs):
+        sent.extend(m["content"] for m in messages)
+        return await original(task, messages, *args, **kwargs)
+
+    s.router.complete = spy
+    assert client.post("/standup", json={"notes": NOTES}, headers=h).status_code == 200
+    prompt = "\n".join(sent)
+    assert "renew the cloud cert" in prompt
+    assert "SECRET" not in prompt
+
+
 def test_script_card_comes_up_on_my_turn_only(env) -> None:
     _, _, client, h = env
     client.post("/standup", json={"notes": NOTES}, headers=h)
@@ -263,6 +286,11 @@ async def test_postgres_standups(pg_dsn: str) -> None:
     await store.add_action_item(m, ActionItemRecord(new_id(), m.id, "do it"))
     [(item, mm)] = await store.open_action_items(uid)
     assert item.text == "do it" and mm.id == m.id
+    local = Meeting(new_id(), uid, "custom", "Private", "local", "private", started_at=time.time())
+    await store.create(local)
+    await store.add_action_item(local, ActionItemRecord(new_id(), local.id, "keep it here"))
+    assert len(await store.open_action_items(uid)) == 2
+    assert [i.text for i, _ in await store.open_action_items(uid, include_local=False)] == ["do it"]
     assert (
         await store.previous_in_series(uid, "standup", series_key("Daily 2"), time.time(), None)
     ).id == m.id

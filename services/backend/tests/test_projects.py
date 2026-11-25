@@ -38,7 +38,9 @@ def h(user: str, email: str | None = None) -> dict[str, str]:
 
 
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch):
+def env(monkeypatch: pytest.MonkeyPatch, tmp_path):
+    from app.projects.documents import LocalBlobs
+
     monkeypatch.setenv("SUPABASE_JWT_SECRET", SECRET)
     monkeypatch.delenv("SUPABASE_SERVICE_ROLE_KEY", raising=False)
     store = InMemoryMeetingStore()
@@ -50,6 +52,7 @@ def env(monkeypatch: pytest.MonkeyPatch):
             d.id, [(t, w) for w, t in LIVE], seconds_per_line=1.0
         ),
     )
+    s.blobs = LocalBlobs(str(tmp_path / "documents"))  # never into the repo's .data folder
     set_services(s)
     with TestClient(app) as client:
         for u, e in [
@@ -66,12 +69,15 @@ def env(monkeypatch: pytest.MonkeyPatch):
             f"/projects/{pid}/members",
             json={"email": "M@x.io", "role": "member"},
             headers=h("owner"),
-        ).json() == {"status": "added", "email_sent": False}
+        ).json() == {"status": "invited", "email_sent": False}
         client.post(
             f"/projects/{pid}/members",
             json={"email": "v@x.io", "role": "viewer"},
             headers=h("owner"),
         )
+        # They join the next time the app lists their projects (their token has their address).
+        for u, e in [("member", "m@x.io"), ("viewer", "v@x.io")]:
+            client.get("/projects", headers=h(u, e))
         yield s, store, client, pid
     set_services(None)
 
@@ -140,23 +146,94 @@ def test_invites_for_new_people_are_accepted_when_they_sign_in(env) -> None:
     assert pending == [
         {"user_id": None, "email": "new@x.io", "name": None, "role": "member", "pending": True}
     ]
-    token = jwt.encode(
-        {
-            "sub": "newbie",
-            "role": "authenticated",
-            "aud": "authenticated",
-            "email": "New@x.io",
-            "exp": int(time.time()) + 600,
-        },
-        SECRET,
-        algorithm="HS256",
-    )
-    backend = client.post("/auth/session", json={"access_token": token}).json()["token"]
+
+    def token(sub: str, **extra) -> str:
+        return jwt.encode(
+            {
+                "sub": sub,
+                "role": "authenticated",
+                "aud": "authenticated",
+                "email": "New@x.io",
+                "exp": int(time.time()) + 600,
+                **extra,
+            },
+            SECRET,
+            algorithm="HS256",
+        )
+
+    # Someone who signed up with that address but never confirmed it doesn't get the invite.
+    squatter = client.post(
+        "/auth/session",
+        json={"access_token": token("squatter", user_metadata={"email_verified": False})},
+    ).json()
+    from app.auth import verify_token
+
+    assert verify_token(squatter["token"]).email is None  # shown in the app, never trusted
+    sq = {"Authorization": f"Bearer {squatter['token']}"}
+    assert client.get("/projects", headers=sq).json() == []
+    # Unknown in the token and no Supabase admin key to ask: not trusted either.
+    unknown = client.post("/auth/session", json={"access_token": token("maybe")}).json()
+    assert verify_token(unknown["token"]).email is None
+    assert [
+        m for m in client.get(f"/projects/{pid}/members", headers=h("owner")).json() if m["pending"]
+    ]
+
+    backend = client.post(
+        "/auth/session",
+        json={"access_token": token("newbie", user_metadata={"email_verified": True})},
+    ).json()["token"]
     projects = client.get("/projects", headers={"Authorization": f"Bearer {backend}"}).json()
     assert [(p["id"], p["role"]) for p in projects] == [(pid, "member")]
     assert not [
         m for m in client.get(f"/projects/{pid}/members", headers=h("owner")).json() if m["pending"]
     ]
+
+
+def test_inviting_says_the_same_whether_or_not_someone_has_an_account(env) -> None:
+    _s, _, client, pid = env
+    has_account = client.post(
+        f"/projects/{pid}/members", json={"email": "z@x.io"}, headers=h("owner")
+    ).json()
+    nobody = client.post(
+        f"/projects/{pid}/members", json={"email": "nobody@x.io"}, headers=h("owner")
+    ).json()
+    assert has_account == nobody == {"status": "invited", "email_sent": False}
+    pending = {
+        m["email"]
+        for m in client.get(f"/projects/{pid}/members", headers=h("owner")).json()
+        if m["pending"]
+    }
+    assert pending == {"z@x.io", "nobody@x.io"}
+    # Re-inviting a current member changes nothing (roles change in the member list).
+    client.post(
+        f"/projects/{pid}/members", json={"email": "m@x.io", "role": "viewer"}, headers=h("owner")
+    )
+    roles = {
+        m["email"]: m["role"]
+        for m in client.get(f"/projects/{pid}/members", headers=h("owner")).json()
+    }
+    assert roles["m@x.io"] == "member"
+
+
+async def test_email_confirmation_is_asked_of_supabase_when_the_token_does_not_say(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.auth_supabase import email_confirmed
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.headers["apikey"] == "service"
+        uid = req.url.path.rsplit("/", 1)[-1]
+        return httpx.Response(
+            200, json={"email_confirmed_at": "2026-11-01T00:00:00Z" if uid == "yes" else None}
+        )
+
+    t = httpx.MockTransport(handler)
+    assert not await email_confirmed("yes", t)  # no admin key configured: can't tell, so no
+    monkeypatch.setenv("SUPABASE_URL", "http://supa")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "service")
+    assert await email_confirmed("yes", t)
+    assert not await email_confirmed("no", t)
+    assert not await email_confirmed("x", httpx.MockTransport(lambda r: httpx.Response(500)))
 
 
 async def test_invite_email_goes_through_supabase_admin(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -313,6 +390,38 @@ def test_project_vocabulary_feeds_new_meetings(env) -> None:
     ).json()
     meeting = client.portal.call(store.get, m["meeting_id"])
     assert meeting.vocabulary == sorted(["ArgoCD = GitOps tool", "OPS-142", "Priya"])
+
+
+def test_uploads_are_parsed_off_the_event_loop_and_failures_leave_no_file(env, monkeypatch) -> None:
+    import threading
+
+    import app.api.projects as projects_api
+
+    s, _, client, pid = env
+    threads: list[str] = []
+    real = projects_api.extract_text
+
+    def spy(name: str, data: bytes) -> str:
+        threads.append(threading.current_thread().name)
+        return real(name, data)
+
+    monkeypatch.setattr(projects_api, "extract_text", spy)
+    r = client.post(
+        f"/projects/{pid}/documents",
+        files={"file": ("empty.md", b"   \n\n  ", "text/markdown")},
+        headers=h("member"),
+    )
+    assert r.status_code == 422 and "No text" in r.json()["detail"]
+    assert threads and threads[0] != threading.main_thread().name
+    assert threads[0] != client.portal.call(_thread_name)  # not the server's loop thread
+    root = s.blobs.root
+    assert not root.exists() or not any(p.is_file() for p in root.rglob("*"))
+
+
+async def _thread_name() -> str:
+    import threading
+
+    return threading.current_thread().name
 
 
 def test_documents_ground_search_and_answers_for_members_only(env) -> None:
@@ -555,7 +664,7 @@ async def test_links_reach_only_the_public_internet() -> None:
 
     # A redirect into the private network is refused too.
     def bounce(req: _httpx.Request) -> _httpx.Response:
-        if req.url.host == "wiki.example":
+        if req.headers["host"] == "wiki.example":
             return _httpx.Response(302, headers={"location": "https://evil.example/admin"})
         return _httpx.Response(200, text="secret")
 
@@ -570,6 +679,18 @@ async def test_links_reach_only_the_public_internet() -> None:
     )
     _title, text = await fetch_link("https://wiki.example/", big, dns)
     assert len(text) <= 5 * 1024 * 1024
+
+    # The page is fetched from the address that was checked (no second DNS lookup to rebind).
+    seen: list[_httpx.Request] = []
+
+    def record(req: _httpx.Request) -> _httpx.Response:
+        seen.append(req)
+        return _httpx.Response(200, html="<title>T</title>ok")
+
+    await fetch_link("https://wiki.example:8443/a?b=1", _httpx.MockTransport(record), dns)
+    assert str(seen[0].url) == "https://93.184.215.14:8443/a?b=1"
+    assert seen[0].headers["host"] == "wiki.example:8443"
+    assert seen[0].extensions["sni_hostname"] == "wiki.example"
 
     assert safe_filename("../../etc/passwd") == "passwd"
     assert safe_filename("..\\secret\\run book?.md") == "run book_.md"
