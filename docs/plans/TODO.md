@@ -107,9 +107,10 @@ Follow-ups that were out of scope for the prompt that found them.
   pass on the saved audio.
 
 ## From the November 2026 code review
-- Hosted deploy: confirm `COPILOT_PROXY_HOPS=1` matches Railway's edge (log `X-Forwarded-For` once
-  and check the rightmost entry is the caller). If not, set the right hop count in the service.
-- Supabase: keep "Confirm email" on. Tokens for email sign-ups that don't carry
-  `user_metadata.email_verified` are checked through the admin API, which needs
-  `SUPABASE_SERVICE_ROLE_KEY` on the backend; without it those users' invites wait until it's set.
-- Apply migration `20261125000100_users_email_backend_only.sql` to the hosted project.
+- Railway keys sign-in rate limits on `X-Real-IP` (`COPILOT_CLIENT_IP_HEADER=x-real-ip` on the
+  service). Other hosts: set the header their proxy sets, or the `COPILOT_PROXY_HOPS` count.
+- Supabase: keep "Confirm email" on. The hosted project's tokens carry
+  `user_metadata.email_verified` (checked 2026-11-25), so invites work without the admin API.
+- Railway has no `SUPABASE_SERVICE_ROLE_KEY`: invite emails aren't sent (invites still work at
+  sign-in) and uploaded project files are kept on the container's disk, which is wiped on every
+  deploy. Add the key in the Railway dashboard (service `api`, Variables) to store them in Supabase.

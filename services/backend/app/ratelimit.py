@@ -56,10 +56,19 @@ def proxy_hops() -> int:
         return 0
 
 
+def client_ip_header() -> str:
+    """A header the proxy in front always sets to the caller's address, replacing whatever the
+    caller sent (COPILOT_CLIENT_IP_HEADER, e.g. "x-real-ip" on Railway). Empty: not used."""
+    return os.environ.get("COPILOT_CLIENT_IP_HEADER", "").strip().lower()
+
+
 def client_address(request: Request) -> str:
-    """The caller's address for rate limits. Behind proxies it's the entry the nearest trusted
-    proxy appended, counted from the right: the left end of X-Forwarded-For is whatever the
-    caller sent, so keying on it would let anyone pick a fresh address per request."""
+    """The caller's address for rate limits: the proxy's client-IP header when one is configured;
+    else, behind proxies, the X-Forwarded-For entry the nearest trusted proxy appended, counted
+    from the right (the left end is whatever the caller sent, so keying on it would let anyone
+    pick a fresh address per request)."""
+    if (name := client_ip_header()) and (value := request.headers.get(name, "").strip()):
+        return value
     hops = proxy_hops()
     forwarded = request.headers.get("x-forwarded-for", "")
     if hops and forwarded:
